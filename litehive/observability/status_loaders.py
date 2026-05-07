@@ -17,7 +17,7 @@ from pydantic import ValidationError
 
 from litehive.config.loading import merge_config_layers
 from litehive.config.model import LitehiveConfig, parse_litehive_config_data, validate_config_data
-from litehive.config.paths import litehive_root, workspace_path
+from litehive.config.paths import litehive_root
 from litehive.config.workspace_files import config_path
 from litehive.domain.common import RunnerStatus
 from litehive.domain.engine import WorkspaceEngineMonitoring
@@ -37,6 +37,13 @@ from litehive.workspace import Workspace
 
 def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssue]]:
     """
+    Path-based compatibility wrapper for callers not yet on ``Workspace``.
+    """
+    return _load_config_for_status_for_workspace(Workspace.from_path(root))
+
+
+def _load_config_for_status_for_workspace(workspace: Workspace) -> tuple[LitehiveConfig, list[StatusIssue]]:
+    """
     Merge the layered config the way the runtime loader does, but tolerantly.
 
     Downgrades YAML and validation errors into status issues
@@ -46,6 +53,7 @@ def _load_config_for_status(root: Path) -> tuple[LitehiveConfig, list[StatusIssu
     the best-effort config builder when the merged dict cannot
     construct a valid :class:`LitehiveConfig`.
     """
+    root = workspace.root
     issues: list[StatusIssue] = []
     data = asdict(LitehiveConfig())
     for path, key in ((litehive_root() / "config.yaml", "global_config"), (config_path(root), "config")):
@@ -218,6 +226,15 @@ def _load_engine_monitoring_for_status(
 
 def _load_runner_status_for_status(root: Path) -> tuple[RunnerStatusState, StatusIssue | None]:
     """
+    Path-based compatibility wrapper for callers not yet on ``Workspace``.
+    """
+    return _load_runner_status_for_status_for_workspace(Workspace.from_path(root))
+
+
+def _load_runner_status_for_status_for_workspace(
+    workspace: Workspace,
+) -> tuple[RunnerStatusState, StatusIssue | None]:
+    """
     Parse the runner lockfile and reconcile its PID against the OS.
 
     Returns a populated :class:`RunnerStatusState` with status
@@ -226,7 +243,7 @@ def _load_runner_status_for_status(root: Path) -> tuple[RunnerStatusState, Statu
     lockfile blindly) means a runner crashed at SIGKILL still
     surfaces as ``STALE`` rather than as a phantom live runner.
     """
-    path = workspace_path(root, "runtime", ".runner.lock")
+    path = workspace.runtime_path("runtime", ".runner.lock")
     mapping, issue = _safe_json_mapping(
         path,
         key="runner_state",

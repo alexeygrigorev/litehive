@@ -22,10 +22,10 @@ from litehive.lifecycle.types import FailedReason, PipelineMode
 from litehive.main import dispatch_status
 from litehive.observability.engine_monitoring import record_engine_execution
 from litehive.observability.status_diagnostics import (
-    _load_runner_status_for_status,
     collect_operational_status_snapshot_for_workspace,
     collect_status_snapshot_for_workspace,
 )
+from litehive.observability.status_loaders import _load_runner_status_for_status_for_workspace
 from litehive.state.records import create_task, save_task
 from litehive.state.persist import save_state
 from litehive.workspace import Workspace
@@ -320,6 +320,7 @@ def test_runner_status_diagnostic_copies_serialize_without_pydantic_warnings(
     monkeypatch,
 ) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     lock_path = workspace_path(tmp_path, "runtime", ".runner.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -340,7 +341,7 @@ def test_runner_status_diagnostic_copies_serialize_without_pydantic_warnings(
             lambda pid, alive=pid_is_alive: alive,
         )
 
-        status, issue = _load_runner_status_for_status(tmp_path)
+        status, issue = _load_runner_status_for_status_for_workspace(workspace)
 
         assert issue is None
         with warnings.catch_warnings():

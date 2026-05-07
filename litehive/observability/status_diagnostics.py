@@ -21,8 +21,9 @@ from litehive.workspace import Workspace
 # `from litehive.observability.status_diagnostics import ...` callers keep working.
 from litehive.observability.status_loaders import _load_runner_status_for_status  # noqa: F401
 from litehive.observability.status_loaders import (
-    _load_config_for_status,
+    _load_config_for_status_for_workspace,
     _load_engine_monitoring_for_status,
+    _load_runner_status_for_status_for_workspace,
     _load_state_for_status,
 )
 from litehive.observability.status_probes import (
@@ -68,9 +69,9 @@ def collect_status_snapshot_for_workspace(workspace: Workspace) -> StatusSnapsho
     not rebuild dependencies during read-only status collection.
     """
     root = workspace.root
-    config, config_issues = _load_config_for_status(root)
+    config, config_issues = _load_config_for_status_for_workspace(workspace)
     state, state_issues = _load_state_for_status(workspace)
-    runner, runner_issue = _load_runner_status_for_status(root)
+    runner, runner_issue = _load_runner_status_for_status_for_workspace(workspace)
     monitoring, monitoring_issues = _load_engine_monitoring_for_status(workspace)
     if runner_issue is not None:
         runner_issues_list: list = [runner_issue]
@@ -108,9 +109,9 @@ def collect_operational_status_snapshot_for_workspace(workspace: Workspace) -> S
     status render.
     """
     root = workspace.root
-    config, config_issues = _load_config_for_status(root)
+    config, config_issues = _load_config_for_status_for_workspace(workspace)
     state, state_issues = _load_state_for_status(workspace)
-    runner, runner_issue = _load_runner_status_for_status(root)
+    runner, runner_issue = _load_runner_status_for_status_for_workspace(workspace)
     monitoring, monitoring_issues = _load_engine_monitoring_for_status(workspace)
     if runner_issue is not None:
         runner_issues_list: list = [runner_issue]
