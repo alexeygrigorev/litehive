@@ -224,6 +224,10 @@ from tests.support.helpers import make_workspace, run_cli
 - Avoid broad dictionaries for internal domain events, reports,
   sessions, diagnostics, runtime settings, and command results. Use a
   dataclass or domain model with fields that explain the contract.
+- Broad domain annotations such as `dict[str, Any]`,
+  `Mapping[str, object]`, and plain `object` are pinned by
+  `test_domain_untyped_payload_annotations_stay_allowlisted`. New
+  cases need a typed value object or an explicit boundary exception.
 - Config/profile data that starts as YAML or JSON should be validated
   into typed models at the boundary. Do not spread mapping-shape
   checks throughout business logic when one model loader can own the

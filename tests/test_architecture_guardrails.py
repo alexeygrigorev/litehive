@@ -366,7 +366,6 @@ def test_domain_untyped_payload_annotations_stay_allowlisted() -> None:
         "litehive/domain/runtime.py:_json_enum_value:value:object",
         "litehive/domain/runtime.py:_serialize_execution_status:value:object",
         "litehive/domain/runtime.py:_serialize_status:value:object",
-        "litehive/domain/runtime.py:_serialize_runtime_enum_value return:object",
         "litehive/domain/runtime.py:_serialize_runtime_enum_value:value:object",
         "litehive/domain/runtime.py:model_copy:update:Mapping[str, Any] | None",
     ]

@@ -23,7 +23,7 @@ def test_removed_cli_main_compat_module_is_unavailable() -> None:
 def test_bare_litehive_prints_status_when_idle(tmp_path, monkeypatch) -> None:
     create_workspace(tmp_path)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(modern_cli, "_run_next_task", lambda root: None)
+    monkeypatch.setattr(modern_cli, "_run_next_task", lambda container: None)
 
     result = CliRunner().invoke(modern_cli.app, [])
 
@@ -32,12 +32,15 @@ def test_bare_litehive_prints_status_when_idle(tmp_path, monkeypatch) -> None:
     assert "=== Queue ===" in result.output
 
 
-def test_bare_litehive_runs_next_task_when_available(monkeypatch) -> None:
+def test_bare_litehive_runs_next_task_when_available(tmp_path, monkeypatch) -> None:
+    create_workspace(tmp_path)
+    monkeypatch.chdir(tmp_path)
     result_payload = SimpleNamespace(
         task=SimpleNamespace(id="T-0007"),
         final_stage="accepting",
     )
-    monkeypatch.setattr(modern_cli, "_run_next_task", lambda root: result_payload)
+    monkeypatch.setattr(modern_cli, "build_container", lambda root: SimpleNamespace(root=root))
+    monkeypatch.setattr(modern_cli, "_run_next_task", lambda container: result_payload)
 
     result = CliRunner().invoke(modern_cli.app, [])
 

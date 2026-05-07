@@ -13,8 +13,8 @@ from litehive.cli.runner import register_root_commands as register_runner_comman
 from litehive.cli.task_cli import app as task_app
 from litehive.cli.workspace import register_root_commands as register_workspace_commands, status_command
 from litehive.cli.worktree_cli import app as worktree_app
-from litehive.container import build_container
-from litehive.lifecycle.orchestration import run_task_for_workspace
+from litehive.container import LitehiveContainer, build_container
+from litehive.lifecycle.orchestration import ExecutionResult, run_task_for_workspace
 from litehive.tasks.queue import dequeue_next_task
 
 app = make_typer()
@@ -22,16 +22,17 @@ backup_app = make_typer(invoke_without_command=True)
 db_app = make_typer(invoke_without_command=True)
 
 
-def _run_next_task(root: Path):
+def _run_next_task(container: LitehiveContainer) -> ExecutionResult | None:
     """
     Pop the next queued task and run it.
 
-    Exists as a seam between the bare-``litehive`` callback and the real
-    runner so tests can monkey-patch task execution without spinning up
-    the full pipeline. Returns ``None`` when the queue has nothing to
-    drain so the caller can fall through to the status view.
+    Exists as a seam between the bare-``litehive`` callback and the
+    real runner so tests can monkey-patch task execution without
+    spinning up the full pipeline. The callback owns root-to-container
+    assembly; this helper only consumes injected dependencies. Returns
+    ``None`` when the queue has nothing to drain so the caller can
+    fall through to the status view.
     """
-    container = build_container(root)
     task = dequeue_next_task(container.workspace)
     if task is None:
         return None
@@ -49,11 +50,13 @@ def root(ctx: typer.Context) -> int | None:
     """
     if ctx.invoked_subcommand is not None:
         return None
-    result = _run_next_task(Path.cwd())
+    root_path = Path.cwd()
+    container = build_container(root_path)
+    result = _run_next_task(container)
     if result is not None and result.task is not None:
         print(f"{result.task.id}: {result.final_stage}")
         return 0
-    return status_command(Path.cwd(), full=False)
+    return status_command(root_path, full=False)
 
 
 register_workspace_commands(app)
