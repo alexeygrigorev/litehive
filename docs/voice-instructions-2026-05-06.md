@@ -1385,11 +1385,22 @@ Legend:
   status/audit/default/preference/freeze/unfreeze helpers while
   preserving the existing single Typer command surface.
   Source: note 4, 20:00-20:36.
-- [ ] C11. Rework `EngineCommand`: remove default/preference command
+- [x] C11. Rework `EngineCommand`: remove default/preference command
   behavior from CLI if it can be configured in YAML; keep engine
   freeze and on-freeze behavior.
   Source: note 4, 20:46-21:54.
-- [ ] C12. Store engine freezes in the database, not files/config.
+  Reviewed 2026-05-07: kept `engine default` and `engine
+  preference` because current runtime settings make SQLite the source
+  of truth after bootstrap; YAML only seeds initial values. Removing
+  the audited CLI setters would leave no live operator path for these
+  DB-backed settings and would push validation/audit behavior out of
+  the runtime settings layer.
+- [x] C12. Store engine freezes in the database, not files/config.
+  Completed 2026-05-07: engine freezes are persisted through audited
+  runtime settings in SQLite. Existing config YAML is bootstrap-only;
+  `test_engine_freeze_cli_writes_audited_db_not_config_file` verifies
+  freeze/unfreeze leaves `.litehive/config.yaml` unchanged and writes
+  audit rows.
   Source: note 4, 21:54-22:12.
 - [ ] C13. In quota status collection, do not inline complex values in
   a dictionary. Hoist each provider status to a named local such as
