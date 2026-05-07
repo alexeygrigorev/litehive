@@ -33,11 +33,6 @@ from litehive.state.persist import (
     persist_tasks_and_state_for_workspace,
     save_state_for_workspace,
 )
-from litehive.state.records import (
-    get_task,
-    list_tasks,
-    require_task,
-)
 from litehive.state.store import runtime_store_for_workspace
 from litehive.tasks.queue_eligibility import (
     _auto_recovery_stage_for_flagged_task,
@@ -117,7 +112,7 @@ def set_active_task(workspace: Workspace, task_id: str | None) -> WorkspaceState
         if task_id is None:
             save_state_for_workspace(workspace, state)
             return state
-        task = require_task(workspace.root, task_id)
+        task = workspace.require_task(task_id)
         if task.status == TaskStatus.QUEUED:
             task.status = TaskStatus.IN_PROGRESS
         persist_task_and_state_for_workspace(workspace, task=task, state=state)
@@ -328,8 +323,7 @@ def _resolve_next_task_from_state(
     runner surfaces missing-intent corruption instead of silently dropping
     the task.
     """
-    root = workspace.root
-    tasks_by_id = {task.id: task for task in list_tasks(root, strict=False)}
+    tasks_by_id = {task.id: task for task in workspace.list_tasks(strict=False)}
     store = runtime_store_for_workspace(workspace)
     for queued_task_id in state.queue:
         if queued_task_id in tasks_by_id:
