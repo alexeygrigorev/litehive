@@ -453,30 +453,66 @@ def clear_engine_freeze(
     and by the engine-selection loop when a freeze window has
     expired.
     """
-    settings = load_runtime_settings(workspace)
-    freeze_map = _freeze_value(settings.get("engine_freeze", {}))
-    old_engine_value = freeze_map.get(engine_name)
-    if old_engine_value is None:
-        return RuntimeSettingChange(
-            key="engine_freeze",
-            old_value=freeze_map,
-            new_value=freeze_map,
-            changed=False,
+    bootstrap_runtime_settings(workspace)
+    now = utcnow()
+    with workspace.connect() as connection:
+        row = connection.execute("SELECT value_json FROM runtime_settings WHERE key = ?", ("engine_freeze",)).fetchone()
+        if row is None:
+            old_json = None
+        else:
+            old_json = str(row["value_json"])
+        freeze_map = _freeze_value(_json_loads(old_json))
+        old_value = dict(freeze_map)
+        old_engine_value = freeze_map.get(engine_name)
+        if old_engine_value is None:
+            return RuntimeSettingChange(
+                key="engine_freeze",
+                old_value=old_value,
+                new_value=old_value,
+                changed=False,
+            )
+        freeze_map.pop(engine_name)
+        new_json = _json_dumps(freeze_map)
+        connection.execute(
+            """
+            UPDATE runtime_settings
+            SET value_json = ?, updated_at = ?, actor = ?, source = ?
+            WHERE key = ?
+            """,
+            (new_json, now, actor, source, "engine_freeze"),
         )
-    freeze_map.pop(engine_name)
-    return set_runtime_setting(
-        workspace,
-        key="engine_freeze",
-        value=freeze_map,
-        actor=actor,
-        source=source,
-        context={
-            "engine": engine_name,
-            "old_value": old_engine_value,
-            "new_value": None,
-            **dict(context or {}),
-        },
-    )
+        connection.execute(
+            """
+            INSERT INTO runtime_settings_audit_log (
+                key,
+                created_at,
+                actor,
+                source,
+                old_value_json,
+                new_value_json,
+                context_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "engine_freeze",
+                now,
+                actor,
+                source,
+                old_json,
+                new_json,
+                _json_dumps(
+                    {
+                        "engine": engine_name,
+                        "old_value": old_engine_value,
+                        "new_value": None,
+                        **dict(context or {}),
+                    }
+                ),
+            ),
+        )
+        connection.commit()
+    return RuntimeSettingChange(key="engine_freeze", old_value=old_value, new_value=freeze_map, changed=True)
 
 
 def load_runtime_setting_audit_entries(

@@ -1089,9 +1089,13 @@ Legend:
   removed unused defaults for `actor`, `source`, and `context` from
   `set_default_engine`, `set_engine_preference`, `set_engine_freeze`,
   and `clear_engine_freeze`.
-- [ ] R7. Simplify `clear_engine_freeze`: it should perform the small
+- [x] R7. Simplify `clear_engine_freeze`: it should perform the small
   database mutation/audit needed and nothing more.
   Source: note 5, 05:55-06:25.
+  Completed 2026-05-07: `clear_engine_freeze` now updates the
+  `engine_freeze` row and audit log directly after bootstrap, instead
+  of loading all runtime settings and routing back through
+  `set_runtime_setting`.
 - [x] R8. In `engine_models`, remove engine attempt order
   deduplication. Assume users provide the right order.
   Source: note 4, 36:49-37:16.
