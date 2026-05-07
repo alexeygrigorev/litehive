@@ -17,7 +17,7 @@ import stat
 import subprocess
 import time
 
-from litehive.config.paths import workspace_path
+from litehive.workspace import Workspace
 
 _PROBE_TIMEOUT_SECONDS = 1.0
 _MISSING_TARGET_ERRNOS = {errno.ENOENT, errno.ENOTDIR}
@@ -49,6 +49,13 @@ class BrokenVenvExecutable:
 
 def discover_workspace_venvs(root: Path) -> list[VenvCheckout]:
     """
+    Path-based compatibility wrapper for venv discovery.
+    """
+    return discover_workspace_venvs_for_workspace(Workspace.from_path(root))
+
+
+def discover_workspace_venvs_for_workspace(workspace: Workspace) -> list[VenvCheckout]:
+    """
     Locate every ``.venv`` the workspace might dispatch into.
 
     Includes the main checkout's ``.venv`` plus the ``.venv``
@@ -57,14 +64,14 @@ def discover_workspace_venvs(root: Path) -> list[VenvCheckout]:
     skipping them would let a broken worktree venv kill an
     agent run after status looked clean.
     """
-    root = root.resolve()
+    root = workspace.root
     checkouts: dict[Path, VenvCheckout] = {}
     main_venv = root / ".venv"
     if main_venv.is_dir():
         resolved_main = main_venv.resolve()
         checkouts[resolved_main] = VenvCheckout(checkout_root=root, venv_path=resolved_main)
 
-    worktrees_dir = workspace_path(root, "worktrees")
+    worktrees_dir = workspace.runtime_path("worktrees")
     if worktrees_dir.exists():
         for venv_path in sorted(worktrees_dir.glob("*/.venv")):
             checkout_root = venv_path.parent.resolve()
@@ -79,6 +86,13 @@ def discover_workspace_venvs(root: Path) -> list[VenvCheckout]:
 
 def probe_broken_venv_executables(root: Path) -> list[BrokenVenvExecutable]:
     """
+    Path-based compatibility wrapper for broken-venv probing.
+    """
+    return probe_broken_venv_executables_for_workspace(Workspace.from_path(root))
+
+
+def probe_broken_venv_executables_for_workspace(workspace: Workspace) -> list[BrokenVenvExecutable]:
+    """
     Probe every venv entrypoint with a minimal ``--version`` exec.
 
     Surfaces the "uv cache clean nuked the symlink target"
@@ -88,7 +102,7 @@ def probe_broken_venv_executables(root: Path) -> list[BrokenVenvExecutable]:
     will fail on the first sub-process spawn.
     """
     findings: list[BrokenVenvExecutable] = []
-    for checkout in discover_workspace_venvs(root):
+    for checkout in discover_workspace_venvs_for_workspace(workspace):
         bin_dir = _venv_bin_dir(checkout.venv_path)
         if not bin_dir.is_dir():
             continue

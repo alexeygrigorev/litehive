@@ -39,7 +39,10 @@ from litehive.observability.status import (
     render_runner_status_line,
     render_task_pipeline_status_lines,
 )
-from litehive.observability.venv_health import daemon_broken_venv_message, probe_broken_venv_executables
+from litehive.observability.venv_health import (
+    daemon_broken_venv_message,
+    probe_broken_venv_executables_for_workspace,
+)
 from litehive.state.backup import create_scheduled_workspace_backup
 from litehive.state.persist import load_state_for_workspace, set_pool_stop_reason
 from litehive.state.locking import runner_status_for_workspace
@@ -305,6 +308,15 @@ def create_workspace_venvs_ready(
     workspace: Path,
 ) -> None:
     """
+    Path-based compatibility wrapper for daemon venv readiness.
+    """
+    create_workspace_venvs_ready_for_workspace(build_workspace(workspace.resolve()))
+
+
+def create_workspace_venvs_ready_for_workspace(
+    workspace: Workspace,
+) -> None:
+    """
     Refuse to start the daemon when the workspace has a broken Python venv.
 
     Called by `start_background_daemon` before forking the worker.
@@ -314,9 +326,9 @@ def create_workspace_venvs_ready(
     clear error per broken workspace and stops a wave of confusing
     task failures from hitting the queue.
     """
-    findings = probe_broken_venv_executables(workspace)
+    findings = probe_broken_venv_executables_for_workspace(workspace)
     if findings:
-        raise RuntimeError(daemon_broken_venv_message(workspace, findings))
+        raise RuntimeError(daemon_broken_venv_message(workspace.root, findings))
 
 
 def maybe_run_workspace_backup(
