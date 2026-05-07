@@ -17,8 +17,6 @@ different schema.
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import importlib.resources
-import json
-import logging
 import os
 import sqlite3
 from pathlib import Path
@@ -26,15 +24,11 @@ from contextlib import contextmanager
 from collections.abc import Iterator
 from typing import TypeAlias
 
-from pydantic import ValidationError
-
 from litehive.config.paths import workspace_path
-from litehive.domain.common import PipelineStatus, TaskStatus
-from litehive.domain.task import TaskIntentRecord, TaskStateRecord
+from litehive.db.migration_hooks import run_post_migration_hook
 from litehive.state.rebuild_safety import assert_database_rebuild_safe, backup_database_before_rebuild
 
 MIGRATIONS_PACKAGE = "litehive.db.migrations"
-logger = logging.getLogger(__name__)
 _BASELINE_REQUIRED_TABLES = {
     "schema_migrations",
     "pool_state",
@@ -120,112 +114,6 @@ def _utcnow() -> str:
     differently from existing rows.
     """
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def _task_intent_column_values(
-    intent: TaskIntentRecord,
-    state: TaskStateRecord | None = None,
-) -> dict[str, str]:
-    """
-    Project a ``TaskIntentRecord`` / ``TaskStateRecord`` pair onto the migration-7 column shape.
-
-    Migration 7 introduced denormalized columns on ``task_intent``
-    (``slug``, ``priority``, ``goal``, ``…_json``) so list/filter
-    queries don't have to parse JSON on every row. This helper
-    produces the flat dict the backfill insert consumes; keeping
-    the projection in Python avoids embedding pydantic-aware logic
-    in SQL.
-    """
-    if intent.created_from is None:
-        provenance_payload: dict = {}
-    else:
-        provenance_payload = intent.created_from.model_dump(mode="json")
-    if state is None:
-        lifecycle_status = TaskStatus.QUEUED.value
-        pipeline_status = PipelineStatus.BACKLOG.value
-    else:
-        lifecycle_status = state.status.value
-        pipeline_status = state.pipeline_status.value
-    return {
-        "slug": intent.slug,
-        "title": intent.title,
-        "created_at": intent.created_at,
-        "priority": intent.priority,
-        "goal": intent.goal,
-        "acceptance_criteria_json": json.dumps(intent.acceptance_criteria, sort_keys=True),
-        "constraints_json": json.dumps(intent.constraints, sort_keys=True),
-        "plan_json": json.dumps(intent.plan, sort_keys=True),
-        "dependencies_json": json.dumps(intent.depends_on, sort_keys=True),
-        "provenance_json": json.dumps(provenance_payload, sort_keys=True),
-        "lifecycle_status": lifecycle_status,
-        "pipeline_status": pipeline_status,
-    }
-
-
-def _sync_task_intent_columns(connection: sqlite3.Connection) -> None:
-    """
-    Backfill the denormalized ``task_intent`` columns from each row's JSON payload.
-
-    Called immediately after migration 7 applies so existing task
-    rows have the new columns populated without requiring a
-    separate operator step. Skipping a row that won't validate is
-    intentional — the migration has already committed, and a single
-    bad row shouldn't block the rest from being usable on the new
-    schema.
-    """
-    rows = connection.execute(
-        """
-        SELECT intent.task_id, intent.payload AS intent_payload, state.payload AS state_payload
-        FROM task_intent AS intent
-        LEFT JOIN task_state AS state ON state.task_id = intent.task_id
-        """
-    ).fetchall()
-    for row in rows:
-        try:
-            intent_payload = json.loads(str(row["intent_payload"]))
-            intent = TaskIntentRecord.model_validate(intent_payload)
-            state = None
-            if row["state_payload"] is not None:
-                state_payload = json.loads(str(row["state_payload"]))
-                state = TaskStateRecord.model_validate(state_payload)
-        except (json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc:
-            logger.warning("Skipping invalid task_intent column backfill for %s: %s", row["task_id"], exc)
-            continue
-        values = _task_intent_column_values(intent, state)
-        connection.execute(
-            """
-            UPDATE task_intent
-            SET
-                slug = ?,
-                title = ?,
-                created_at = ?,
-                priority = ?,
-                goal = ?,
-                acceptance_criteria_json = ?,
-                constraints_json = ?,
-                plan_json = ?,
-                dependencies_json = ?,
-                provenance_json = ?,
-                lifecycle_status = ?,
-                pipeline_status = ?
-            WHERE task_id = ?
-            """,
-            (
-                values["slug"],
-                values["title"],
-                values["created_at"],
-                values["priority"],
-                values["goal"],
-                values["acceptance_criteria_json"],
-                values["constraints_json"],
-                values["plan_json"],
-                values["dependencies_json"],
-                values["provenance_json"],
-                values["lifecycle_status"],
-                values["pipeline_status"],
-                row["task_id"],
-            ),
-        )
 
 
 def _migration_resources():
@@ -493,9 +381,8 @@ def apply_pending_migrations(root: Path, dry_run: bool = False) -> MigrationPlan
             except sqlite3.DatabaseError as exc:
                 connection.rollback()
                 raise MigrationApplyError(migration, exc) from exc
-            if migration.version == 7:
-                _sync_task_intent_columns(connection)
-                connection.commit()
+            run_post_migration_hook(connection, migration.version)
+            connection.commit()
         applied = tuple(migrations)
     return MigrationPlan(applied_migrations=applied, pending_migrations=pending, dry_run=False)
 

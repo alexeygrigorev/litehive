@@ -2198,16 +2198,30 @@ Legend:
 
 ## Database And Migrations Instructions
 
-- [ ] DB1. Move database migrations into separate migration modules,
+- [x] DB1. Move database migrations into separate migration modules,
   matching the fact that there are now several migrations.
   Source: note 5, 26:28-27:37.
-- [ ] DB2. Clarify whether helper data such as task intent column
+  Completed 2026-05-07: moved the migration-7 Python backfill for
+  denormalized `task_intent` columns into
+  `litehive.db.migration_hooks.task_intent_columns`. `schema.py` now
+  keeps the generic migration runtime and calls the migration-specific
+  hook entry point after each migration applies.
+- [x] DB2. Clarify whether helper data such as task intent column
   values is migration-only schema code or business logic. Document
   where it is used.
   Source: note 5, 26:52-27:19.
-- [ ] DB3. If schema/migration code is large, split it so migrations
+  Completed 2026-05-07: documented the task-intent column projection
+  as migration-7 backfill code in
+  `migration_hooks/task_intent_columns.py`; it is not general business
+  logic and is invoked only from the schema runtime immediately after
+  migration 7 applies.
+- [x] DB3. If schema/migration code is large, split it so migrations
   are easier to read and audit.
   Source: note 5, 27:19-27:37.
+  Completed 2026-05-07: removed the migration-7 pydantic/json backfill
+  implementation from `schema.py` and moved it to the dedicated
+  migration hook module, leaving `schema.py` focused on discovery,
+  planning, transactions, and migration bookkeeping.
 
 ## Type Checker And Guardrail Instructions
 
