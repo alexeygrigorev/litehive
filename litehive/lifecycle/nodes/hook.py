@@ -81,7 +81,6 @@ class SubprocessHookRunner(HookRunner):
         wrong tree entirely.
         """
         self.workspace = workspace
-        self.workspace_root = workspace.root
         self.execution_root_resolver = execution_root_resolver
         self.extra_env = dict(extra_env or {})
 
@@ -95,7 +94,7 @@ class SubprocessHookRunner(HookRunner):
         introspect which task it is gating without arguments.
         """
         if self.execution_root_resolver is None:
-            execution_root = self.workspace_root
+            execution_root = self.workspace.root
         else:
             execution_root = Path(self.execution_root_resolver(state))
         env = {

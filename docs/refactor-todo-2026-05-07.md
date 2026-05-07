@@ -31,6 +31,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Move `DockerSandboxLauncher` constructor from raw root to injected `Workspace`.
 - [x] Remove duplicate raw workspace root constructor argument from `HeruEngineAdapter`.
 - [x] Move `SubprocessHookRunner` constructor from raw root to injected `Workspace`.
+- [x] Remove duplicate cached root field from `SubprocessHookRunner`.
 - [x] Move `GitCommitNode` constructor from raw root to injected `Workspace`.
 - [x] Remove duplicate cached root field from `GitWorktreeSyncNode`.
 - [x] Move Heru execution-root helpers from raw root to injected `Workspace`.
