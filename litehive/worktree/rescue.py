@@ -36,7 +36,7 @@ from litehive.git.ops import (
     stdout_or_none as git_stdout_or_none,
     unmerged_files,
 )
-from litehive.state.locking import ensure_future_task_mutation_allowed_for_workspace, workspace_lock
+from litehive.state.locking import ensure_future_task_mutation_allowed_for_workspace, workspace_lock_for_workspace
 from litehive.state.persist import (
     load_state_for_workspace,
     persist_task_and_state_without_runner_guard_for_workspace,
@@ -47,7 +47,7 @@ from litehive.state.records import (
     get_task_worktree_path,
     set_task_commit_sha,
 )
-from litehive.worktree.paths import is_managed_worktree_path, resolve_recorded_worktree_path
+from litehive.worktree.paths import is_managed_worktree_path_for_workspace, resolve_recorded_worktree_path_for_workspace
 from litehive.workspace import Workspace
 
 
@@ -60,19 +60,18 @@ def collect_rescue_candidates_for_workspace(workspace: Workspace) -> list[Rescue
     Sorted by task id so the CLI output is stable and the operator
     can re-invoke against the same ordering.
     """
-    root = workspace.root
     candidates: list[RescueCandidate] = []
     for task in workspace.list_tasks(strict=False):
         if task.status != TaskStatus.FLAGGED or task.flag_reason != "merge_failed":
             continue
         worktree_rel = get_task_worktree_path(task)
-        if not is_managed_worktree_path(root, worktree_rel):
+        if not is_managed_worktree_path_for_workspace(workspace, worktree_rel):
             continue
-        worktree_path = resolve_recorded_worktree_path(root, worktree_rel)
+        worktree_path = resolve_recorded_worktree_path_for_workspace(workspace, worktree_rel)
         if worktree_path is None or worktree_rel is None:
             continue
         if worktree_path.exists():
-            commit_shas = _worktree_commits_ahead_of_main(root, worktree_path)
+            commit_shas = _worktree_commits_ahead_of_main(workspace.root, worktree_path)
         else:
             commit_shas = []
         candidates.append(
@@ -409,8 +408,7 @@ def _finalize_rescue_for_workspace(workspace: Workspace, task: TaskRecord, outco
     elif outcome == "already-landed" and head_sha:
         journal_message = f"Worktree rescue reconciled: patch already landed on main at {head_sha}."
 
-    root = workspace.root
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace)
         if state.active_task_id == task.id:
             raise WorkspaceConflictError(
