@@ -1,5 +1,6 @@
 import io
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 from litehive.config.workspace import create_workspace
@@ -28,6 +29,7 @@ def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monke
 
     runner_checks = 0
     subprocess_calls: list[tuple[str, ...]] = []
+    subprocess_cwds: list[Path] = []
     sleep_calls = 0
 
     def fake_runner_status(workspace: Workspace) -> RunnerStatusState:
@@ -53,8 +55,8 @@ def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monke
         save_state(tmp_path, state)
 
     def fake_run_logged_subprocess(command: list[str], **kwargs) -> int:
-        del kwargs
         subprocess_calls.append(tuple(command))
+        subprocess_cwds.append(kwargs["cwd"])
         if "repair" not in command and "run" in command:
             state = load_state(tmp_path)
             state.queue = []
@@ -77,6 +79,8 @@ def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monke
     assert sleep_calls == 1
     assert runner_checks >= 2
     assert len(subprocess_calls) == 1
+    assert subprocess_calls[0][:3] == (sys.executable, "-m", "litehive.main")
+    assert subprocess_cwds == [tmp_path.resolve()]
     assert any("run" in call for call in subprocess_calls)
     assert "runner already active: status=running pid=4242 active_task_id=" in stream.getvalue()
 

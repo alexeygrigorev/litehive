@@ -2068,9 +2068,15 @@ Legend:
   now invokes child runs through the current interpreter with
   `[sys.executable, "-m", "litehive.main"]`, and the backup test no
   longer patches a fake `uv` launcher.
-- [ ] DM12. If `uv` is used to run LiteHive as an executor in another
+- [x] DM12. If `uv` is used to run LiteHive as an executor in another
   project, ensure it runs in the correct project directory.
   Source: note 5, 18:28-18:56.
+  Completed 2026-05-07: verified the daemon no longer uses `uv run
+  litehive` for child execution after DM11. Added a regression
+  assertion that `run_daemon_loop` invokes child runs as
+  `[sys.executable, "-m", "litehive.main", "run", ...]`, so the
+  daemon stays in the current LiteHive Python environment rather than
+  running `uv` from the target workspace.
 - [ ] DM13. Replace `emit(..., stream=...)` free functions with an
   object that takes the stream in its constructor and exposes methods.
   Source: note 5, 19:00-19:27; note 5, 21:25-21:52.
