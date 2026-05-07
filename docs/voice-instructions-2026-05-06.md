@@ -1907,9 +1907,14 @@ Legend:
   resolution. Removed the helper and expanded the branches so
   unconstrained workspace resolution and task-id-constrained task
   existence checks are explicit at each call site.
-- [ ] W6. Rewrite the complex list comprehension around the line
+- [x] W6. Rewrite the complex list comprehension around the line
   called out near 134.
   Source: note 5, 09:31-09:43.
+  Completed 2026-05-07: verified the line-near-134 target in
+  `config/workspace.py` was the ancestor generator logic in
+  `_reject_litehive_control_paths()`. Replaced the `next(...)`
+  generator expressions for managed worktrees and `.litehive`
+  control directories with explicit loops and direct raises.
 - [ ] W7. Review `path inside managed workspace`; likely remove nested
   workspace rejection logic unless it is truly needed.
   Source: note 5, 09:47-10:32.

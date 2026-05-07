@@ -101,30 +101,19 @@ def _reject_litehive_control_paths(path: Path, source: str) -> None:
     """
     resolved_path = path.resolve()
 
-    # Check if path is inside managed worktrees
-    managed_worktree = next(
-        (
-            ancestor
-            for ancestor in (resolved_path, *resolved_path.parents)
-            if ancestor.name == "worktrees" and ancestor.parent.name == ".litehive"
-        ),
-        None,
-    )
-    if managed_worktree is not None:
-        raise ValueError(
-            f"invalid workspace root from {source}: {resolved_path} is inside Litehive managed "
-            f"worktrees at {managed_worktree}; choose the real repo root instead"
-        )
+    for ancestor in (resolved_path, *resolved_path.parents):
+        if ancestor.name == "worktrees" and ancestor.parent.name == ".litehive":
+            raise ValueError(
+                f"invalid workspace root from {source}: {resolved_path} is inside Litehive managed "
+                f"worktrees at {ancestor}; choose the real repo root instead"
+            )
 
-    # Check if path is inside any .litehive control directory
-    control_ancestor = next(
-        (ancestor for ancestor in (resolved_path, *resolved_path.parents) if ancestor.name == ".litehive"),
-        None,
-    )
-    if control_ancestor is not None:
+    for ancestor in (resolved_path, *resolved_path.parents):
+        if ancestor.name != ".litehive":
+            continue
         raise ValueError(
             f"invalid workspace root from {source}: {resolved_path} is inside the Litehive "
-            f"control directory {control_ancestor}; choose the real repo root instead"
+            f"control directory {ancestor}; choose the real repo root instead"
         )
 
 
