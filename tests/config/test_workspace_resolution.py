@@ -94,6 +94,31 @@ def test_resolve_workspace_uses_registry_from_outside_repo(tmp_path: Path, monke
     assert resolve_workspace(task.id) == tmp_path.resolve()
 
 
+def test_resolve_workspace_ignores_stale_task_directories_when_using_registry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_home = tmp_path / "xdg-config"
+    data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+
+    owning_workspace = tmp_path / "owning-workspace"
+    stale_workspace = tmp_path / "stale-workspace"
+    ensure_workspace(owning_workspace)
+    task = create_task(owning_workspace, title="SQLite-owned task")
+    ensure_workspace(stale_workspace)
+    stale_task_dir = stale_workspace / ".litehive" / "tasks" / f"{task.id}-stale"
+    stale_task_dir.mkdir(parents=True)
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    monkeypatch.chdir(outside)
+    monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
+    monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
+
+    assert resolve_workspace(task.id) == owning_workspace.resolve()
+
+
 def test_resolve_workspace_uses_injected_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from litehive.config.registry import build_workspace_registry
 

@@ -1934,9 +1934,15 @@ Legend:
   `ensure_workspace()` and left existing-workspace reads to
   `require_existing_workspace()` where the `<root>/.litehive` existence
   check lives.
-- [ ] W9. Remove legacy task-existence checks now that tasks are in
+- [x] W9. Remove legacy task-existence checks now that tasks are in
   the database.
   Source: note 5, 12:23-12:30.
+  Completed 2026-05-07: verified the remaining legacy check was
+  `_task_exists()` in `config/workspace.py`, which globbed
+  `.litehive/tasks/<task-id>-*` during workspace resolution. Replaced
+  it with a SQLite task-intent lookup through `state.records.task_exists`
+  and added a registry-resolution regression where a stale task
+  directory in another workspace must not beat the database owner.
 - [ ] W10. Remove `resolve_workspace_from_search_root` / search repo
   behavior. If no workspace is passed, use current directory and fail
   if it is not a LiteHive project.

@@ -818,6 +818,17 @@ def get_task(root: Path, task_id: str) -> TaskRecord | None:
     return task
 
 
+def task_exists(root: Path, task_id: str) -> bool:
+    """
+    Return whether the SQLite task-intent table owns ``task_id``.
+
+    Workspace resolution uses this to disambiguate task ids across
+    registered workspaces. Directory names under ``.litehive/tasks``
+    are legacy artifacts and must not decide task ownership.
+    """
+    return runtime_store(root).load_task_intent(task_id) is not None
+
+
 def get_task_record(root: Path, task_id: str) -> TaskRecord | None:
     """
     Return the task record, tolerating a missing runtime row.

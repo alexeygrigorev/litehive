@@ -124,18 +124,15 @@ def normalize_workspace_root(root: Path, source: str, registry: WorkspaceRegistr
     return registered_workspace_root(resolved_input, registry=registry) or resolved_input
 
 
-def _task_exists(root: Path, task_id: str) -> bool:
+def _task_exists_in_state(root: Path, task_id: str) -> bool:
     """
-    Cheap on-disk check for "does this workspace own this task?".
+    Return whether SQLite task state owns ``task_id`` in ``root``.
+    """
+    # inline: state.records imports workspace helpers, so keep this local
+    # to avoid a config.workspace -> state.records import cycle.
+    from litehive.state.records import task_exists  # noqa: PLC0415
 
-    Looks for a directory under ``.litehive/tasks/`` whose name
-    starts with ``task_id-``. Used by workspace resolution to
-    disambiguate when a task id is supplied — far cheaper than
-    loading the full task store and good enough because task ids
-    are unique within a workspace.
-    """
-    tasks_root = workspace_dir(root) / "tasks"
-    return any(tasks_root.glob(f"{task_id}-*"))
+    return task_exists(root, task_id)
 
 
 def _resolve_workspace_from_search_root(
@@ -159,7 +156,7 @@ def _resolve_workspace_from_search_root(
             if register:
                 _register_workspace(resolved_search_root, registry)
             return resolved_search_root
-        if _task_exists(resolved_search_root, effective_task_id):
+        if _task_exists_in_state(resolved_search_root, effective_task_id):
             if register:
                 _register_workspace(resolved_search_root, registry)
             return resolved_search_root
@@ -168,8 +165,9 @@ def _resolve_workspace_from_search_root(
         if not workspace_dir(candidate).is_dir():
             continue
         resolved = candidate.resolve()
-        if effective_task_id is not None and not _task_exists(resolved, effective_task_id):
-            continue
+        if effective_task_id is not None:
+            if not _task_exists_in_state(resolved, effective_task_id):
+                continue
         if register:
             _register_workspace(resolved, registry)
         return resolved
@@ -219,7 +217,7 @@ def resolve_workspace(
             if register:
                 _register_workspace(resolved_env_workspace, workspace_registry)
             return resolved_env_workspace
-        if _task_exists(resolved_env_workspace, effective_task_id):
+        if _task_exists_in_state(resolved_env_workspace, effective_task_id):
             if register:
                 _register_workspace(resolved_env_workspace, workspace_registry)
             return resolved_env_workspace
@@ -235,7 +233,7 @@ def resolve_workspace(
 
     if effective_task_id:
         for root in workspace_registry.list_paths():
-            if _task_exists(root, effective_task_id):
+            if _task_exists_in_state(root, effective_task_id):
                 if register:
                     _register_workspace(root, workspace_registry)
                 return root
