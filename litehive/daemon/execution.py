@@ -78,21 +78,9 @@ def _halt_for_origin_divergence(
     divergence_reason = check_origin_divergence(workspace)
     if divergence_reason is None:
         return None
-    _write_pool_stop_reason(workspace, "diverged_from_origin")
+    set_pool_stop_reason(workspace, "diverged_from_origin")
     _append_attention_log(attention_workspace, divergence_reason)
     return divergence_reason
-
-
-def _write_pool_stop_reason(workspace: Path, reason: str) -> None:
-    """
-    Daemon-internal alias for the canonical pool-stop-reason writer.
-
-    Wrapping ``set_pool_stop_reason`` lets the divergence/halt branches
-    read uniformly (``_write_pool_stop_reason(...)``) without each one
-    pulling in the full ``state.persist`` import surface, and gives the
-    tests one place to monkey-patch when verifying halt sequencing.
-    """
-    set_pool_stop_reason(workspace, reason)
 
 
 def sleep_with_stop(seconds: float, stop_requested_fn) -> None:

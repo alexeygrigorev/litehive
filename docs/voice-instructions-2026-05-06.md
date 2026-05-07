@@ -2014,9 +2014,13 @@ Legend:
   `maybe_run_workspace_backup(...)`. Those helpers now return the
   divergence message or backup timestamp, and `run_daemon_loop(...)`
   owns rendering those facts to the daemon output stream.
-- [ ] DM5. Remove useless retry/restart code around line 133 if it is
+- [x] DM5. Remove useless retry/restart code around line 133 if it is
   dead weight.
   Source: note 5, 15:48-16:04.
+  Completed 2026-05-07: removed the dead
+  `_write_pool_stop_reason(...)` wrapper around `set_pool_stop_reason`.
+  `_halt_for_origin_divergence(...)` now calls the canonical state
+  writer directly, leaving no extra daemon-side retry/rewrite shim.
 - [ ] DM6. Document `sleep_with_stop`: why it exists, where it is
   called, and how stop requests enter it.
   Source: note 5, 16:04-16:18.
