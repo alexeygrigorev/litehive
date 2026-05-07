@@ -12,7 +12,7 @@ reads activity for routing should be redirected to the reports.
 
 from typing import Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
 
 from .common import (
     FEEDBACK_CAP,
@@ -43,6 +43,7 @@ TaskActivityStage: TypeAlias = ReportPipelineState | PipelineStatus
 TaskActivitySource: TypeAlias = Literal["agent", "operator", "system"]
 StageReportVerdict: TypeAlias = Literal["pass", "reject", "blocked"]
 TaskActivityVerdict: TypeAlias = Verdict
+FailureDiagnosticValue: TypeAlias = str | int | bool | None | list[str]
 
 SEMANTIC_REJECT_CLASSIFICATION = "semantic_reject"
 SEMANTIC_REJECT_ROLES = frozenset({"qa", "reviewer"})
@@ -112,6 +113,34 @@ REPORT_VERDICT_KINDS: frozenset[TaskActivityVerdict] = frozenset(
 )
 
 
+class FailureDiagnostics(RootModel[dict[str, FailureDiagnosticValue]]):
+    """
+    Typed report-local failure evidence.
+
+    The persisted shape remains a JSON object so existing reports and
+    status renderers keep working, but callers construct and read a
+    named domain value instead of passing anonymous dictionaries
+    through ``StageReport``.
+    """
+
+    root: dict[str, FailureDiagnosticValue] = Field(default_factory=dict)
+
+    def __bool__(self) -> bool:
+        return bool(self.root)
+
+    def __getitem__(self, key: str) -> FailureDiagnosticValue:
+        return self.root[key]
+
+    def get(self, key: str, default: FailureDiagnosticValue = None) -> FailureDiagnosticValue:
+        return self.root.get(key, default)
+
+    def as_dict(self) -> dict[str, FailureDiagnosticValue]:
+        """
+        Return a mutable dictionary copy for legacy boundaries.
+        """
+        return dict(self.root)
+
+
 def canonical_report_pipeline_state(value: str | TaskStage) -> ReportPipelineState:
     """
     Convert a stage label to the typed ``ReportPipelineState``.
@@ -167,7 +196,7 @@ class StageReport(BaseModel):
     outcome: OutcomeKind | None = None  # Terminal outcome if stage completed task
     outcome_reason_code: OutcomeReasonCode | None = None  # Machine-readable outcome reason
     failure_classification: str | None = None  # Type of failure if applicable
-    failure_diagnostics: dict[str, str | int | bool | None | list[str]] = Field(default_factory=dict)  # Report evidence
+    failure_diagnostics: FailureDiagnostics = Field(default_factory=FailureDiagnostics)  # Report evidence
     duration_seconds: int = 0  # How long stage execution took
     created_at: str = Field(default_factory=utcnow)  # When report was generated
 
@@ -345,6 +374,8 @@ class TaskActivityEntry(BaseModel):
 __all__ = [
     "ExecutionEstimate",
     "FEEDBACK_CAP",
+    "FailureDiagnosticValue",
+    "FailureDiagnostics",
     "FollowUpTaskSpec",
     "RecoveryAction",
     "RecoveryEvidenceItem",

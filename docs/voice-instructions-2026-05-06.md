@@ -883,6 +883,11 @@ Legend:
 - [ ] D2. Replace `FailureDiagnostics` dictionaries with a typed
   class/dataclass.
   Source: note 4, 00:14-00:20.
+  Progress 2026-05-07: added `FailureDiagnostics` as the typed
+  `StageReport.failure_diagnostics` value object. Existing report
+  constructors still accept plain dictionaries at the boundary and
+  persisted JSON remains an object, but report consumers now read a
+  named domain type rather than an anonymous dictionary.
 - [ ] D3. Re-read and verify every previous `agents/parsing.py`
   comment; the note says the same feedback keeps recurring.
   Source: note 4, 00:25-00:31.

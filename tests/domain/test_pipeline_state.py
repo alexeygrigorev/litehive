@@ -10,7 +10,12 @@ from litehive.domain.common import (
     pipeline_status_for_pipeline_state,
     task_stage_for_pipeline_state,
 )
-from litehive.domain.reports import ReportPipelineState, StageReport, canonical_stage_report_verdict
+from litehive.domain.reports import (
+    FailureDiagnostics,
+    ReportPipelineState,
+    StageReport,
+    canonical_stage_report_verdict,
+)
 from litehive.domain.runtime import RuntimeSubagentState, Subagent
 
 
@@ -93,6 +98,29 @@ def test_stage_report_pipeline_state_uses_named_report_projection() -> None:
     assert get_args(ReportPipelineState)[0] is TaskStage
     report = StageReport(task_id="T-0001", pipeline_state="implementing", verdict="pass", summary="ok")
     assert report.pipeline_state == "implementing"
+
+
+def test_stage_report_failure_diagnostics_are_typed_but_serialize_as_object() -> None:
+    report = StageReport(
+        task_id="T-0001",
+        pipeline_state="implementing",
+        verdict="reject",
+        summary="hook failed",
+        failure_diagnostics={
+            "phase": "after_commit",
+            "consecutive_same_hook_rejects": 2,
+            "claimed_files_changed": ["src/app.py"],
+        },
+    )
+
+    assert isinstance(report.failure_diagnostics, FailureDiagnostics)
+    assert report.failure_diagnostics["phase"] == "after_commit"
+    assert report.failure_diagnostics.get("consecutive_same_hook_rejects") == 2
+    assert report.model_dump(mode="json")["failure_diagnostics"] == {
+        "phase": "after_commit",
+        "consecutive_same_hook_rejects": 2,
+        "claimed_files_changed": ["src/app.py"],
+    }
 
 
 def test_subagent_status_is_domain_enum_with_heru_serialized_values() -> None:
