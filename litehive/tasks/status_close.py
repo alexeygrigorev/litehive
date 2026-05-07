@@ -23,7 +23,6 @@ from litehive.state.locking import (
     workspace_lock,
 )
 from litehive.state.persist import load_state
-from litehive.state.records import get_task_record, require_task
 from litehive.tasks.audit import snapshot_task_audit_state
 from litehive.tasks.queue import drop_task_from_workspace_state
 from litehive.tasks.stop import stop_current_task
@@ -56,7 +55,7 @@ def _abandon_task_transition(
 
     root = workspace.root
     with workspace_lock(root):
-        task = require_task(root, task_id)
+        task = workspace.require_task(task_id)
         before_task = snapshot_task_audit_state(task)
         state = load_state(root)
         queue_before = list(state.queue)
@@ -117,7 +116,7 @@ def _close_task_transition(
         raise ValueError(f"Unsupported close outcome '{outcome}'. Expected one of: {allowed}")
     state = load_state(root)
     stop_summary: StopTaskSummary | None = None
-    task_snapshot = get_task_record(root, task_id)
+    task_snapshot = workspace.get_task_record(task_id)
     if task_snapshot is None or task_snapshot.runtime.execution.active_subagent is None:
         active_subagent_pid = None
     else:
@@ -135,7 +134,7 @@ def _close_task_transition(
     _terminate_subagent_pid(task_id, active_subagent_pid)
     _terminate_subagent_pid(task_id, runner_pid)
     with workspace_lock(root):
-        task = get_task_record(root, task_id)
+        task = workspace.get_task_record(task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
         before_task = snapshot_task_audit_state(task)
@@ -145,7 +144,7 @@ def _close_task_transition(
                 raise ValueError("Follow-up task id must not be empty")
             if follow_up_task_id == task.id:
                 raise ValueError(f"Task {task.id} cannot reference itself as a follow-up task")
-            if get_task_record(root, follow_up_task_id) is None:
+            if workspace.get_task_record(follow_up_task_id) is None:
                 raise ValueError(f"Task {follow_up_task_id} not found")
         state = load_state(root)
         queue_before = list(state.queue)
@@ -195,7 +194,7 @@ def _park_task_transition(
     """
     root = workspace.root
     with workspace_lock(root):
-        task = require_task(root, task_id)
+        task = workspace.require_task(task_id)
         before_task = snapshot_task_audit_state(task)
         state = load_state(root)
         queue_before = list(state.queue)
