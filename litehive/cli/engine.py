@@ -331,12 +331,16 @@ def _collect_quota_statuses() -> dict[str, object]:
     because they share a backend; ``gemini`` has no probe surface
     so it carries the literal ``"unsupported"`` sentinel.
     """
+    claude_status = _safe_quota_check(check_claude_quota)
+    codex_status = _safe_quota_check(check_codex_quota)
+    copilot_status = _safe_quota_check(check_copilot_quota)
     zai_status = _safe_quota_check(check_zai_quota)
+    gemini_status = "unsupported"
     return {
-        "claude": _safe_quota_check(check_claude_quota),
-        "codex": _safe_quota_check(check_codex_quota),
-        "copilot": _safe_quota_check(check_copilot_quota),
-        "gemini": "unsupported",
+        "claude": claude_status,
+        "codex": codex_status,
+        "copilot": copilot_status,
+        "gemini": gemini_status,
         "goz": zai_status,
         "opencode": zai_status,
     }

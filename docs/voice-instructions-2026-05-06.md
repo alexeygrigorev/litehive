@@ -1402,10 +1402,13 @@ Legend:
   freeze/unfreeze leaves `.litehive/config.yaml` unchanged and writes
   audit rows.
   Source: note 4, 21:54-22:12.
-- [ ] C13. In quota status collection, do not inline complex values in
+- [x] C13. In quota status collection, do not inline complex values in
   a dictionary. Hoist each provider status to a named local such as
   ZAI status, quota status, Codex status, Copilot status.
   Source: note 4, 22:25-23:02.
+  Completed 2026-05-07: `_collect_quota_statuses` now assigns
+  Claude, Codex, Copilot, Gemini, and shared Z.ai probe results to
+  named locals before constructing the engine-keyed status map.
 - [ ] C14. Move quota check and quota error label logic to Heru or a
   dedicated engine/quota domain module if it is not CLI interaction.
   Source: note 4, 23:12-23:38.
