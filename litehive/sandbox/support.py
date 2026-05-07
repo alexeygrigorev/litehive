@@ -296,10 +296,3 @@ class SandboxedAdapter(ExternalCLIAdapter):
     def render_transcript(self, execution: CLIExecutionResult) -> str:
         """Delegate transcript rendering to the wrapped adapter — sandboxing does not change the post-mortem format the engine adapter knows how to produce."""
         return self._adapter.render_transcript(execution)
-
-
-__all__ = [
-    "SandboxedAdapter",
-    "forced_engine_rw_state_dirs",
-    "sanitize_path_env",
-]

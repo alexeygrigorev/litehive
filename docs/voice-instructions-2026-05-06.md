@@ -1069,8 +1069,11 @@ Legend:
   to use the sandbox package directly without compatibility wrappers.
 - [ ] S2. Split `SandboxSupport`; it is too large.
   Source: note 4, 02:01-02:07.
-- [ ] S3. Remove the `__all__` export bag from sandbox support.
+- [x] S3. Remove the `__all__` export bag from sandbox support.
   Source: note 4, 02:07-02:17.
+  Completed 2026-05-07: removed the `__all__` list from
+  `litehive/sandbox/support.py`; callers import the concrete names
+  they use directly from the owning module.
 - [ ] S4. Re-read previous sandbox comments and verify the exact old
   code paths, because the note says old comments still remain.
   Source: note 4, 02:17-02:49.
