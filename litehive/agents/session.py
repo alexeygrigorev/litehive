@@ -50,6 +50,42 @@ _COMPLETED_INACTIVITY_PATTERN = re.compile(
 
 
 @dataclass
+class SubagentInactivityTimeoutPolicy:
+    """
+    Timeout rules for live and completed subagent executions.
+
+    Live watchdog limits can vary by engine, while completed-process
+    detection reads the stderr marker emitted by Heru's watchdog after
+    the engine has already exited.
+    """
+
+    config: "LitehiveConfig"
+    completed_marker: re.Pattern[str] = _COMPLETED_INACTIVITY_PATTERN
+
+    def live_timeout_seconds(self, engine_name: str) -> float:
+        """
+        Return the stdout idle budget for one engine.
+        """
+        if engine_name == "opencode":
+            return _OPENCODE_INACTIVITY_TIMEOUT_SECONDS
+        return self.config.subagent_inactivity_timeout_seconds
+
+    def completed_timeout(self, execution: CLIExecutionResult) -> SubagentInactivityTimeout | None:
+        """
+        Return a completed-run timeout when stderr carries the watchdog marker.
+        """
+        match = self.completed_marker.search(execution.stderr or "")
+        if match is None:
+            return None
+        limit_seconds = float(match.group("seconds"))
+        return SubagentInactivityTimeout(
+            execution,
+            idle_seconds=limit_seconds,
+            limit_seconds=limit_seconds,
+        )
+
+
+@dataclass
 class SubagentSessionManager:
     """
     Persist subagent session state and stream artifacts for one manager.
@@ -65,6 +101,7 @@ class SubagentSessionManager:
     workspace: "Workspace"
     sandbox: "SandboxLauncher"
     config: "LitehiveConfig"
+    inactivity_policy: SubagentInactivityTimeoutPolicy
     _stream_offsets: dict[str, int] = field(default_factory=dict)
 
     def session_storage_fields(
@@ -254,9 +291,7 @@ class SubagentSessionManager:
         lookup keeps the engine-specific exception in one place
         instead of scattering hard-coded exceptions across the watchdog.
         """
-        if engine_name == "opencode":
-            return _OPENCODE_INACTIVITY_TIMEOUT_SECONDS
-        return self.config.subagent_inactivity_timeout_seconds
+        return self.inactivity_policy.live_timeout_seconds(engine_name)
 
     def completed_inactivity_timeout(
         self,
@@ -272,15 +307,7 @@ class SubagentSessionManager:
         timeout signal, and let the lifecycle accept whatever partial
         output remained.
         """
-        match = _COMPLETED_INACTIVITY_PATTERN.search(execution.stderr or "")
-        if match is None:
-            return None
-        limit_seconds = float(match.group("seconds"))
-        return SubagentInactivityTimeout(
-            execution,
-            idle_seconds=limit_seconds,
-            limit_seconds=limit_seconds,
-        )
+        return self.inactivity_policy.completed_timeout(execution)
 
     def check_stdout_inactivity(
         self,

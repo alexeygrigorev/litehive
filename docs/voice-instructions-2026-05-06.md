@@ -803,11 +803,11 @@ Legend:
   preserving the dictionary payload in the prompt context. `rg` now
   shows `load_subagent_session(...)` only at the compatibility method
   and storage implementation; production callers use the typed record.
-- [ ] M39. Review continuation handling. If continuation is always
+- [x] M39. Review continuation handling. If continuation is always
   required in a given flow, remove `None`; if not, model the distinct
   start/continue states.
   Source: note 3, 30:21-30:53; note 6, 00:47-00:59.
-  Progress 2026-05-07: introduced explicit subagent continuation
+  Verified 2026-05-07: introduced explicit subagent continuation
   state objects (`NoSubagentContinuation` and
   `CapturedSubagentContinuation`) for session/report persistence.
   Subagent report payloads, session snapshot metadata, concrete
@@ -815,18 +815,30 @@ Legend:
   interrupted-subagent persistence now carry a
   `SubagentContinuationState` instead of raw
   `RuntimeEngineContinuation | None` or pre-serialized dictionaries.
-  Remaining work: review lifecycle continuation flows outside
-  subagent artifact persistence and decide which optional states are
-  true start-vs-continue domain states.
-  Progress 2026-05-07: added lifecycle `FreshEngineSession` and
+  Added lifecycle `FreshEngineSession` and
   `ResumableEngineSession` continuation states behind `Session`,
   plus object methods for reading and capturing the engine resume id.
   The crash-resume adapter now uses those methods instead of reading
-  and writing `Session.engine_session_id` directly.
+  and writing `Session.engine_session_id` directly. Traced subagent
+  artifact persistence, interrupted-subagent persistence, lifecycle
+  `Session`, and `HeruEngineAdapter._run_with_crash_resume`; the only
+  remaining continuation `None` handling is at the Heru boundary helper
+  or legacy extraction fallback, while production report/session
+  construction carries modeled start-vs-continue state. Reran focused
+  ruff, pyrefly, subagent report/session/manager/event-stream/recovery
+  tests, lifecycle SQLite session tests, engine-adapter tests, and
+  agent retry continuation tests.
 - [ ] M40. Revisit `subagent_inactivity_timeout_seconds`,
   `open code inactivity timeout`, and `compiled inactivity pattern`;
   make each previous small note into a separate task.
   Source: note 3, 31:00-31:24; note 4, 10:15-10:43.
+  Progress 2026-05-07: extracted
+  `SubagentInactivityTimeoutPolicy` and inject it through the
+  container into `SubagentSessionManager`. The policy now owns the
+  opencode live-timeout exception and completed-process stderr marker
+  parsing, while the manager delegates instead of hard-coding those
+  rules inline. Remaining work: split the remaining stale-PID and
+  inactivity notes into separate plan items before deeper cleanup.
 - [ ] M41. Decide why `merge_resolver` is in the current package and
   move it if its package ownership is wrong.
   Source: note 3, 31:24-31:36.
