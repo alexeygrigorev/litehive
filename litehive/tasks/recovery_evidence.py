@@ -12,7 +12,7 @@ from litehive.observability.engine_monitoring import load_engine_monitoring
 from litehive.observability.events import read_events
 from litehive.state.records import get_task_worktree_path
 from litehive.tasks.paths import (
-    latest_run_all_log_path,
+    latest_run_all_log_path_for_workspace,
     latest_subagent_base_for_workspace,
     resolve_artifact_path,
     status_entry_paths,
@@ -42,7 +42,7 @@ def collect_recovery_evidence(
     activity_entries = workspace.task_activity(task).load()
     task_events = read_events(workspace, task)
     latest_report = latest_stage_report(workspace, task)
-    latest_run_log = latest_run_all_log_path(root)
+    latest_run_log = latest_run_all_log_path_for_workspace(workspace)
     monitoring = load_engine_monitoring(workspace)
     engine_name = None
     if task.runtime.execution.active_subagent is not None:

@@ -158,16 +158,15 @@ def read_text_artifact(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def latest_run_all_log_path(root: Path) -> Path | None:
+def latest_run_all_log_path_for_workspace(workspace: Workspace) -> Path | None:
     """
     Find the most recent ``run-all`` log file for the workspace.
 
-    Called by the operator-facing logs CLI to surface the last batch run
-    without forcing the operator to know the timestamped on-disk layout;
-    walks the whole tree because the ``run-all`` log path is partitioned by
-    date.
+    Called by recovery evidence to surface the last batch run without
+    forcing the caller to know the timestamped on-disk layout; walks the
+    whole tree because the ``run-all`` log path is partitioned by date.
     """
-    logs_root = workspace_path(root.resolve(), "logs", "run-all")
+    logs_root = workspace.runtime_path("logs", "run-all")
     if not logs_root.exists():
         return None
     candidates = [
@@ -178,13 +177,6 @@ def latest_run_all_log_path(root: Path) -> Path | None:
     if not candidates:
         return None
     return sorted(candidates)[-1]
-
-
-def latest_subagent_base(root: Path, task: TaskRecord) -> Path | None:
-    """
-    Path-based compatibility wrapper for latest subagent lookup.
-    """
-    return latest_subagent_base_for_workspace(Workspace.from_path(root), task)
 
 
 def latest_subagent_base_for_workspace(workspace: Workspace, task: TaskRecord) -> Path | None:
