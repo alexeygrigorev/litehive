@@ -2103,9 +2103,14 @@ Legend:
   point where the pid guard is needed. Kept `unregister_daemon`
   because it owns lock release, pid-guarded metadata clearing, and
   process-state cleanup.
-- [ ] DM16. Split daemon termination behavior into submodules/classes
+- [x] DM16. Split daemon termination behavior into submodules/classes
   if it violates single responsibility.
   Source: note 5, 20:19-20:42.
+  Completed 2026-05-07: moved daemon pid wait, SIGTERM/SIGKILL
+  escalation, and child process-group termination helpers into
+  `litehive.daemon.termination`. `daemon.execution` now keeps the
+  start/stop orchestration and daemon loop while importing the
+  termination behavior from that focused module.
 - [ ] DM17. Fix type checking around "runner is live" and `has_work`;
   functions should accept and return normal typed objects.
   Source: note 5, 20:43-21:07.

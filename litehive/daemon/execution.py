@@ -41,7 +41,7 @@ from litehive.observability.status import (
 from litehive.observability.venv_health import daemon_broken_venv_message, probe_broken_venv_executables
 from litehive.state.backup import create_scheduled_workspace_backup
 from litehive.state.persist import load_state_for_workspace, set_pool_stop_reason
-from litehive.state.locking import runner_pid_is_alive, runner_status_for_workspace
+from litehive.state.locking import runner_status_for_workspace
 from litehive.workspace import Workspace
 
 from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir_for_workspace
@@ -54,6 +54,7 @@ from .registry import (
     touch_daemon,
     unregister_daemon,
 )
+from .termination import force_kill_recorded_daemon, terminate_child_process, terminate_recorded_daemon
 
 logger = logging.getLogger(__name__)
 
@@ -238,106 +239,6 @@ def _daemon_healthcheck_failed(entry: DaemonRegistryEntry, config: DaemonConfig)
     return heartbeat_age is None or heartbeat_age > config.health_timeout_seconds
 
 
-def _wait_for_pid_exit(pid: int, timeout_seconds: float, poll_interval_seconds: float) -> bool:
-    """
-    Block until a foreign pid is gone or the deadline passes.
-
-    The stop sequence owns the registry row, not the ``Popen`` handle
-    — so ``process.wait`` is unavailable and we have to poll
-    ``runner_pid_is_alive`` instead. Used by the SIGTERM/SIGKILL escalation
-    in ``_terminate_recorded_daemon`` and ``_force_kill_recorded_daemon``.
-    """
-    deadline = time.monotonic() + max(timeout_seconds, 0.0)
-    while True:
-        if not runner_pid_is_alive(pid):
-            return True
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            return False
-        time.sleep(min(remaining, poll_interval_seconds))
-
-
-def _force_kill_recorded_daemon(workspace: Path, pid: int, config: DaemonConfig) -> None:
-    """
-    SIGKILL a daemon that ignored SIGTERM, then clear its registration.
-
-    Reached either as the escalation step of ``_terminate_recorded_daemon``
-    or directly from ``start_background_daemon`` when an existing
-    registration row fails its heartbeat check. Raises if the process
-    refuses to die so the caller does not falsely conclude the
-    workspace is free for a new daemon to register.
-    """
-    if not runner_pid_is_alive(pid):
-        unregister_daemon(workspace, pid=pid)
-        return
-    try:
-        os.kill(pid, signal.SIGKILL)
-    except ProcessLookupError:
-        unregister_daemon(workspace, pid=pid)
-        return
-    except PermissionError as exc:
-        raise RuntimeError(f"failed to send SIGKILL to daemon pid={pid}: {exc}") from exc
-    if not _wait_for_pid_exit(
-        pid,
-        timeout_seconds=config.force_kill_timeout_seconds,
-        poll_interval_seconds=config.exit_poll_interval_seconds,
-    ):
-        raise RuntimeError(f"daemon pid={pid} did not exit after SIGKILL")
-    unregister_daemon(workspace, pid=pid)
-
-
-def _terminate_recorded_daemon(workspace: Path, pid: int, config: DaemonConfig) -> None:
-    """
-    Run the graceful-then-forceful stop sequence against a registered daemon.
-
-    Sends SIGTERM first so the daemon's signal handler can flush its
-    heartbeat thread and unregister cleanly; if the process is still
-    alive after the configured daemon stop grace period we escalate to
-    SIGKILL via ``_force_kill_recorded_daemon``. Called by
-    ``stop_workspace_daemon`` (and the ``litehive stop`` shortcut)
-    when the operator asks the workspace's daemon to stop.
-    """
-    if not runner_pid_is_alive(pid):
-        unregister_daemon(workspace, pid=pid)
-        return
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        unregister_daemon(workspace, pid=pid)
-        return
-    except PermissionError as exc:
-        raise RuntimeError(f"failed to send SIGTERM to daemon pid={pid}: {exc}") from exc
-    if _wait_for_pid_exit(
-        pid,
-        timeout_seconds=config.stop_grace_period_seconds,
-        poll_interval_seconds=config.exit_poll_interval_seconds,
-    ):
-        unregister_daemon(workspace, pid=pid)
-        return
-    _force_kill_recorded_daemon(workspace, pid=pid, config=config)
-
-
-def _terminate_child_process(process: subprocess.Popen[str]) -> None:
-    """
-    Forward a stop signal from the daemon to the whole ``litehive run`` subtree.
-
-    The child runs in its own session (``start_new_session=True``)
-    because it spawns subagents that themselves spawn subprocesses;
-    sending SIGTERM only to the immediate child would orphan that
-    subtree. ``killpg`` covers the whole group, with
-    ``process.terminate`` as a fallback for platforms that lack
-    ``killpg``.
-    """
-    if process.poll() is not None:
-        return
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-    except OSError:
-        process.terminate()
-
-
 def _runner_is_live(status) -> bool:
     """
     True when another ``litehive run`` is still active for the workspace.
@@ -503,7 +404,7 @@ def run_daemon_loop(
 
         Flips the local ``stop_requested`` flag so the loop exits
         after the current iteration, and forwards the signal to the
-        live ``litehive run`` child via ``_terminate_child_process``
+        live ``litehive run`` child via ``terminate_child_process``
         so a Ctrl-C from the operator reaches the whole subtree
         instead of leaving a zombie subagent attached to a dead
         daemon.
@@ -513,7 +414,7 @@ def run_daemon_loop(
         stop_requested = True
         child = current_child["process"]
         if child is not None:
-            _terminate_child_process(child)
+            terminate_child_process(child)
 
     previous_term = signal.signal(signal.SIGTERM, _handle_signal)
     previous_int = signal.signal(signal.SIGINT, _handle_signal)
@@ -650,7 +551,7 @@ def start_background_daemon(workspace: Path) -> int:
     existing = daemon_metadata(workspace)
     if existing is not None and existing.status == "running":
         if existing.pid is not None and _daemon_healthcheck_failed(existing, daemon_config):
-            _force_kill_recorded_daemon(workspace, pid=existing.pid, config=daemon_config)
+            force_kill_recorded_daemon(workspace, pid=existing.pid, config=daemon_config)
         else:
             raise RuntimeError(f"daemon already running for {workspace}: pid={existing.pid}")
     if existing is not None and existing.status == "stale":
@@ -711,7 +612,7 @@ def stop_workspace_daemon(workspace: Path) -> DaemonRegistryEntry | None:
     if entry.pid is None:
         unregister_daemon(workspace)
         return None
-    _terminate_recorded_daemon(workspace, pid=entry.pid, config=daemon_config)
+    terminate_recorded_daemon(workspace, pid=entry.pid, config=daemon_config)
     return entry
 
 
