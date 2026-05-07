@@ -29,7 +29,6 @@ from litehive.domain.common import PipelineState
 from litehive.domain.reports import TaskActivityEntry, TaskActivityVerdict
 from litehive.lifecycle.orchestration import ExecutionResult, run_task_for_workspace
 from litehive.state.backup import create_workspace_backup, list_workspace_backups, restore_workspace_backup
-from litehive.state.records import get_task
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.state.persist import (
     CONSECUTIVE_TASK_FAILURE_STOP_REASON,
@@ -564,7 +563,7 @@ def report_command(
     if not task_id:
         print("report failed: no task id provided, LITEHIVE_TASK_ID is unset, and no active task exists")
         return 1
-    task = get_task(root, task_id)
+    task = workspace_obj.get_task(task_id)
     if task is None:
         print(f"report failed: task {task_id} not found")
         return 1
