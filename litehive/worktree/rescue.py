@@ -37,7 +37,11 @@ from litehive.git.ops import (
     unmerged_files,
 )
 from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
-from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard, save_state
+from litehive.state.persist import (
+    load_state_for_workspace,
+    persist_task_and_state_without_runner_guard_for_workspace,
+    save_state_for_workspace,
+)
 from litehive.state.records import (
     clear_task_worktree_path,
     get_task,
@@ -47,9 +51,17 @@ from litehive.state.records import (
     set_task_commit_sha,
 )
 from litehive.worktree.paths import is_managed_worktree_path, resolve_recorded_worktree_path
+from litehive.workspace import Workspace
 
 
 def collect_rescue_candidates(root: Path) -> list[RescueCandidate]:
+    """
+    Path-based compatibility wrapper for rescue candidate collection.
+    """
+    return collect_rescue_candidates_for_workspace(Workspace.from_path(root))
+
+
+def collect_rescue_candidates_for_workspace(workspace: Workspace) -> list[RescueCandidate]:
     """
     Return tasks flagged ``merge_failed`` whose worktrees still hold commits.
 
@@ -58,6 +70,7 @@ def collect_rescue_candidates(root: Path) -> list[RescueCandidate]:
     Sorted by task id so the CLI output is stable and the operator
     can re-invoke against the same ordering.
     """
+    root = workspace.root
     candidates: list[RescueCandidate] = []
     for task in list_tasks(root, strict=False):
         if task.status != TaskStatus.FLAGGED or task.flag_reason != "merge_failed":
@@ -103,6 +116,13 @@ def require_clean_main_checkout(root: Path) -> None:
 
 def apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResult:
     """
+    Path-based compatibility wrapper for applying a rescue candidate.
+    """
+    return apply_rescue_candidate_for_workspace(Workspace.from_path(root), candidate)
+
+
+def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: RescueCandidate) -> RescueResult:
+    """
     Cherry-pick a candidate's commits onto main and finalize the task record.
 
     Called once per candidate by ``WorktreeService.apply_rescue_candidate``.
@@ -113,6 +133,7 @@ def apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResu
     ``already_landed``, ``manual_conflict``, …) so the CLI can render
     a per-row status table.
     """
+    root = workspace.root
     task = get_task(root, candidate.task_id)
     if task is None:
         return RescueResult(
@@ -130,7 +151,7 @@ def apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResu
             commit_shas=candidate.commit_shas,
             message="recorded worktree is missing",
         )
-    if load_state(root).active_task_id == task.id:
+    if load_state_for_workspace(workspace).active_task_id == task.id:
         return RescueResult(
             task_id=candidate.task_id,
             worktree_rel=candidate.worktree_rel,
@@ -150,7 +171,7 @@ def apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResu
             and _worktree_patch_already_on_main(root, worktree_head, main_head)
         ):
             try:
-                _finalize_rescue(root, task, outcome="already-landed", head_sha=main_head)
+                _finalize_rescue_for_workspace(workspace, task, outcome="already-landed", head_sha=main_head)
             except WorkspaceConflictError as exc:
                 return RescueResult(
                     task_id=candidate.task_id,
@@ -174,7 +195,7 @@ def apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResu
             and _worktree_has_non_metadata_changes(root, candidate.worktree_path, task.id)
         ):
             try:
-                _finalize_rescue(root, task, outcome="already-landed", head_sha=main_head)
+                _finalize_rescue_for_workspace(workspace, task, outcome="already-landed", head_sha=main_head)
             except WorkspaceConflictError as exc:
                 return RescueResult(
                     task_id=candidate.task_id,
@@ -192,7 +213,7 @@ def apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResu
                 message="worktree patch already landed on main",
             )
         try:
-            _finalize_rescue(root, task, outcome="no-op", head_sha=main_head)
+            _finalize_rescue_for_workspace(workspace, task, outcome="no-op", head_sha=main_head)
         except WorkspaceConflictError as exc:
             return RescueResult(
                 task_id=candidate.task_id,
@@ -212,7 +233,7 @@ def apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResu
 
     if worktree_head and main_head and _worktree_patch_already_on_main(root, worktree_head, main_head):
         try:
-            _finalize_rescue(root, task, outcome="already-landed", head_sha=main_head)
+            _finalize_rescue_for_workspace(workspace, task, outcome="already-landed", head_sha=main_head)
         except WorkspaceConflictError as exc:
             return RescueResult(
                 task_id=candidate.task_id,
@@ -286,7 +307,7 @@ def apply_rescue_candidate(root: Path, candidate: RescueCandidate) -> RescueResu
     _restore_litehive_changes(root, stashed_metadata)
     head_sha = current_head(root)
     try:
-        _finalize_rescue(root, task, outcome="rescued", head_sha=head_sha)
+        _finalize_rescue_for_workspace(workspace, task, outcome="rescued", head_sha=head_sha)
     except WorkspaceConflictError as exc:
         return RescueResult(
             task_id=candidate.task_id,
@@ -390,6 +411,13 @@ def _drop_task_metadata_changes(root: Path, task_id: str) -> None:
 
 def _finalize_rescue(root: Path, task: TaskRecord, outcome: str, head_sha: str | None) -> None:
     """
+    Path-based compatibility wrapper for finalizing rescue state.
+    """
+    _finalize_rescue_for_workspace(Workspace.from_path(root), task, outcome=outcome, head_sha=head_sha)
+
+
+def _finalize_rescue_for_workspace(workspace: Workspace, task: TaskRecord, outcome: str, head_sha: str | None) -> None:
+    """
     Commit the rescue result to task + workspace state under the workspace lock.
 
     Mutating both the task and the workspace ``unmerged_worktrees``
@@ -405,8 +433,9 @@ def _finalize_rescue(root: Path, task: TaskRecord, outcome: str, head_sha: str |
     elif outcome == "already-landed" and head_sha:
         journal_message = f"Worktree rescue reconciled: patch already landed on main at {head_sha}."
 
+    root = workspace.root
     with workspace_lock(root):
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         if state.active_task_id == task.id:
             raise WorkspaceConflictError(
                 f"task {task.id} is still state.active_task_id; worktree rescue refuses to race with the runner"
@@ -419,8 +448,8 @@ def _finalize_rescue(root: Path, task: TaskRecord, outcome: str, head_sha: str |
             task.status = TaskStatus.DONE
             task.pipeline_status = PipelineStatus.DONE
             set_task_commit_sha(task, head_sha)
-        persist_task_and_state_without_runner_guard(
-            root,
+        persist_task_and_state_without_runner_guard_for_workspace(
+            workspace,
             task=task,
             state=state,
             journal_message=journal_message,
@@ -437,12 +466,13 @@ def _ensure_unmerged_worktree_state(root: Path, task_id: str, worktree_rel: str)
     idempotent check (skip when already present) keeps repeated
     rescue attempts from duplicating the entry.
     """
-    state = load_state(root)
+    workspace = Workspace.from_path(root)
+    state = load_state_for_workspace(workspace)
     for entry in state.unmerged_worktrees:
         if entry.task_id == task_id:
             return
     state.unmerged_worktrees.append(UnmergedWorktree(task_id=task_id, worktree_path=worktree_rel))
-    save_state(root, state)
+    save_state_for_workspace(workspace, state)
 
 
 def _stash_litehive_changes(root: Path) -> str | None:

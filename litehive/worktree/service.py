@@ -61,7 +61,11 @@ from litehive.worktree.paths import (
     task_worktree_branch,
     task_worktree_path,
 )
-from litehive.worktree.rescue import apply_rescue_candidate, collect_rescue_candidates, require_clean_main_checkout
+from litehive.worktree.rescue import (
+    apply_rescue_candidate_for_workspace,
+    collect_rescue_candidates_for_workspace,
+    require_clean_main_checkout,
+)
 from litehive.workspace import Workspace
 
 
@@ -191,7 +195,7 @@ class WorktreeService:
         lists candidates first so the operator can review before
         applying.
         """
-        return collect_rescue_candidates(self.root)
+        return collect_rescue_candidates_for_workspace(self.workspace)
 
     def apply_rescue_candidate(self, candidate: RescueCandidate) -> RescueResult:
         """
@@ -201,7 +205,7 @@ class WorktreeService:
         scrub and finalization. Caller must have run
         :meth:`require_clean_main_checkout` once for the batch.
         """
-        return apply_rescue_candidate(self.root, candidate)
+        return apply_rescue_candidate_for_workspace(self.workspace, candidate)
 
     def inspect_task_worktree(self, task: TaskRecord) -> TaskWorktreeInspection:
         """
