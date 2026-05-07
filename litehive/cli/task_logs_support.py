@@ -25,13 +25,6 @@ _DEFAULT_TAIL_LINES = 40
 FOLLOW_POLL_SECONDS = 0.1
 
 
-def show_latest_daemon_log(root: Path) -> int:
-    """
-    Path-based compatibility wrapper for latest daemon log display.
-    """
-    return show_latest_daemon_log_for_workspace(Workspace.from_path(root))
-
-
 def show_latest_daemon_log_for_workspace(workspace: Workspace) -> int:
     """
     Tail the most recent daemon run log.
@@ -51,13 +44,6 @@ def show_latest_daemon_log_for_workspace(workspace: Workspace) -> int:
     print()
     print(_tail_text(read_text_artifact(log_path)))
     return 0
-
-
-def list_daemon_sessions(root: Path) -> int:
-    """
-    Path-based compatibility wrapper for daemon session listing.
-    """
-    return list_daemon_sessions_for_workspace(Workspace.from_path(root))
 
 
 def list_daemon_sessions_for_workspace(workspace: Workspace) -> int:
@@ -145,13 +131,6 @@ def list_task_subagents_for_workspace(workspace: Workspace, task: TaskRecord) ->
             f"exit_code={exit_str}  duration={duration}"
         )
     return 0
-
-
-def follow_active_subagent(root: Path, task_id: str | None = None) -> int:
-    """
-    Path-based compatibility wrapper for live subagent stdout following.
-    """
-    return follow_active_subagent_for_workspace(Workspace.from_path(root), task_id=task_id)
 
 
 def follow_active_subagent_for_workspace(workspace: Workspace, task_id: str | None = None) -> int:
@@ -402,13 +381,6 @@ def _format_duration(started_at: object, completed_at: object) -> str:
     return "-"
 
 
-def resolve_follow_task(root: Path, task_id: str | None) -> TaskRecord | None:
-    """
-    Path-based compatibility wrapper for follow-target resolution.
-    """
-    return resolve_follow_task_for_workspace(Workspace.from_path(root), task_id=task_id)
-
-
 def resolve_follow_task_for_workspace(workspace: Workspace, task_id: str | None) -> TaskRecord | None:
     """
     Pick the task whose stdout ``--follow`` should attach to.
@@ -426,13 +398,6 @@ def resolve_follow_task_for_workspace(workspace: Workspace, task_id: str | None)
     if active is not None:
         return active
     return next((task for task in tasks if task.subagents), None)
-
-
-def load_task_with_runtime(root: Path, task_id: str) -> TaskRecord | None:
-    """
-    Path-based compatibility wrapper for tolerant task lookup.
-    """
-    return load_task_with_runtime_for_workspace(Workspace.from_path(root), task_id)
 
 
 def load_task_with_runtime_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord | None:
