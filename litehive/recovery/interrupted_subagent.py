@@ -4,7 +4,7 @@ from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import (
     SubagentArtifactPayload,
     load_subagent_report,
-    save_subagent_artifacts,
+    subagent_artifacts,
 )
 from litehive.agents.session_continuation import subagent_continuation_state
 from litehive.agents.session_snapshots import InterruptedSubagentSessionRow, SubagentSessionStorageFields
@@ -160,10 +160,7 @@ def _write_interrupted_subagent_artifacts(
     report_payload["interruption_reason"] = subagent.interruption_reason or None
     report_payload["resume_stage"] = resume_stage
     report_payload["continuation"] = continuation_state.payload()
-    save_subagent_artifacts(
-        workspace,
-        task.id,
-        subagent.id,
+    subagent_artifacts(workspace, task.id, subagent.id).save(
         session=session_row,
         report=SubagentArtifactPayload(report_payload),
     )

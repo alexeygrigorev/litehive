@@ -19,7 +19,7 @@ from litehive.agents.execution_trace import (
 from litehive.agents.artifacts import ArtifactService
 from litehive.agents.session_store import (
     SubagentEventStreamPayload,
-    save_subagent_artifacts,
+    subagent_artifacts,
 )
 from litehive.agents.session_events import SubagentPidEvent, SubagentStartedEvent
 from litehive.agents.session_reports import SubagentReportPayload
@@ -250,12 +250,7 @@ class SubagentSessionManager:
             pid=metadata.pid,
             continuation=metadata.continuation,
         )
-        save_subagent_artifacts(
-            self.workspace,
-            task.id,
-            ref.id,
-            session=session_row,
-        )
+        subagent_artifacts(self.workspace, task.id, ref.id).save(session=session_row)
 
     def record_subagent_pid(self, task: TaskRecord, ref: Subagent, pid: int | None) -> None:
         """
@@ -369,10 +364,7 @@ class SubagentSessionManager:
         )
         if event_stream is None:
             return
-        save_subagent_artifacts(
-            self.workspace,
-            task.id,
-            ref.id,
+        subagent_artifacts(self.workspace, task.id, ref.id).save(
             event_stream=SubagentEventStreamPayload(event_stream.model_dump(mode="python")),
         )
 
@@ -395,10 +387,7 @@ class SubagentSessionManager:
         """
         created_at = self.workspace.load_subagent_session_created_at(task.id, ref.id) or utcnow()
         session_row = self.session_row_for_snapshot(ref, snapshot, created_at)
-        save_subagent_artifacts(
-            self.workspace,
-            task.id,
-            ref.id,
+        subagent_artifacts(self.workspace, task.id, ref.id).save(
             session=session_row,
             report=snapshot.report,
         )

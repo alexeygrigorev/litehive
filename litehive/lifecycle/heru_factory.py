@@ -725,7 +725,7 @@ class HeruEngineAdapter:
             SubagentSessionStorageFields,
         )
         from litehive.sandbox.launcher import SandboxPolicySummary  # noqa: PLC0415
-        from litehive.agents.session_store import save_subagent_artifacts  # noqa: PLC0415
+        from litehive.agents.session_store import subagent_artifacts  # noqa: PLC0415
 
         now = datetime.now(UTC).isoformat()
         session_row = RunningSubagentSessionRow(
@@ -742,12 +742,7 @@ class HeruEngineAdapter:
             ),
             pid=None,
         )
-        save_subagent_artifacts(
-            self.workspace,
-            task_id,
-            str(source_subagent_id),
-            session=session_row,
-        )
+        subagent_artifacts(self.workspace, task_id, str(source_subagent_id)).save(session=session_row)
         adapter = CodexCLIAdapter()
         return adapter.run(
             prompt_text,

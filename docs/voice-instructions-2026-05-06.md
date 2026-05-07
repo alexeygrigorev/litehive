@@ -1172,16 +1172,24 @@ Legend:
 
 ## Subagent Artifact Ownership Instructions
 
-- [ ] SA1. Model a subagent as belonging to a workspace and a
+- [x] SA1. Model a subagent as belonging to a workspace and a
   concrete task.
   Source: note 4, 08:47-08:59.
-- [ ] SA2. Give the subagent/session object enough data to save its
+  Completed 2026-05-07: added `SubagentArtifactStore`, a bound
+  persistence handle carrying `workspace`, `task_id`, and
+  `subagent_id` together for one concrete subagent.
+- [x] SA2. Give the subagent/session object enough data to save its
   own artifacts: session, report, and event stream.
   Source: note 4, 08:59-09:09.
-- [ ] SA3. Replace scattered `save_subagent_artifacts` free-function
+  Completed 2026-05-07: `SubagentArtifactStore.save(...)` owns
+  session/report/event-stream writes for its bound subagent.
+- [x] SA3. Replace scattered `save_subagent_artifacts` free-function
   calls with a method such as `subagent.save_artifacts(...)` or a
   session-store service method invoked by the subagent object.
   Source: note 4, 08:59-09:19.
+  Completed 2026-05-07: production artifact writes now go through
+  `subagent_artifacts(...).save(...)`; the legacy free function remains
+  as a compatibility wrapper for tests and older call sites.
 - [ ] SA4. Define these as domain rules so artifact/session behavior
   is not a pile of functions spread through the code.
   Source: note 4, 09:19-09:29.
