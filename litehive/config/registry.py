@@ -26,17 +26,18 @@ import os
 from pathlib import Path
 import sqlite3
 import threading
-import time
 
 from litehive.config.paths import litehive_root
+from litehive.config.registry_locking import (
+    locked_registry_operation,
+    registry_busy_timeout_ms,
+    registry_busy_timeout_seconds,
+)
 
 log = logging.getLogger(__name__)
 
 _REGISTRY_MUTEX = threading.RLock()
 
-_DEFAULT_BUSY_TIMEOUT_MS = 30_000
-_DEFAULT_LOCK_RETRIES = 0
-_DEFAULT_LOCK_RETRY_DELAY_MS = 100
 _REGISTRY_TABLE = "workspace_registry"
 
 
@@ -91,7 +92,7 @@ class WorkspaceRegistry:
         with self.mutex:
             for attempt in range(2):
                 try:
-                    return _locked_registry_operation(
+                    return locked_registry_operation(
                         lambda: _list_registered_workspace_paths(self.path),
                         path=self.path,
                     )
@@ -115,7 +116,7 @@ class WorkspaceRegistry:
         with self.mutex:
             for attempt in range(2):
                 try:
-                    _locked_registry_operation(
+                    locked_registry_operation(
                         lambda: _register_workspace_path(self.path, resolved),
                         path=self.path,
                     )
@@ -171,71 +172,6 @@ def default_workspace_registry() -> WorkspaceRegistry:
     return build_workspace_registry()
 
 
-def _int_env(name: str, default: int) -> int:
-    """
-    Read a non-negative integer from the named env var.
-
-    Falls back to ``default`` for unset or unparseable values.
-    Used by the registry tunables (lock retries, busy timeout) so
-    operators and CI can override locking behaviour via env without
-    editing code.
-    """
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    try:
-        return max(int(raw), 0)
-    except ValueError:
-        return default
-
-
-def _registry_lock_retries() -> int:
-    """
-    Extra retries the registry tolerates beyond the SQLite busy timeout.
-
-    Consumed by :func:`_locked_registry_operation`. Tunable via
-    ``LITEHIVE_REGISTRY_LOCK_RETRIES`` so CI can crank it up
-    without code changes when concurrent test runs hit the same
-    file.
-    """
-    return _int_env("LITEHIVE_REGISTRY_LOCK_RETRIES", _DEFAULT_LOCK_RETRIES)
-
-
-def _registry_busy_timeout_ms() -> int:
-    """
-    SQLite ``PRAGMA busy_timeout`` value in milliseconds.
-
-    Clamped to at least 1 ms so a misconfigured zero does not
-    disable busy waits entirely. Used by the connection opener to
-    bound how long a writer waits on a contended registry before
-    surfacing a "locked" error to the retry loop.
-    """
-    return max(_int_env("LITEHIVE_REGISTRY_BUSY_TIMEOUT_MS", _DEFAULT_BUSY_TIMEOUT_MS), 1)
-
-
-def _registry_busy_timeout_seconds() -> float:
-    """
-    Busy timeout in seconds for the ``sqlite3.connect`` ``timeout`` parameter.
-
-    Same value as :func:`_registry_busy_timeout_ms`, just rescaled.
-    The connect-level timeout uses seconds while the pragma uses
-    milliseconds; keeping both in sync prevents one bound from
-    silently overriding the other.
-    """
-    return _registry_busy_timeout_ms() / 1000
-
-
-def _registry_lock_retry_delay_seconds() -> float:
-    """
-    Sleep between :func:`_locked_registry_operation` retry attempts.
-
-    Small by default so the worst case is a brief stall rather
-    than a tight CPU spin. Tunable via env so a test that wants
-    to drive contention can pin the delay to zero.
-    """
-    return _int_env("LITEHIVE_REGISTRY_LOCK_RETRY_DELAY_MS", _DEFAULT_LOCK_RETRY_DELAY_MS) / 1000
-
-
 def _open_registry_connection(path: Path) -> sqlite3.Connection:
     """
     Open an autocommit SQLite connection to the registry.
@@ -247,9 +183,9 @@ def _open_registry_connection(path: Path) -> sqlite3.Connection:
     pragmas stay consistent.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(path, timeout=_registry_busy_timeout_seconds(), isolation_level=None)
+    connection = sqlite3.connect(path, timeout=registry_busy_timeout_seconds(), isolation_level=None)
     connection.row_factory = sqlite3.Row
-    connection.execute(f"PRAGMA busy_timeout = {_registry_busy_timeout_ms()}")
+    connection.execute(f"PRAGMA busy_timeout = {registry_busy_timeout_ms()}")
     if os.environ.get("LITEHIVE_SKIP_FSYNC"):
         connection.execute("PRAGMA synchronous = OFF")
         connection.execute("PRAGMA journal_mode = MEMORY")
@@ -366,32 +302,6 @@ def _canonical_workspace_root(root: Path | str) -> Path | None:
         return None
 
 
-def _locked_registry_operation(operation, path: Path):
-    """
-    Run a registry callable with bounded retries through SQLite locks.
-
-    Retries through ``database is locked``/``busy`` errors up to
-    :func:`_registry_lock_retries` times before surfacing
-    ``TimeoutError``; wraps every public registry read/write so
-    contention with another process becomes a bounded wait rather
-    than an immediate failure visible to the operator.
-    """
-    retries_remaining = _registry_lock_retries()
-    retry_delay_seconds = _registry_lock_retry_delay_seconds()
-    while True:
-        try:
-            return operation()
-        except sqlite3.OperationalError as exc:
-            message = str(exc).lower()
-            if "locked" not in message and "busy" not in message:
-                raise
-            if retries_remaining <= 0:
-                raise TimeoutError(f"workspace registry remained locked: {path}") from None
-            retries_remaining -= 1
-            if retry_delay_seconds > 0:
-                time.sleep(retry_delay_seconds)
-
-
 def _read_registered_workspace_paths(connection: sqlite3.Connection) -> list[Path]:
     """
     Read all workspace roots newest-first, canonicalized and deduplicated.
@@ -439,7 +349,7 @@ def _list_registered_workspace_paths(path: Path) -> list[Path]:
 
     The lock-protected callable that
     :func:`list_registered_workspace_paths` hands to
-    :func:`_locked_registry_operation`; kept private and
+    :func:`locked_registry_operation`; kept private and
     parameterless except for ``path`` so the retry wrapper does
     not have to know about schema bootstrap.
     """
@@ -470,7 +380,7 @@ def _register_workspace_path(path: Path, root: Path) -> None:
     cleanly via ``BEGIN IMMEDIATE`` rather than racing through
     autocommit; the alternative would lose timestamp updates when
     two CLI calls land at the same instant. Lock-protected
-    callable handed to :func:`_locked_registry_operation`.
+    callable handed to :func:`locked_registry_operation`.
     """
     with _open_registry_connection(path) as connection:
         _ensure_registry_schema(connection)

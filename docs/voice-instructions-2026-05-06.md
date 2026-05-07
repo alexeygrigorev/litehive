@@ -1588,6 +1588,11 @@ Legend:
   persistence queries, sqlite details, security, and workspace path
   registration should not all live in one mixed module.
   Source: note 5, 01:22-02:21.
+  Progress 2026-05-07: split registry lock/busy-timeout/retry
+  policy into `config.registry_locking`, leaving
+  `config.registry` focused on the registry service, SQLite schema,
+  corruption quarantine, and workspace-root row operations. Remaining
+  work is to split persistence/query details further.
 - [ ] F11. Simplify `register_workspace_path`; verify whether its
   complexity is justified.
   Source: note 5, 02:12-02:25.
