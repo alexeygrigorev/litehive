@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from litehive.attention import waiting_for_you_lines
+from litehive.attention import waiting_for_you_lines_for_workspace
 from litehive.config.engine_freezes import active_engine_freezes
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import workspace_path
@@ -163,13 +163,13 @@ def collect_task_pipeline_status_for_workspace(
             active_task = _load_task_read_only(resolved_root, active_task_id)
         else:
             active_task = None
-        waiting_lines = waiting_for_you_lines(resolved_root, reconcile=False)
+        waiting_lines = waiting_for_you_lines_for_workspace(workspace, reconcile=False)
     else:
         if active_task_id:
             active_task = workspace.get_task(active_task_id)
         else:
             active_task = None
-        waiting_lines = waiting_for_you_lines(resolved_root)
+        waiting_lines = waiting_for_you_lines_for_workspace(workspace)
     if not diagnostics:
         waiting_lines = _operational_attention_lines(waiting_lines)
     return TaskPipelineStatusData(

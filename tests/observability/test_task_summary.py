@@ -133,8 +133,8 @@ def test_collect_task_pipeline_status_prefers_runner_active_task_id(tmp_path: Pa
         lambda workspace: snapshot,
     )
     monkeypatch.setattr(
-        "litehive.observability.status.waiting_for_you_lines",
-        lambda root, **_: ["operator_needed: unavailable"],
+        "litehive.observability.status.waiting_for_you_lines_for_workspace",
+        lambda workspace, **_: ["operator_needed: unavailable"],
     )
     monkeypatch.setattr(
         "litehive.observability.status.Workspace.get_task",
