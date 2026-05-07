@@ -41,7 +41,7 @@ from litehive.worktree.paths import resolve_recorded_worktree_path
 from tests.support.lifecycle_fakes import InMemorySessionStore
 
 from litehive.config.model import LitehiveConfig
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.lifecycle.orchestration import run_task
 from litehive.state.records import create_task
 from litehive.tasks.journal import render_task_journal
@@ -103,7 +103,7 @@ class _RecoveringEngine(_PassEngine):
 
 @pytest.fixture
 def workspace(tmp_path: Path) -> Path:
-    ensure_workspace(tmp_path)
+    create_workspace(tmp_path)
     return tmp_path
 
 
@@ -253,7 +253,7 @@ class _FlakyEngine:
 
 
 def test_run_task_uses_workspace_retry_on_for_live_execution_retries(tmp_path: Path) -> None:
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine="codex",
@@ -329,7 +329,7 @@ def _init_git_workspace(root: Path) -> None:
 
 
 def test_run_task_creates_worktree_and_merges_back_into_main(tmp_path: Path) -> None:
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(default_engine="codex", engine_preference=["codex"]),
     )
@@ -350,7 +350,7 @@ def test_run_task_creates_worktree_and_merges_back_into_main(tmp_path: Path) -> 
 
 
 def test_run_task_cleans_up_worktree_after_failed_terminal_state(tmp_path: Path) -> None:
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(default_engine="codex", engine_preference=["codex"]),
     )
@@ -381,7 +381,7 @@ class _AlreadyLandedCommitNode(CommitNode):
 
 
 def test_run_task_records_already_landed_commit_reconciliation(tmp_path: Path, monkeypatch) -> None:
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(default_engine="codex", engine_preference=["codex"]),
     )
@@ -407,7 +407,7 @@ def test_run_task_records_already_landed_commit_reconciliation(tmp_path: Path, m
 
 
 def test_run_task_honors_task_retry_limit_override_for_live_execution_retries(tmp_path: Path) -> None:
-    ensure_workspace(
+    create_workspace(
         tmp_path,
         LitehiveConfig(
             default_engine="codex",

@@ -29,7 +29,7 @@ from heru.quota._shared import UsageStatus
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import litehive_root
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 from litehive.domain.common import PipelineStatus
 from litehive.config.model import VALID_ENGINE_NAMES
 from litehive.workspace import Workspace
@@ -107,7 +107,7 @@ def require_real_engine(engine_name: str) -> None:
 
 
 def integration_workspace(root: Path) -> Path:
-    ensure_workspace(
+    create_workspace(
         root,
         LitehiveConfig(
             default_engine="codex",
@@ -224,7 +224,7 @@ def sandboxed_integration_workspace(root: Path) -> Path:
             setenv=setenv_home,
         )
 
-    ensure_workspace(
+    create_workspace(
         root,
         LitehiveConfig(
             default_engine="codex",

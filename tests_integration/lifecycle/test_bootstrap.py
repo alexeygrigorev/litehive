@@ -20,7 +20,7 @@ from litehive.lifecycle.nodes.agent import AgentVerdict, EngineBlockedError
 from litehive.lifecycle.orchestration import run_task
 from litehive.state.records import create_task, save_task
 
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import create_workspace
 
 pytestmark = pytest.mark.integration
 
@@ -39,7 +39,7 @@ def live_workspace(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     root.mkdir()
     _init_git_repo(root)
-    ensure_workspace(root)
+    create_workspace(root)
     return root
 
 
