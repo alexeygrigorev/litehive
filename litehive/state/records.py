@@ -351,6 +351,28 @@ def _persist_created_tasks(
     audit_entries: list[TaskAuditEntry] | None = None,
 ) -> None:
     """
+    Path-based compatibility wrapper for newly-created task persistence.
+    """
+    _persist_created_tasks_for_workspace(
+        Workspace.from_path(root),
+        tasks=tasks,
+        state=state,
+        task_journal_messages=task_journal_messages,
+        cleanup_dirs=cleanup_dirs,
+        audit_entries=audit_entries,
+    )
+
+
+def _persist_created_tasks_for_workspace(
+    workspace: Workspace,
+    *,
+    tasks: list[TaskRecord],
+    state: WorkspaceState,
+    task_journal_messages: dict[str, str] | None = None,
+    cleanup_dirs: list[Path],
+    audit_entries: list[TaskAuditEntry] | None = None,
+) -> None:
+    """
     Atomically commit a batch of newly minted tasks.
 
     Writes intent rows, state rows, journal entries, audit entries, and
@@ -359,13 +381,13 @@ def _persist_created_tasks(
     leaves disk debris pointing at a row that was never committed.
     Shared by the manual create and follow-up creation paths.
     """
-    # inline: kept so tests can monkey-patch ``merged_state_for_runner_owned_write``
+    # inline: kept so tests can monkey-patch ``merged_state_for_runner_owned_write_for_workspace``
     # on the persist module (the canonical home) and have callers here see it.
-    from litehive.state.persist import merged_state_for_runner_owned_write, skip_bootstrap_load_state  # noqa: PLC0415
+    from litehive.state.persist import merged_state_for_runner_owned_write_for_workspace, skip_bootstrap_load_state  # noqa: PLC0415
 
     with skip_bootstrap_load_state():
-        merged_state = merged_state_for_runner_owned_write(
-            root,
+        merged_state = merged_state_for_runner_owned_write_for_workspace(
+            workspace,
             state=state,
             protected_task_ids=[task.id for task in tasks],
         )
@@ -380,7 +402,7 @@ def _persist_created_tasks(
             cannot be undone) only fires once the on-disk artifacts are
             safely in place.
             """
-            runtime_store(root).save_runtime_transaction(
+            runtime_store_for_workspace(workspace).save_runtime_transaction(
                 task_intents={task.id: task.to_intent_record() for task in tasks},
                 task_states={task.id: task_state_for_storage(task) for task in tasks},
                 workspace_state=merged_state,
@@ -540,8 +562,8 @@ def create_task_for_workspace(
             created_from_payload = None
         else:
             created_from_payload = task.created_from.model_dump(mode="json")
-        _persist_created_tasks(
-            root,
+        _persist_created_tasks_for_workspace(
+            workspace,
             tasks=[task],
             state=state,
             task_journal_messages={task.id: "Task created."},

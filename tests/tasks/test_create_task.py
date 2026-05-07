@@ -298,19 +298,19 @@ root = Path(__import__("sys").argv[1])
 create_workspace(root)
 first = create_task(root, title="First queued task")
 second = create_task(root, title="Second queued task")
-original_merge = litehive.state.persist.merged_state_for_runner_owned_write
+original_merge = litehive.state.persist.merged_state_for_runner_owned_write_for_workspace
 injected = False
 
-def inject_latest_state(root, *, state, protected_task_ids=()):
+def inject_latest_state(workspace, *, state, protected_task_ids=()):
     global injected
     if not injected:
         injected = True
-        latest = load_state(root)
+        latest = load_state(workspace.root)
         latest.queue = [second.id, first.id]
-        save_state_without_runner_guard(root, latest)
-    return original_merge(root, state=state, protected_task_ids=protected_task_ids)
+        save_state_without_runner_guard(workspace.root, latest)
+    return original_merge(workspace, state=state, protected_task_ids=protected_task_ids)
 
-litehive.state.persist.merged_state_for_runner_owned_write = inject_latest_state
+litehive.state.persist.merged_state_for_runner_owned_write_for_workspace = inject_latest_state
 added = create_task(root, title="Added while runner updated queue")
 print(json.dumps({"id": added.id, "queue": load_state(root).queue}))
 """
