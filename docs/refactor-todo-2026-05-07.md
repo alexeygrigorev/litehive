@@ -74,6 +74,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate worktree cleanup path checks to workspace-native helpers.
 - [x] Migrate worktree rescue candidate paths and finalization lock to workspace-native helpers.
 - [x] Remove recovery scope-analysis root aliases around git/test boundaries.
+- [x] Migrate Heru factory execution-root helpers away from local root aliases.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

@@ -50,7 +50,7 @@ from litehive.state.records import get_task_worktree_path
 from litehive.tasks.journal import append_journal
 from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.tasks.report_storage import rewrite_latest_stage_report
-from litehive.worktree.paths import resolve_recorded_worktree_path
+from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace
 
 from .events import Crash
 from .nodes.agent import (
@@ -143,13 +143,12 @@ def _execution_checkout_path(workspace: Workspace, task) -> Path:
     """Resolve the working directory the subagent should run in for a task —
     the per-task worktree if one was recorded, otherwise the workspace root.
     Falls back to the workspace so engines never see a missing cwd."""
-    workspace_root = workspace.root
     return (
-        resolve_recorded_worktree_path(
-            workspace_root,
+        resolve_recorded_worktree_path_for_workspace(
+            workspace,
             get_task_worktree_path(task),
         )
-        or workspace_root
+        or workspace.root
     )
 
 
@@ -158,22 +157,21 @@ def _recovery_execution_root(workspace: Workspace, config: LitehiveConfig | None
     worktree. Resolve ``litehive_source_path`` from config and run the recovery
     turn there; fall back to the workspace if the source path is unset or
     unreadable."""
-    workspace_root = workspace.root
     if config is None:
-        return workspace_root
+        return workspace.root
     raw_source = str(config.litehive_source_path or "").strip()
     if not raw_source:
-        return workspace_root
+        return workspace.root
     candidate = Path(raw_source).expanduser()
     if not candidate.is_absolute():
-        candidate = workspace_root / candidate
+        candidate = workspace.root / candidate
     try:
         resolved = candidate.resolve()
     except OSError:
         resolved = candidate
     if resolved.is_dir():
         return resolved
-    return workspace_root
+    return workspace.root
 
 
 def _agent_execution_root(workspace: Workspace, task, role: str, config: LitehiveConfig | None) -> Path:
