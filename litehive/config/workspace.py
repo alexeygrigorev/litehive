@@ -91,7 +91,7 @@ def require_existing_workspace(root: Path, source: str) -> Path:
 
 def _reject_litehive_control_paths(path: Path, source: str) -> None:
     """
-    Reject paths inside ``.litehive`` control dirs or managed worktrees.
+    Reject paths inside ``.litehive`` control dirs.
 
     Bootstrapping a workspace there would create a nested
     ``.litehive`` inside another one and produce subtle
@@ -100,13 +100,6 @@ def _reject_litehive_control_paths(path: Path, source: str) -> None:
     later.
     """
     resolved_path = path.resolve()
-
-    for ancestor in (resolved_path, *resolved_path.parents):
-        if ancestor.name == "worktrees" and ancestor.parent.name == ".litehive":
-            raise ValueError(
-                f"invalid workspace root from {source}: {resolved_path} is inside Litehive managed "
-                f"worktrees at {ancestor}; choose the real repo root instead"
-            )
 
     for ancestor in (resolved_path, *resolved_path.parents):
         if ancestor.name != ".litehive":

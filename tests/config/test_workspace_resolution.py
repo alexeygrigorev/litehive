@@ -144,7 +144,7 @@ def test_ensure_workspace_rejects_nested_workspace_root(tmp_path: Path) -> None:
     nested_root = tmp_path / ".litehive" / "worktrees" / "T-0001"
     nested_root.mkdir(parents=True)
 
-    with pytest.raises(ValueError, match="managed worktrees.*choose the real repo root"):
+    with pytest.raises(ValueError, match="Litehive control directory.*choose the real repo root"):
         ensure_workspace(nested_root)
 
 
@@ -176,7 +176,7 @@ def test_normalize_workspace_root_rejects_nested_control_tree(tmp_path: Path) ->
     [
         (lambda root: root / ".litehive", "Litehive control directory"),
         (lambda root: root / ".litehive" / ".litehive", "Litehive control directory"),
-        (lambda root: root / ".litehive" / "worktrees" / "T-0001" / "repo", "managed worktrees"),
+        (lambda root: root / ".litehive" / "worktrees" / "T-0001" / "repo", "Litehive control directory"),
     ],
 )
 def test_ensure_workspace_rejections_do_not_create_nested_workspace_side_effects(

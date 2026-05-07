@@ -1915,9 +1915,15 @@ Legend:
   `_reject_litehive_control_paths()`. Replaced the `next(...)`
   generator expressions for managed worktrees and `.litehive`
   control directories with explicit loops and direct raises.
-- [ ] W7. Review `path inside managed workspace`; likely remove nested
+- [x] W7. Review `path inside managed workspace`; likely remove nested
   workspace rejection logic unless it is truly needed.
   Source: note 5, 09:47-10:32.
+  Completed 2026-05-07: verified the managed-workspace branch was the
+  legacy `.litehive/worktrees/...` check inside
+  `_reject_litehive_control_paths()`. Removed that special branch
+  because those paths are already rejected by the `.litehive` control
+  directory rule, and updated the workspace-resolution tests to assert
+  the remaining control-directory behavior.
 - [ ] W8. Simplify `normalize_workspace_root`; it may only need to
   resolve the path and check whether `.litehive` exists.
   Source: note 5, 10:53-12:23.
