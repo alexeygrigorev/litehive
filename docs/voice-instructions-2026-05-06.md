@@ -1891,8 +1891,14 @@ Legend:
   through it. Non-workspace paths now raise without creating
   `.litehive`; workspace creation remains explicit via
   `ensure_workspace(...)`.
-- [ ] W4. Remove `workspace_parent_root` / upward parent search.
+- [x] W4. Remove `workspace_parent_root` / upward parent search.
   Source: note 5, 08:16-08:51.
+  Completed 2026-05-07: verified the upward ancestor search lived in
+  `_workspace_parent_root()` and was only used by
+  `_reject_nested_workspace_bootstrap()` during `ensure_workspace()`.
+  Removed both helpers and the `ensure_workspace()` call site, then
+  deleted tests that expected ordinary nested subdirectories under an
+  existing workspace to be rejected.
 - [ ] W5. Remove `task_matches` / `task is none or task exists` style
   helpers; they obscure real branches.
   Source: note 5, 09:03-09:23.

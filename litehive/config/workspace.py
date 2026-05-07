@@ -72,24 +72,6 @@ def _workspace_config_template_path() -> Path:
     return Path(__file__).resolve().parents[1] / "cli" / "templates" / "workspace_config.yaml"
 
 
-def _workspace_parent_root(path: Path) -> Path | None:
-    """
-    Walk up the parents looking for an existing ``.litehive`` directory.
-
-    Used to detect attempts to bootstrap a workspace inside
-    another one — a nested workspace would silently capture
-    operator commands meant for the outer workspace, so the
-    bootstrap path refuses it loudly.
-    """
-    for ancestor in path.parents:
-        try:
-            if workspace_dir(ancestor).is_dir():
-                return ancestor
-        except OSError:
-            continue
-    return None
-
-
 def require_existing_workspace(root: Path, source: str) -> Path:
     """
     Return ``root`` when it is already a Litehive workspace.
@@ -179,25 +161,6 @@ def normalize_workspace_root(root: Path, source: str, registry: WorkspaceRegistr
             f"invalid workspace root from {source}: {resolved_root} is nested inside another .litehive tree"
         )
     return resolved_root
-
-
-def _reject_nested_workspace_bootstrap(root: Path, source: str) -> None:
-    """
-    Reject workspace creation inside an existing Litehive workspace.
-
-    Distinct from :func:`_reject_litehive_control_paths` because
-    the existing-workspace check looks at parent ``.litehive``
-    directories — a nested workspace under an unrelated parent
-    workspace would silently break command routing and is rarely
-    what the operator intended.
-    """
-    parent_workspace = _workspace_parent_root(root)
-    if parent_workspace is None:
-        return
-    raise ValueError(
-        f"invalid workspace root from {source}: {root} is inside existing Litehive workspace "
-        f"{parent_workspace}; choose the real repo root instead of a nested subdirectory"
-    )
 
 
 def _task_exists(root: Path, task_id: str) -> bool:
@@ -342,7 +305,6 @@ def ensure_workspace(
     """
     workspace_registry = registry or build_workspace_registry()
     root = normalize_workspace_root(root, source="ensure_workspace", registry=workspace_registry)
-    _reject_nested_workspace_bootstrap(root, source="ensure_workspace")
     base = workspace_dir(root)
     tasks = base / "tasks"
     tasks.mkdir(parents=True, exist_ok=True)

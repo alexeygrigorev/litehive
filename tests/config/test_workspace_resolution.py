@@ -171,22 +171,12 @@ def test_normalize_workspace_root_rejects_nested_control_tree(tmp_path: Path) ->
         normalize_workspace_root(legacy, source="test")
 
 
-def test_ensure_workspace_rejects_nested_subdirectory_of_existing_workspace(tmp_path: Path) -> None:
-    ensure_workspace(tmp_path)
-    nested_root = tmp_path / "packages" / "demo"
-    nested_root.mkdir(parents=True)
-
-    with pytest.raises(ValueError, match="inside existing Litehive workspace.*nested subdirectory"):
-        ensure_workspace(nested_root)
-
-
 @pytest.mark.parametrize(
     ("target_factory", "message"),
     [
         (lambda root: root / ".litehive", "Litehive control directory"),
         (lambda root: root / ".litehive" / ".litehive", "Litehive control directory"),
         (lambda root: root / ".litehive" / "worktrees" / "T-0001" / "repo", "managed worktrees"),
-        (lambda root: root / "packages" / "demo", "inside existing Litehive workspace"),
     ],
 )
 def test_ensure_workspace_rejections_do_not_create_nested_workspace_side_effects(
