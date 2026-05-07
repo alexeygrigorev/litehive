@@ -43,15 +43,18 @@ class SubagentResult:
     """
     Single-run summary the lifecycle layer reads back from the runner.
 
-    Carries everything the lifecycle and recovery layers need to advance
-    the state machine: the persisted subagent record, the low-level
-    execution handle, the rendered execution trace, the exit code, an
-    optional ``EngineFailure`` for routing, and an optional continuation
-    token so an interrupted run can resume. The runner builds one of
-    these per subagent invocation; no other layer constructs them.
+    Carries everything the lifecycle and recovery layers need to
+    advance the state machine: ``ref`` is the Litehive
+    :class:`~litehive.domain.runtime.Subagent` record appended to
+    ``TaskRecord.subagents`` for this run (id, role, engine, status,
+    and artifact path), followed by the low-level execution handle,
+    rendered execution trace, exit code, optional ``EngineFailure`` for
+    routing, and optional continuation token so an interrupted run can
+    resume. The runner builds one of these per subagent invocation; no
+    other layer constructs them.
     """
 
-    ref: Subagent  # Subagent record for the run
+    ref: Subagent  # Persisted Litehive subagent record for this run
     execution: CLIExecutionResult | None  # Low-level execution results
     execution_trace: str  # Rendered subagent execution trace
     exit_code: int  # Process exit code

@@ -923,9 +923,14 @@ Legend:
   `latest_entry(...)`. Added `TaskActivityLog.latest()` for the
   unfiltered newest-entry case and moved task debug output off
   `load()[-1]` onto that object-owned API.
-- [ ] D6. In `domain/agent.py`, review `SubAgentResult` and explain
+- [x] D6. In `domain/agent.py`, review `SubAgentResult` and explain
   what `subagent_ref` means.
   Source: note 6, 00:01-00:21.
+  Verified 2026-05-07: reviewed `SubagentResult.ref` and documented
+  that it is the persisted Litehive `Subagent` record for this run
+  (the entry appended to `TaskRecord.subagents`, carrying id, role,
+  engine, status, and artifact path), not a git ref or Heru transport
+  reference.
 - [ ] D7. Change `execution_trace` from one string to a list or typed
   trace if it represents multiple agent actions.
   Source: note 6, 00:21-00:34.
