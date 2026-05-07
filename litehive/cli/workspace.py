@@ -45,7 +45,7 @@ from litehive.observability.status_diagnostics import (
     status_has_problems,
 )
 from litehive.recovery.workspace_repair import repair_workspace_state
-from litehive.state.records import get_task, list_tasks_state_first
+from litehive.state.records import list_tasks_state_first
 from litehive.state.persist import load_state
 from litehive.state.records import list_tasks
 from litehive.domain.task_ops import WorkspaceConflictError, WorkspaceRepairSummary
@@ -266,7 +266,7 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     state = load_state(root)
     tasks = list_tasks_state_first(root, state=state, include_runtime=True)
     if state.active_task_id:
-        active_task = get_task(root, state.active_task_id)
+        active_task = ws.get_task(state.active_task_id)
     else:
         active_task = None
     flagged_tasks = [task for task in tasks if task.status == TaskStatus.FLAGGED]
