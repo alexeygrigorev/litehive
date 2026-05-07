@@ -24,9 +24,12 @@ from litehive.agents.session_store import (
 from litehive.agents.session_events import SubagentPidEvent, SubagentStartedEvent
 from litehive.agents.session_reports import SubagentReportPayload
 from litehive.agents.session_snapshots import (
+    RunningSubagentSessionRow,
     RunningSubagentSessionMetadata,
     SubagentSessionMetadata,
     SubagentSessionSnapshot,
+    SubagentSessionStorageFields,
+    TerminalSubagentSessionRow,
 )
 from litehive.domain.agent import SubagentInactivityTimeout
 from litehive.domain.common import SubagentStatus, utcnow
@@ -64,6 +67,27 @@ class SubagentSessionManager:
     sandbox: "SandboxLauncher"
     config: "LitehiveConfig"
     _stream_offsets: dict[str, int] = field(default_factory=dict)
+
+    def session_storage_fields(
+        self,
+        ref: Subagent,
+        created_at: str,
+        updated_at: str,
+    ) -> SubagentSessionStorageFields:
+        """
+        Build the common typed session row fields for persistence.
+        """
+        return SubagentSessionStorageFields(
+            id=ref.id,
+            role=ref.role,
+            engine=ref.engine,
+            status=SubagentStatus(ref.status),
+            sandboxed=ref.sandboxed,
+            sandbox=ref.sandbox_summary or "host",
+            created_at=created_at,
+            updated_at=updated_at,
+            resource_control=self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
+        )
 
     @staticmethod
     def render_execution_trace(
@@ -184,29 +208,19 @@ class SubagentSessionManager:
         written through full session snapshots.
         """
         created_at = utcnow()
-        resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()
         existing = load_subagent_session(self.workspace, task.id, ref.id)
         if isinstance(existing.get("created_at"), str):
             created_at = existing["created_at"]
+        session_row = RunningSubagentSessionRow(
+            fields=self.session_storage_fields(ref, created_at, utcnow()),
+            pid=metadata.pid,
+            continuation=metadata.continuation_payload(),
+        )
         save_subagent_artifacts(
             self.workspace,
             task.id,
             ref.id,
-            session={
-                "id": ref.id,
-                "role": ref.role,
-                "engine": ref.engine,
-                "status": ref.status,
-                "sandboxed": ref.sandboxed,
-                "sandbox": ref.sandbox_summary or "host",
-                "created_at": created_at,
-                "updated_at": utcnow(),
-                "pid": metadata.pid,
-                "exit_code": None,
-                "interruption_reason": None,
-                "resource_control": resource_control,
-                "continuation": metadata.continuation_payload(),
-            },
+            session=session_row,
         )
 
     def record_subagent_pid(self, task: TaskRecord, ref: Subagent, pid: int | None) -> None:
@@ -356,29 +370,15 @@ class SubagentSessionManager:
         catching the snapshot mid-update.
         """
         created_at = utcnow()
-        resource_control = self.sandbox.policy_summary(ref.engine, ref.role).as_dict()
         existing = load_subagent_session(self.workspace, task.id, ref.id)
         if isinstance(existing.get("created_at"), str):
             created_at = existing["created_at"]
+        session_row = self.session_row_for_snapshot(ref, snapshot, created_at)
         save_subagent_artifacts(
             self.workspace,
             task.id,
             ref.id,
-            session={
-                "id": ref.id,
-                "role": ref.role,
-                "engine": ref.engine,
-                "status": ref.status,
-                "sandboxed": ref.sandboxed,
-                "sandbox": ref.sandbox_summary or "host",
-                "created_at": created_at,
-                "updated_at": utcnow(),
-                "pid": snapshot.metadata.pid,
-                "exit_code": snapshot.metadata.exit_code,
-                "interruption_reason": snapshot.metadata.interruption_reason,
-                "resource_control": resource_control,
-                "continuation": snapshot.metadata.continuation_payload(),
-            },
+            session=session_row,
             report=snapshot.report.as_dict(),
         )
         artifacts = ArtifactService(base)
@@ -389,3 +389,28 @@ class SubagentSessionManager:
             artifacts.write_text("execution_trace", ".md", snapshot.transcript, compress=True)
         artifacts.write_stream("stdout", snapshot.stdout, compress=False)
         artifacts.write_stream("stderr", snapshot.stderr, compress=False)
+
+    def session_row_for_snapshot(
+        self,
+        ref: Subagent,
+        snapshot: SubagentSessionSnapshot,
+        created_at: str,
+    ) -> RunningSubagentSessionRow | TerminalSubagentSessionRow:
+        """
+        Convert a complete snapshot into the concrete persisted row type.
+        """
+        fields = self.session_storage_fields(ref, created_at, utcnow())
+        continuation = snapshot.metadata.continuation_payload()
+        if snapshot.metadata.exit_code is None:
+            return RunningSubagentSessionRow(
+                fields=fields,
+                pid=snapshot.metadata.pid,
+                continuation=continuation,
+            )
+        return TerminalSubagentSessionRow(
+            fields=fields,
+            exit_code=snapshot.metadata.exit_code,
+            pid=snapshot.metadata.pid,
+            interruption_reason=snapshot.metadata.interruption_reason,
+            continuation=continuation,
+        )

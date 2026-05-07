@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from heru.types import RuntimeEngineContinuation
 
 from litehive.agents.session_reports import SubagentReportPayload
+from litehive.domain.common import SubagentStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +53,97 @@ class RunningSubagentSessionMetadata:
         if self.continuation is None:
             return None
         return self.continuation.model_dump(mode="python")
+
+
+@dataclass(frozen=True, slots=True)
+class SubagentSessionStorageFields:
+    """
+    Common persisted fields for one subagent session row.
+    """
+
+    id: str
+    role: str
+    engine: str
+    status: SubagentStatus
+    sandboxed: bool
+    sandbox: str
+    created_at: str
+    updated_at: str
+    resource_control: dict[str, object]
+
+    def as_dict(self) -> dict[str, object]:
+        """
+        Serialize common session fields for SQLite JSON storage.
+        """
+        return {
+            "id": self.id,
+            "role": self.role,
+            "engine": self.engine,
+            "status": self.status.value,
+            "sandboxed": self.sandboxed,
+            "sandbox": self.sandbox,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "resource_control": self.resource_control,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RunningSubagentSessionRow:
+    """
+    Persisted session row while a subagent is still running.
+
+    Running rows do not have terminal process fields. The PID can be
+    absent because some adapter progress callbacks arrive before the
+    adapter reports process start.
+    """
+
+    fields: SubagentSessionStorageFields
+    pid: int | None
+    continuation: dict[str, object] | None = None
+
+    def as_dict(self) -> dict[str, object]:
+        """
+        Serialize a running session row for SQLite JSON storage.
+        """
+        payload = self.fields.as_dict()
+        payload.update(
+            {
+                "pid": self.pid,
+                "exit_code": None,
+                "interruption_reason": None,
+                "continuation": self.continuation,
+            }
+        )
+        return payload
+
+
+@dataclass(frozen=True, slots=True)
+class TerminalSubagentSessionRow:
+    """
+    Persisted session row after the engine process has exited.
+    """
+
+    fields: SubagentSessionStorageFields
+    exit_code: int
+    pid: int | None
+    interruption_reason: str | None = None
+    continuation: dict[str, object] | None = None
+
+    def as_dict(self) -> dict[str, object]:
+        """
+        Serialize a terminal session row for SQLite JSON storage.
+        """
+        payload = self.fields.as_dict()
+        payload.update(
+            {
+                "pid": self.pid,
+                "exit_code": self.exit_code,
+                "interruption_reason": self.interruption_reason,
+                "continuation": self.continuation,
+            }
+        )
+        return payload
 
 
 @dataclass(frozen=True, slots=True)

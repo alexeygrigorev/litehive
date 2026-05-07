@@ -1,7 +1,7 @@
 """SQLite-backed storage for structured subagent session artifacts."""
 
 import json
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from litehive.domain.common import utcnow
 from litehive.workspace import Workspace
@@ -9,6 +9,15 @@ from litehive.workspace import Workspace
 
 _UNSET = object()
 _EVENT_STREAM_KEY = "event_stream"
+
+
+@runtime_checkable
+class SerializableSubagentSession(Protocol):
+    """
+    Concrete session row object accepted by the persistence boundary.
+    """
+
+    def as_dict(self) -> dict[str, object]: ...
 
 
 def _load_subagent_payload(workspace: Workspace, task_id: str, subagent_id: str) -> tuple[dict[str, Any], str | None]:
@@ -49,7 +58,7 @@ def save_subagent_artifacts(
     workspace: Workspace,
     task_id: str,
     subagent_id: str,
-    session: dict[str, Any] | object = _UNSET,
+    session: dict[str, Any] | SerializableSubagentSession | object = _UNSET,
     report: dict[str, Any] | object = _UNSET,
     event_stream: dict[str, Any] | None | object = _UNSET,
 ) -> None:
@@ -64,7 +73,10 @@ def save_subagent_artifacts(
     """
     payload, created_at = _load_subagent_payload(workspace, task_id, subagent_id)
     if session is not _UNSET:
-        payload["session"] = session
+        if isinstance(session, SerializableSubagentSession):
+            payload["session"] = session.as_dict()
+        else:
+            payload["session"] = session
     if report is not _UNSET:
         payload["report"] = report
     if event_stream is not _UNSET:
