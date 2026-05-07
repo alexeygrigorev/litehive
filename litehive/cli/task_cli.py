@@ -29,7 +29,7 @@ from litehive.cli.task_logs_support import (
 )
 from litehive.config.workspace import ensure_workspace
 from litehive.container import build_workspace
-from litehive.state.records import create_task, get_task, list_tasks, require_task
+from litehive.state.records import create_task
 from litehive.domain.common import TaskStatus
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
@@ -199,12 +199,12 @@ def evidence(
     pipeline-level evidence and not the task fields.
     """
     ensure_workspace(workspace)
+    workspace_obj = build_workspace(workspace)
     try:
-        task = require_task(workspace, task_id)
+        task = workspace_obj.require_task(task_id)
     except ValueError:
         print(f"task not found: {task_id}")
         return 1
-    workspace_obj = build_workspace(workspace)
     return render_task_evidence_for_workspace(workspace_obj, task)
 
 
@@ -225,12 +225,12 @@ def debug(
     flavor without remembering three separate command names.
     """
     ensure_workspace(workspace)
+    workspace_obj = build_workspace(workspace)
     try:
-        task = require_task(workspace, task_id)
+        task = workspace_obj.require_task(task_id)
     except ValueError:
         print(f"task not found: {task_id}")
         return 1
-    workspace_obj = build_workspace(workspace)
     if worktree:
         return debug_worktree_for_workspace(workspace_obj, task)
     if all_:
@@ -290,7 +290,8 @@ def list_tasks_command(
     does not blank out the entire listing.
     """
     ensure_workspace(workspace)
-    tasks = list_tasks(workspace, strict=False)
+    workspace_obj = build_workspace(workspace)
+    tasks = workspace_obj.list_tasks(strict=False)
     filtered = []
     for task in tasks:
         if not show_all and task.status == TaskStatus.DONE:
