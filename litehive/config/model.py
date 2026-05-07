@@ -250,6 +250,26 @@ class LitehiveConfig:
             self.litehive_source_path = self.litehive_source_path.strip() or None
         self.external_engine_sandbox = normalize_external_engine_sandbox_config(self.external_engine_sandbox)
 
+    def model_for_engine(self, engine_name: str) -> str | None:
+        """
+        Return the workspace-level default model pinned for an engine.
+
+        The bottom rung of the model-resolution ladder under task-level
+        and CLI overrides. Returns ``None`` when the workspace has not
+        pinned one so the engine adapter can use its own default.
+        """
+        if engine_name == "opencode":
+            return self.opencode_model
+        if engine_name == "goz":
+            return self.goz_model
+        if engine_name == "gemini":
+            return self.gemini_model
+        if engine_name == "copilot":
+            return self.copilot_model
+        if engine_name == "claude":
+            return self.claude_model
+        return None
+
 
 _VALID_CONFIG_KEYS = frozenset(field.name for field in fields(LitehiveConfig))
 

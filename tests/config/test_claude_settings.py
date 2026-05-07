@@ -2,7 +2,7 @@ from pathlib import Path
 
 import yaml
 
-from litehive.config.engine_models import resolve_engine_name, workspace_model_for_engine
+from litehive.config.engine_models import resolve_engine_name
 from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import ensure_workspace
@@ -75,7 +75,7 @@ def test_configure_updates_existing_workspace_process_profile(tmp_path: Path) ->
 
 def test_claude_model_resolved_from_workspace_defaults() -> None:
     config = LitehiveConfig(claude_model="claude-sonnet-4-20250514")
-    assert workspace_model_for_engine(config, "claude") == "claude-sonnet-4-20250514"
+    assert config.model_for_engine("claude") == "claude-sonnet-4-20250514"
 
     config_default = LitehiveConfig()
-    assert workspace_model_for_engine(config_default, "claude") == "claude-sonnet-4-20250514"
+    assert config_default.model_for_engine("claude") == "claude-sonnet-4-20250514"

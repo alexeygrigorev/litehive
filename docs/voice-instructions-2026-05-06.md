@@ -1750,6 +1750,12 @@ Legend:
 - [ ] R18. Move engine lookup/order logic into config/domain object
   methods where appropriate, for example `config.get_engine(...)`.
   Source: note 4, 42:28-43:05.
+  Progress 2026-05-07: moved workspace model lookup from
+  `config.engine_models.workspace_model_for_engine(...)` onto
+  `LitehiveConfig.model_for_engine(...)`, so model-default lookup now
+  lives on the config object that owns those fields. Remaining work:
+  move engine ordering/plan lookup into a domain/config object where it
+  reduces `engine_models` branching.
 - [ ] R19. Clarify `model_override`; if a model should always be set,
   make it always explicit.
   Source: note 4, 43:05-43:36.

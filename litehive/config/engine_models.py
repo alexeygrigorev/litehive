@@ -353,28 +353,6 @@ def select_engine_for_workspace(
     )
 
 
-def workspace_model_for_engine(config: LitehiveConfig, engine_name: str) -> str | None:
-    """
-    Return the workspace-level default model pinned for an engine.
-
-    The bottom rung of the model-resolution ladder under
-    task-level and CLI overrides. Returns ``None`` when the
-    workspace has not pinned one so :func:`resolve_model` can
-    fall through to the engine adapter's own default.
-    """
-    if engine_name == "opencode":
-        return config.opencode_model
-    if engine_name == "goz":
-        return config.goz_model
-    if engine_name == "gemini":
-        return config.gemini_model
-    if engine_name == "copilot":
-        return config.copilot_model
-    if engine_name == "claude":
-        return config.claude_model
-    return None
-
-
 def resolve_model(
     task: TaskRecord,
     config: LitehiveConfig,
@@ -397,7 +375,7 @@ def resolve_model(
         return model_override
     if task.model is not None:
         return task.model
-    return workspace_model_for_engine(config, engine_name)
+    return config.model_for_engine(engine_name)
 
 
 def resolve_engine_name(
