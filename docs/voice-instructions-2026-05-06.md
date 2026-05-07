@@ -17,6 +17,8 @@ Legend:
   note naming the code paths and checks used. Existing legacy checked
   entries without those notes are explicitly allowlisted in
   `test_checked_voice_instruction_items_include_verification_notes`.
+- Each checklist item must have a unique stable ID and a `Source:`
+  line so details from the recordings stay traceable as separate tasks.
 - `Audio check` means the transcript wording was unclear enough that
   the audio should be replayed before implementation.
 
@@ -2299,9 +2301,14 @@ Legend:
   note fails architecture tests. Updated the checklist legend and
   `docs/code-style.md` to require completion notes naming the exact
   code paths or commands checked before reporting done.
-- [ ] X2. Revisit all prior notes and turn every small detail into a
+- [x] X2. Revisit all prior notes and turn every small detail into a
   separate task.
   Source: note 4, 10:21-10:34.
+  Completed 2026-05-07: verified the instruction file contains 246
+  distinct checklist items, each with a stable ID and `Source:` line.
+  Added `test_voice_instruction_items_are_atomic_and_source_attributed`
+  so future checklist edits cannot merge unrelated details into
+  anonymous or unattributed umbrella tasks.
 - [ ] X3. Generalize the concrete feedback into durable style/domain
   rules, then apply those rules across the codebase.
   Source: note 3, 32:48-33:08; note 6, 06:09-06:17.

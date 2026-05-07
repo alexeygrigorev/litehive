@@ -146,6 +146,22 @@ def _checked_voice_instruction_items_without_verification_note() -> list[str]:
     return missing
 
 
+def _voice_instruction_item_blocks() -> list[tuple[str, str]]:
+    lines = (REPO_ROOT / "docs" / "voice-instructions-2026-05-06.md").read_text(encoding="utf-8").splitlines()
+    blocks: list[tuple[str, str]] = []
+    for index, line in enumerate(lines):
+        if not line.startswith("- ["):
+            continue
+        item_id = line[6:].split(".", maxsplit=1)[0]
+        block_lines = [line]
+        for next_line in lines[index + 1 :]:
+            if next_line.startswith("- [") or next_line.startswith("## "):
+                break
+            block_lines.append(next_line)
+        blocks.append((item_id, "\n".join(block_lines)))
+    return blocks
+
+
 def test_cli_modules_do_not_mutate_domain_state_with_direct_sqlite() -> None:
     violations: list[str] = []
     for path in _python_files("cli"):
@@ -333,6 +349,15 @@ def test_checked_voice_instruction_items_include_verification_notes() -> None:
     }
 
     assert set(_checked_voice_instruction_items_without_verification_note()) == legacy_checked_without_notes
+
+
+def test_voice_instruction_items_are_atomic_and_source_attributed() -> None:
+    blocks = _voice_instruction_item_blocks()
+    item_ids = [item_id for item_id, _block in blocks]
+
+    assert len(item_ids) == len(set(item_ids))
+    assert all("." not in item_id for item_id in item_ids)
+    assert [item_id for item_id, block in blocks if "Source:" not in block] == []
 
 
 def test_pyrefly_requires_return_annotations() -> None:
