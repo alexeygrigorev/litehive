@@ -23,7 +23,6 @@ from litehive.state.locking import (
     workspace_lock,
 )
 from litehive.state.persist import load_state_for_workspace
-from litehive.state.records import get_task_record
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.normalization import (
     missing_acceptance_criteria_reason,
@@ -109,7 +108,7 @@ def _update_task_transition(
 
     with workspace_lock(root):
         state = load_state_for_workspace(workspace)
-        task = get_task_record(root, task_id)
+        task = workspace.get_task_record(task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
         before_task = snapshot_task_audit_state(task)
