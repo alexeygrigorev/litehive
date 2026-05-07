@@ -16,7 +16,7 @@ from litehive.domain.task import TaskRecord
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task
 from litehive.state.records import get_task_record
-from litehive.state.store import runtime_store
+from litehive.state.store import runtime_store_for_workspace
 
 
 @pytest.fixture(autouse=True)
@@ -61,7 +61,7 @@ def _bind_report_identity(
 
 def _save_intent_only_task(root: Path) -> None:
     (root / ".litehive" / "tasks" / "T-0001-missing-runtime").mkdir(parents=True, exist_ok=True)
-    runtime_store(root).save_task_intent(
+    runtime_store_for_workspace(Workspace.from_path(root)).save_task_intent(
         "T-0001",
         TaskRecord(
             id="T-0001",

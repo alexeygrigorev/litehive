@@ -13,6 +13,7 @@ from litehive.lifecycle.types import PipelineMode
 from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, save_task
+from litehive.state.store import runtime_store_for_workspace
 from litehive.tasks.completed_task_recovery import recover_completed_task_for_workspace
 from litehive.tasks.queue import dequeue_next_task
 from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
@@ -115,7 +116,6 @@ def test_run_task_restarts_recovered_completed_task_from_ready(tmp_path: Path, m
 def test_completed_task_recovery_then_close_reconciles_all_state_layers(tmp_path: Path) -> None:
     """Test that recovery+close operations maintain consistency across all persistence layers."""
     from litehive.state.records import get_task_record
-    from litehive.state.store import runtime_store
     from litehive.tasks.status import close_task_for_workspace
 
     _init_workspace_git_repo(tmp_path)
@@ -150,7 +150,7 @@ def test_completed_task_recovery_then_close_reconciles_all_state_layers(tmp_path
     assert state_after_recovery.active_task_id is None
 
     # Verify SQLite task_state reflects queued status
-    store = runtime_store(tmp_path)
+    store = runtime_store_for_workspace(Workspace.from_path(tmp_path))
     task_state_after_recovery = store.load_task_state(task.id)
     assert task_state_after_recovery is not None
     assert task_state_after_recovery.status == "queued"

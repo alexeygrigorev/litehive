@@ -12,7 +12,7 @@ from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.workspace import Workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, require_task, save_task
-from litehive.state.store import runtime_store
+from litehive.state.store import runtime_store_for_workspace
 from litehive.tasks.status import (
     close_task_for_workspace,
     park_task_for_workspace,
@@ -29,7 +29,7 @@ def _raw_task_state_payload(root: Path, task_id: str) -> dict:
 
 
 def _save_intent_only_task(root: Path, task_id: str = "T-0001", *, goal: str = "") -> None:
-    runtime_store(root).save_task_intent(
+    runtime_store_for_workspace(Workspace.from_path(root)).save_task_intent(
         task_id,
         TaskRecord(
             id=task_id,

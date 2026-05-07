@@ -12,7 +12,7 @@ from litehive.config.workspace import create_workspace
 from litehive.domain.task import TaskStateRecord, WorkspaceState
 from litehive.recovery.detection import TaskLaunchFailure
 from litehive.state.records import create_task, get_task, list_tasks
-from litehive.state.store import runtime_store
+from litehive.state.store import runtime_store_for_workspace
 from litehive.tasks.queue import peek_next_task
 from litehive.workspace import Workspace
 from litehive.db import schema as schema_module
@@ -212,7 +212,7 @@ def test_migration_0005_does_not_import_deprecated_task_yaml(tmp_path: Path) -> 
         connection.commit()
 
     apply_pending_migrations(tmp_path)
-    runtime_store(tmp_path).bootstrap()
+    runtime_store_for_workspace(Workspace.from_path(tmp_path)).bootstrap()
 
     with connect_workspace_db(tmp_path) as connection:
         intent_rows = connection.execute("SELECT task_id, payload FROM task_intent ORDER BY task_id").fetchall()
