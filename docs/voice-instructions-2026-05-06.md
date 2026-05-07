@@ -1261,9 +1261,15 @@ Legend:
   `litehive/agents/execution_trace.py` and updated `SubagentManager`
   to call it directly; `SubagentSessionManager` no longer owns this
   formatter.
-- [ ] SE5. Find all `del ...` patterns such as deleting
+- [x] SE5. Find all `del ...` patterns such as deleting
   `engine_name`. If a value is immediately deleted, stop passing it.
   Source: note 4, 11:30-11:43.
+  Completed 2026-05-07: removed the session `engine_name` deletion by
+  moving trace rendering to `litehive/agents/execution_trace.py`, then
+  audited all remaining production `del ...` sites in
+  `docs/del-pattern-audit-2026-05-07.md`. Most remaining sites are
+  lifecycle/protocol hook signatures; migration candidates are recorded
+  for focused follow-up instead of being changed piecemeal.
 - [x] SE6. Consolidate `append_stream_data` and related event tracking
   into one owner instead of spreading it through code.
   Source: note 4, 11:56-12:17.
