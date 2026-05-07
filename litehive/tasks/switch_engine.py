@@ -17,7 +17,7 @@ from litehive.domain.common import PipelineStatus, TaskStatus, Verdict
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import SwitchTaskSummary
-from litehive.state.persist import load_state
+from litehive.state.persist import load_state_for_workspace
 from litehive.tasks.audit import (
     append_task_audit_entries,
     build_task_audit_entry,
@@ -126,7 +126,6 @@ def switch_task_engine_for_workspace(
     if not reason.strip():
         raise ValueError("Switch reason must not be empty")
 
-    root = workspace.root
     task = workspace.require_task(task_id)
     before_task = snapshot_task_audit_state(task)
     if task.pipeline_status == PipelineStatus.DONE:
@@ -134,7 +133,7 @@ def switch_task_engine_for_workspace(
     if task.pipeline_status == PipelineStatus.BACKLOG:
         raise ValueError(f"Task {task.id} is still in backlog and has no runnable stage to resume")
 
-    state = load_state(root)
+    state = load_state_for_workspace(workspace)
     was_active = state.active_task_id == task_id
     runner_pid: int | None = None
     signal_sent = False
