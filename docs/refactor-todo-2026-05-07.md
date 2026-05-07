@@ -38,6 +38,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove raw-root alternate `SubagentManager` construction path from the DI container.
 - [x] Move recovery scope-analysis internals from raw root to injected `Workspace`.
 - [x] Move daemon termination helpers from raw root to injected `Workspace`.
+- [x] Move workspace health daemon-status lookup to workspace-native registry helper.
 - [x] Migrate `config.loading.load_config(root)` callers that already hold `Workspace`.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`

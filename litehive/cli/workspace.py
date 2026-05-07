@@ -19,7 +19,7 @@ from litehive.cli.display import format_retry_on
 from litehive.cli.common import WorkspaceOption
 from litehive.config.workspace import create_workspace
 from litehive.container import build_workspace
-from litehive.daemon.registry import daemon_metadata
+from litehive.daemon.registry import daemon_metadata_for_workspace
 from litehive.domain.common import TaskStatus
 from litehive.observability.status import (
     collect_recent_activity,
@@ -327,7 +327,7 @@ def health_daemon_status_for_workspace(workspace: Workspace) -> tuple[str, str]:
     record is present so the caller can render the row without
     branching.
     """
-    entry = daemon_metadata(workspace.root)
+    entry = daemon_metadata_for_workspace(workspace)
     if entry is None or entry.status != "running":
         return ("stopped", "-")
     if entry.pid is not None:
