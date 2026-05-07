@@ -1924,9 +1924,16 @@ Legend:
   because those paths are already rejected by the `.litehive` control
   directory rule, and updated the workspace-resolution tests to assert
   the remaining control-directory behavior.
-- [ ] W8. Simplify `normalize_workspace_root`; it may only need to
+- [x] W8. Simplify `normalize_workspace_root`; it may only need to
   resolve the path and check whether `.litehive` exists.
   Source: note 5, 10:53-12:23.
+  Completed 2026-05-07: verified `normalize_workspace_root()` still
+  mixed path resolution, control-dir rejection, and worktree remapping.
+  Simplified it to resolve the path and preserve the existing
+  registered-worktree remap; moved `.litehive` control-dir rejection to
+  `ensure_workspace()` and left existing-workspace reads to
+  `require_existing_workspace()` where the `<root>/.litehive` existence
+  check lives.
 - [ ] W9. Remove legacy task-existence checks now that tasks are in
   the database.
   Source: note 5, 12:23-12:30.

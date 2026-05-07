@@ -112,25 +112,16 @@ def _reject_litehive_control_paths(path: Path, source: str) -> None:
 
 def normalize_workspace_root(root: Path, source: str, registry: WorkspaceRegistry | None = None) -> Path:
     """
-    Validate, expand, and re-route a candidate workspace path.
+    Resolve and re-route a candidate workspace path.
 
-    Rejects Litehive-internal paths and redirects worktree paths
-    back to the owning workspace so a CLI run inside a managed
-    worktree still acts on the real workspace. ``source`` is woven
-    into errors so an operator knows which input (env,
-    ``--workspace``, …) produced a bad value.
+    Redirects registered worktree paths back to the owning workspace
+    so a CLI run inside a managed worktree still acts on the real
+    workspace. Callers that read a workspace must check that
+    ``<root>/.litehive`` exists; callers that create a workspace must
+    reject Litehive control paths before bootstrapping.
     """
     resolved_input = Path(root).expanduser().resolve()
-    _reject_litehive_control_paths(resolved_input, source=source)
-
-    resolved_root = registered_workspace_root(resolved_input, registry=registry) or resolved_input
-
-    # Additional check for nested .litehive trees in resolved root
-    if any(ancestor.name == ".litehive" for ancestor in resolved_root.parents):
-        raise ValueError(
-            f"invalid workspace root from {source}: {resolved_root} is nested inside another .litehive tree"
-        )
-    return resolved_root
+    return registered_workspace_root(resolved_input, registry=registry) or resolved_input
 
 
 def _task_exists(root: Path, task_id: str) -> bool:
@@ -284,6 +275,7 @@ def ensure_workspace(
     """
     workspace_registry = registry or build_workspace_registry()
     root = normalize_workspace_root(root, source="ensure_workspace", registry=workspace_registry)
+    _reject_litehive_control_paths(root, source="ensure_workspace")
     base = workspace_dir(root)
     tasks = base / "tasks"
     tasks.mkdir(parents=True, exist_ok=True)
