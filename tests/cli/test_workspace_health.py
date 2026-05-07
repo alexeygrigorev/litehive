@@ -8,7 +8,7 @@ from typer.testing import CliRunner
 from litehive.cli.app import app
 from litehive.cli.workspace import (
     collect_quota_health,
-    health_daemon_status,
+    health_daemon_status_for_workspace,
     quota_health,
     repair_summary_lines,
     status_command,
@@ -34,7 +34,7 @@ _RUNNER = CliRunner()
 def test_health_daemon_status_defaults_to_stopped(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("litehive.cli.workspace.daemon_metadata", lambda root: None)
 
-    assert health_daemon_status(tmp_path) == ("stopped", "-")
+    assert health_daemon_status_for_workspace(Workspace.from_path(tmp_path)) == ("stopped", "-")
 
 
 def test_health_daemon_status_reports_running_pid(tmp_path: Path, monkeypatch) -> None:
@@ -50,7 +50,7 @@ def test_health_daemon_status_reports_running_pid(tmp_path: Path, monkeypatch) -
         ),
     )
 
-    assert health_daemon_status(tmp_path) == ("running", "4242")
+    assert health_daemon_status_for_workspace(Workspace.from_path(tmp_path)) == ("running", "4242")
 
 
 def test_repair_summary_lines_omit_empty_fields() -> None:
