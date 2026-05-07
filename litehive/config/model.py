@@ -188,7 +188,6 @@ class LitehiveConfig:
     recovery_engine: str | None = None
     litehive_source_path: str | None = None
     process_profile: str = "generic"
-    codex_model: str | None = None
     opencode_model: str = "zai-coding-plan/glm-5-turbo"
     goz_model: str = "glm-5-turbo"
     gemini_model: str | None = None

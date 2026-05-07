@@ -110,7 +110,6 @@ Minimal workspace config:
 ```yaml
 default_engine: codex
 recovery_engine: claude
-codex_model: gpt-5.4-high
 claude_model: claude-opus-4-6
 auto_commit: true
 subagent_inactivity_timeout_seconds: 300.0

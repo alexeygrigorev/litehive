@@ -332,7 +332,6 @@ def execute_engine_prompt(
         max_turns = 1
     config = load_config(cwd)
     model = {
-        "codex": config.codex_model,
         "opencode": config.opencode_model,
         "goz": config.goz_model,
         "gemini": config.gemini_model,
