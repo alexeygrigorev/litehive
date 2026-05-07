@@ -1238,9 +1238,16 @@ Legend:
   Completed 2026-05-07: kept parsing the Heru stderr marker for now,
   but moved that parsing into `SubagentInactivityTimeoutPolicy` so the
   adapter-boundary workaround has one owner.
-- [ ] SE2c. Verify live adapter timeout propagation for every engine
+- [x] SE2c. Verify live adapter timeout propagation for every engine
   path, including engines without live execution support.
   Source: note 4, 10:15-10:43; extracted from M40.
+  Completed 2026-05-07: verified the live path in
+  `SubagentManager._run_live_engine_process` passes
+  `inactivity_timeout_seconds` through `filter_supported_kwargs`, the
+  sandbox adapter forwards it from `SandboxedAdapter.run_live`, and
+  the non-live `_run_single_engine_process` path does not pass the
+  live-only timeout to `run(...)`. Added a non-live engine test and
+  reran the focused live/non-live inactivity tests.
 - [ ] SE3. Remove `SessionMixin` and use a delegated session manager
   dependency.
   Source: note 4, 10:48-11:13.

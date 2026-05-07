@@ -907,6 +907,55 @@ def test_subagent_manager_preserves_workspace_timeout_for_non_opencode_live_runs
     assert captured["inactivity_timeout_seconds"] == 123.0
 
 
+def test_subagent_manager_does_not_pass_live_timeout_to_non_live_engine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace(tmp_path)
+    task = create_task(tmp_path, title="Non-live execution timeout")
+    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager.config.subagent_inactivity_timeout_seconds = 123.0
+    captured: dict[str, Any] = {}
+
+    class FakeEngine:
+        name = "codex"
+        binary = "codex"
+
+        def is_available(self) -> bool:
+            return True
+
+        def run(
+            self,
+            prompt: str,
+            cwd: Path,
+            model: str | None = None,
+            **kwargs,
+        ) -> CLIExecutionResult:
+            del prompt, model
+            captured["kwargs"] = dict(kwargs)
+            on_started = kwargs.get("on_started")
+            if on_started is not None:
+                on_started(4242)
+            return CLIExecutionResult(
+                adapter="codex",
+                argv=("codex", "exec"),
+                cwd=cwd,
+                exit_code=0,
+                stdout="plain transcript",
+                stderr="",
+                pid=4242,
+            )
+
+        def render_transcript(self, execution: CLIExecutionResult) -> str:
+            return execution.transcript
+
+    monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
+
+    manager.run(task, role="swe", engine_name="codex", prompt="implement it")
+
+    assert captured["kwargs"]["emit_unified"] is True
+    assert "inactivity_timeout_seconds" not in captured["kwargs"]
+
+
 def test_subagent_manager_survives_nonfatal_start_callback_failure_for_planner(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
