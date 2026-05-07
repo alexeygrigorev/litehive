@@ -7,8 +7,6 @@ logic lives in ``queue_selection``; pure predicates live in
 ``queue_eligibility``.
 """
 
-from pathlib import Path
-
 from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStatus, utcnow
 from litehive.domain.outcomes import TaskOutcomeKind
 from litehive.domain.runtime import TaskOutcomeState
@@ -31,17 +29,6 @@ from litehive.tasks.runtime import clear_task_run_activity, idle_stage_state
 from litehive.workspace import Workspace
 
 
-def enqueue_task(root: Path, task_id: str) -> WorkspaceState:
-    """
-    Append a task to the back of the workspace queue.
-
-    No production or test callers remain — candidate for removal alongside
-    ``enqueue_task_front``; queue inserts now go through ``move_queued_task``
-    and ``prioritize_queued_tasks`` from the queue CLI.
-    """
-    return enqueue_task_for_workspace(Workspace.from_path(root), task_id)
-
-
 def enqueue_task_for_workspace(workspace: Workspace, task_id: str) -> WorkspaceState:
     """
     Append a task to the back of the workspace queue.
@@ -49,28 +36,11 @@ def enqueue_task_for_workspace(workspace: Workspace, task_id: str) -> WorkspaceS
     return _enqueue_task_for_workspace(workspace, task_id, front=False)
 
 
-def enqueue_task_front(root: Path, task_id: str) -> WorkspaceState:
-    """
-    Insert a task at the head of the workspace queue.
-
-    No callers — see ``enqueue_task``; both wrappers look like dead weight
-    that is preserved only so the legacy public surface keeps compiling.
-    """
-    return enqueue_task_front_for_workspace(Workspace.from_path(root), task_id)
-
-
 def enqueue_task_front_for_workspace(workspace: Workspace, task_id: str) -> WorkspaceState:
     """
     Insert a task at the head of the workspace queue.
     """
     return _enqueue_task_for_workspace(workspace, task_id, front=True)
-
-
-def _enqueue_task(root: Path, task_id: str, front: bool) -> WorkspaceState:
-    """
-    Path-based compatibility wrapper for queue insertion.
-    """
-    return _enqueue_task_for_workspace(Workspace.from_path(root), task_id, front=front)
 
 
 def _enqueue_task_for_workspace(workspace: Workspace, task_id: str, front: bool) -> WorkspaceState:
@@ -112,13 +82,6 @@ def _enqueue_task_for_workspace(workspace: Workspace, task_id: str, front: bool)
             ],
         )
         return state
-
-
-def move_queued_task(root: Path, task_id: str, position: int) -> WorkspaceState:
-    """
-    Path-based compatibility wrapper for queue reordering.
-    """
-    return move_queued_task_for_workspace(Workspace.from_path(root), task_id, position)
 
 
 def move_queued_task_for_workspace(workspace: Workspace, task_id: str, position: int) -> WorkspaceState:
@@ -196,13 +159,6 @@ def _prioritize_audit_entries(
             )
         )
     return entries
-
-
-def prioritize_queued_tasks(root: Path, task_ids: list[str]) -> WorkspaceState:
-    """
-    Path-based compatibility wrapper for bulk queue prioritization.
-    """
-    return prioritize_queued_tasks_for_workspace(Workspace.from_path(root), task_ids)
 
 
 def prioritize_queued_tasks_for_workspace(workspace: Workspace, task_ids: list[str]) -> WorkspaceState:
