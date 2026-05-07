@@ -21,7 +21,8 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [ ] Migrate `state.persist` path compatibility wrappers where callers already hold `Workspace`:
   - [x] Pool stop/completion helpers used by runner and daemon.
   - [ ] Remaining load/save wrappers in CLI/task/recovery callers.
-- [ ] Migrate `config.loading.load_config(root)` callers that already hold `Workspace`.
+- [x] Move agent task mutation target from raw root to `Workspace`.
+- [x] Migrate `config.loading.load_config(root)` callers that already hold `Workspace`.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

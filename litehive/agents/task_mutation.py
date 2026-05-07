@@ -5,7 +5,7 @@ from pathlib import Path
 
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
 from litehive.domain.task import TaskRecord
-from litehive.state.persist import load_state
+from litehive.state.persist import load_state_for_workspace
 from litehive.tasks.status import close_task_for_workspace, update_task_for_workspace
 from litehive.workspace import Workspace
 
@@ -22,7 +22,7 @@ class AgentTaskMutationError(Exception):
 @dataclass(frozen=True)
 class AgentTaskMutationTarget:
     role: str
-    root: Path
+    workspace: Workspace
     task_id: str
 
 
@@ -63,8 +63,8 @@ class AgentTaskMutationAuthorizer:
         if task_id is None:
             raise AgentTaskMutationError("LITEHIVE_TASK_ID is not set")
 
-        root = self._resolve_root(task_id)
-        state = load_state(root)
+        workspace = Workspace.from_path(self._resolve_root(task_id))
+        state = load_state_for_workspace(workspace)
         if (
             env_task_id is not None
             and state.active_task_id == env_task_id
@@ -75,7 +75,7 @@ class AgentTaskMutationAuthorizer:
         if state.active_task_id != task_id:
             active_task_id = state.active_task_id or "-"
             raise AgentTaskMutationError(f"agents may only mutate active task {active_task_id}, not {task_id}")
-        return AgentTaskMutationTarget(role=role, root=root, task_id=task_id)
+        return AgentTaskMutationTarget(role=role, workspace=workspace, task_id=task_id)
 
     def _authorized_role(self, allowed_roles: set[str]) -> str:
         if self.role is None or self.role not in allowed_roles:

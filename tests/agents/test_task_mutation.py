@@ -35,7 +35,7 @@ def test_agent_task_mutation_authorizer_resolves_active_env_task(tmp_path: Path)
     target = authorizer.authorize(requested_task_id=None, allowed_roles={"planner", "reviewer"})
 
     assert target.role == "planner"
-    assert target.root == tmp_path.resolve()
+    assert target.workspace == Workspace.from_path(tmp_path)
     assert target.task_id == task.id
 
 

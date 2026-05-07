@@ -425,7 +425,7 @@ def close(
     mutation_task_id = task_id
     if agent_role is not None:
         target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
-        mutation_workspace = target.root
+        mutation_workspace = target.workspace.root
         mutation_task_id = target.task_id
         close_kwargs = {"audit_actor": "agent", "audit_source": "agent"}
     create_workspace(mutation_workspace)
@@ -483,7 +483,7 @@ def update(
     mutation_task_id = task_id
     if agent_role is not None:
         target = resolve_active_agent_task_mutation_target(task_id, allowed_roles={"planner", "reviewer"})
-        mutation_workspace = target.root
+        mutation_workspace = target.workspace.root
         mutation_task_id = target.task_id
         allow_active_agent_task_mutation = True
         audit_actor = "agent"

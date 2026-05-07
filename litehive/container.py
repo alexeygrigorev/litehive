@@ -131,14 +131,21 @@ def build_agent_report_submitter(
     )
 
 
-def build_agent_task_mutator(root: Path, task_id: str) -> AgentTaskMutator:
+def build_agent_task_mutator_for_workspace(workspace: Workspace, task_id: str) -> AgentTaskMutator:
     """
-    Assemble the authorized agent task mutation service.
+    Assemble the authorized agent task mutation service from injected workspace dependencies.
     """
     return AgentTaskMutator(
-        workspace=build_workspace(root),
+        workspace=workspace,
         task_id=task_id,
     )
+
+
+def build_agent_task_mutator(root: Path, task_id: str) -> AgentTaskMutator:
+    """
+    Path-based compatibility wrapper for agent task mutation service assembly.
+    """
+    return build_agent_task_mutator_for_workspace(build_workspace(root), task_id)
 
 
 def build_subagent_manager_for_workspace(
