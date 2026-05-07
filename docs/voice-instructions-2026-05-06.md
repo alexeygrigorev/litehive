@@ -1699,9 +1699,17 @@ Legend:
   excluding source-recording artifacts for `youtube`, `YouTube`,
   `yt-`, `yt_`, and `YT`. No engine-name references remain; the
   only hit was this checklist item.
-- [ ] R13. Move active engine freeze out of config and into database
+- [x] R13. Move active engine freeze out of config and into database
   runtime state.
   Source: note 4, 38:25-39:13.
+  Completed 2026-05-07: verified the freeze path is DB-backed through
+  `config.runtime_settings.set_engine_freeze(...)` and
+  `clear_engine_freeze(...)`; `load_config(...)` only receives the
+  runtime-settings projection after bootstrap. Added
+  `test_engine_freeze_cli_persists_to_audited_db_not_config_file` to
+  prove `litehive engine freeze` writes the audited
+  `runtime_settings`/`runtime_settings_audit_log` rows while leaving
+  `.litehive/config.yaml` unchanged.
 - [x] R14. Replace `getattr(status, ...)` in engine models with typed
   status objects.
   Source: note 4, 39:30-40:21.

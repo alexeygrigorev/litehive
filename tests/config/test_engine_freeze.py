@@ -175,6 +175,42 @@ def test_engine_preference_cli_persists_to_audited_db(tmp_path: Path) -> None:
     assert 'new_value: ["gemini", "codex"]' in audit[1]
 
 
+def test_engine_freeze_cli_persists_to_audited_db_not_config_file(tmp_path: Path) -> None:
+    ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex"))
+    config_path = tmp_path / ".litehive" / "config.yaml"
+    raw_config_before = config_path.read_text(encoding="utf-8")
+
+    exit_code, output = _run_engine(
+        "engine",
+        "freeze",
+        "codex",
+        "--until",
+        "2099-06-15",
+        "--workspace",
+        str(tmp_path),
+        "--reason",
+        "Quota exhausted",
+    )
+
+    assert exit_code == 0
+    assert "engine_frozen: codex until 2099-06-15T00:00:00Z reason=Quota exhausted" in output
+    assert config_path.read_text(encoding="utf-8") == raw_config_before
+    assert load_config(tmp_path).engine_freeze == {"codex": "2099-06-15T00:00:00Z"}
+
+    entries = load_runtime_setting_audit_entries(Workspace.from_path(tmp_path), key="engine_freeze", limit=5)
+    assert len(entries) == 1
+    assert entries[0].actor == "operator"
+    assert entries[0].source == "cli"
+    assert entries[0].old_value == {}
+    assert entries[0].new_value == {"codex": "2099-06-15T00:00:00Z"}
+    assert entries[0].context == {
+        "engine": "codex",
+        "new_value": "2099-06-15T00:00:00Z",
+        "old_value": None,
+        "reason": "Quota exhausted",
+    }
+
+
 def test_engine_runtime_settings_treat_config_file_drift_as_bootstrap_only(tmp_path: Path) -> None:
     ensure_workspace(tmp_path, LitehiveConfig(default_engine="codex", engine_preference=["codex", "gemini"]))
     first = load_config(tmp_path)
