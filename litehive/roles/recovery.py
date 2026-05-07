@@ -104,7 +104,7 @@ class RecoveryAgent(RoleAgent):
             litehive_source_path, recovery_execution_root = _recovery_source_checkout(workspace)
         except (OSError, ValueError) as exc:
             recovery_execution_root = str(root)
-            recovery_config_diagnostic = _recovery_source_checkout_diagnostic(root, exc)
+            recovery_config_diagnostic = _recovery_source_checkout_diagnostic(workspace, exc)
         if task_record is not None:
             failed_subagent_diagnostics = _failed_subagent_diagnostics_payload(workspace, task_record)
         recovery_history = _merged_recovery_history_payload(state, task_record)
@@ -316,11 +316,11 @@ def _recovery_source_checkout(workspace: Workspace) -> tuple[str | None, str | N
     return raw_source, str(execution_root)
 
 
-def _recovery_source_checkout_diagnostic(root: Path, exc: OSError | ValueError) -> dict[str, str]:
+def _recovery_source_checkout_diagnostic(workspace: Workspace, exc: OSError | ValueError) -> dict[str, str]:
     """Render a config-load failure into a prompt-friendly diagnostic so the recovery agent can see why its source path is missing."""
     return {
         "kind": "workspace_config_load_failed",
-        "config_root": str(root),
+        "config_root": str(workspace.root),
         "exception_type": type(exc).__name__,
         "message": str(exc),
     }
