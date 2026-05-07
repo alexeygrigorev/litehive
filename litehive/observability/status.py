@@ -22,7 +22,6 @@ from typing import Literal
 from litehive.attention import waiting_for_you_lines_for_workspace
 from litehive.config.engine_freezes import active_engine_freezes
 from litehive.config.model import LitehiveConfig
-from litehive.config.paths import workspace_path
 from litehive.container import build_workspace
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
@@ -160,7 +159,7 @@ def collect_task_pipeline_status_for_workspace(
     active_task_id = snapshot.runner.active_task_id or snapshot.state.active_task_id
     if read_only:
         if active_task_id:
-            active_task = _load_task_read_only(resolved_root, active_task_id)
+            active_task = _load_task_read_only_for_workspace(workspace, active_task_id)
         else:
             active_task = None
         waiting_lines = waiting_for_you_lines_for_workspace(workspace, reconcile=False)
@@ -183,7 +182,7 @@ def collect_task_pipeline_status_for_workspace(
         active_task=active_task,
         queue_head=_first_or_none(snapshot.state.queue),
         waiting_lines=waiting_lines,
-        runner_state_label=_runner_state_label(resolved_root, snapshot.runner),
+        runner_state_label=_runner_state_label_for_workspace(workspace, snapshot.runner),
     )
 
 
@@ -265,6 +264,13 @@ def _first_or_none(items):
 
 def _runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:
     """
+    Path-based compatibility wrapper for callers not yet on ``Workspace``.
+    """
+    return _runner_state_label_for_workspace(build_workspace(workspace.resolve()), runner)
+
+
+def _runner_state_label_for_workspace(workspace: Workspace, runner: RunnerStatusState) -> str:
+    """
     Distinguish never-started workspaces from stopped or dead runners.
 
     The detailed status path reads liveness from the runner record
@@ -276,7 +282,7 @@ def _runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:
     """
     if runner.status in {"running", "late"}:
         return "running"
-    if not workspace_path(workspace, "runtime", ".runner.lock").exists():
+    if not workspace.runtime_path("runtime", ".runner.lock").exists():
         return "never_started"
     if runner.pid is None:
         return "stopped"
@@ -284,6 +290,13 @@ def _runner_state_label(workspace: Path, runner: RunnerStatusState) -> str:
 
 
 def _load_task_read_only(root: Path, task_id: str) -> TaskRecord | None:
+    """
+    Path-based compatibility wrapper for callers not yet on ``Workspace``.
+    """
+    return _load_task_read_only_for_workspace(build_workspace(root.resolve()), task_id)
+
+
+def _load_task_read_only_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord | None:
     """
     Load a task without taking a writer lock.
 
@@ -294,7 +307,7 @@ def _load_task_read_only(root: Path, task_id: str) -> TaskRecord | None:
     ``None``. Status is allowed to be incomplete, never to
     raise — a missing task is silently dropped from the snapshot.
     """
-    db_path = workspace_path(root, "data.db")
+    db_path = workspace.runtime_path("data.db")
     if not db_path.exists():
         return None
     try:
