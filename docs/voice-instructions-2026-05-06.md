@@ -1244,9 +1244,13 @@ Legend:
 - [ ] SE3. Remove `SessionMixin` and use a delegated session manager
   dependency.
   Source: note 4, 10:48-11:13.
-- [ ] SE4. Review `session.render_execution_trace`; it may not be
+- [x] SE4. Review `session.render_execution_trace`; it may not be
   session's responsibility.
   Source: note 4, 11:20-11:27.
+  Completed 2026-05-07: moved subagent trace rendering to
+  `litehive/agents/execution_trace.py` and updated `SubagentManager`
+  to call it directly; `SubagentSessionManager` no longer owns this
+  formatter.
 - [ ] SE5. Find all `del ...` patterns such as deleting
   `engine_name`. If a value is immediately deleted, stop passing it.
   Source: note 4, 11:30-11:43.

@@ -17,6 +17,7 @@ from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from heru.types import RuntimeEngineContinuation
 from litehive.agents.callbacks import CallbackWarnings, SubagentRunCallbacks
 from litehive.agents.engine_callables import resolve_cli_execution_callable
+from litehive.agents.execution_trace import render_execution_trace
 from litehive.sandbox.adapter import SandboxedAdapter
 from litehive.sandbox.launcher import SandboxError, SandboxLauncher, SandboxPolicySummary
 from litehive.config.model import LitehiveConfig
@@ -352,10 +353,7 @@ class SubagentManager:
             completed_timeout = self.sessions.completed_inactivity_timeout(proc)
             if completed_timeout is not None:
                 raise completed_timeout
-            transcript = self.sessions.render_execution_trace(
-                ref.engine,
-                proc,
-            )
+            transcript = render_execution_trace(proc)
             continuation = self.sessions.extract_execution_continuation(ref.engine, proc)
             failure = self._classify_completed_execution(ref, proc, transcript)
         except SubagentInactivityTimeout as exc:
@@ -364,10 +362,7 @@ class SubagentManager:
             if timeout_note not in stderr:
                 stderr = f"{stderr.rstrip()}\n{timeout_note}".strip()
             proc = replace(exc.execution, exit_code=124, stderr=stderr)
-            transcript = self.sessions.render_execution_trace(
-                ref.engine,
-                proc,
-            )
+            transcript = render_execution_trace(proc)
             continuation = self.sessions.extract_execution_continuation(ref.engine, proc)
             ref.status = SubagentStatus.FAILED.value
             failure = EngineFailure(
@@ -763,10 +758,7 @@ class SubagentManager:
         output after the engine finishes.
         """
         engine = self.engines.engine_for(ref.engine)
-        transcript = self.sessions.render_execution_trace(
-            ref.engine,
-            execution,
-        )
+        transcript = render_execution_trace(execution)
         continuation = self.sessions.extract_execution_continuation(ref.engine, execution)
         continuation_state = subagent_continuation_state(continuation)
         if isinstance(engine, ExternalCLIAdapter):

@@ -10,7 +10,6 @@ from heru.types import LiveTimeline, RuntimeEngineContinuation
 from litehive.agents.execution_trace import (
     parse_unified_events,
     recovered_timeline_from_events,
-    render_execution_trace_from_events,
 )
 from litehive.agents.artifacts import ArtifactService
 from litehive.agents.session_store import (
@@ -80,27 +79,6 @@ class SubagentSessionManager:
             updated_at=updated_at,
             resource_control=self.sandbox.policy_summary(ref.engine),
         )
-
-    @staticmethod
-    def render_execution_trace(
-        engine_name: str,
-        execution: CLIExecutionResult,
-    ) -> str:
-        """
-        Produce the human-readable transcript saved alongside each
-        subagent run.
-
-        Falls back to the engine's raw transcript when the
-        unified-event parse yields nothing so the SubagentManager
-        always has something to write to ``execution_trace.md`` —
-        without this fallback, an engine that fails to emit unified
-        events would leave the transcript artifact empty.
-        """
-        del engine_name
-        events = parse_unified_events(execution.stdout)
-        if not events:
-            return execution.transcript
-        return render_execution_trace_from_events(events, stderr=execution.stderr)
 
     @staticmethod
     def extract_execution_continuation(

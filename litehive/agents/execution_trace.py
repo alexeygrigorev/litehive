@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from heru.base import CLIExecutionResult
 from heru.types import LiveEvent, LiveTimeline, UnifiedEvent
 from pydantic import ValidationError
 
@@ -126,6 +127,20 @@ def render_execution_trace_from_events(events: ParsedUnifiedEvents, stderr: str)
     if stderr.strip():
         parts.append(f"[stderr]\n{stderr.strip()}")
     return "\n\n".join(parts)
+
+
+def render_execution_trace(execution: CLIExecutionResult) -> str:
+    """
+    Produce the human-readable transcript saved alongside a subagent run.
+
+    Falls back to the engine's raw transcript when the unified-event
+    parse yields nothing so callers always have something to persist
+    to ``execution_trace.md``.
+    """
+    events = parse_unified_events(execution.stdout)
+    if not events:
+        return execution.transcript
+    return render_execution_trace_from_events(events, stderr=execution.stderr)
 
 
 def recovered_timeline_from_events(
