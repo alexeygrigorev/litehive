@@ -174,8 +174,7 @@ def _probe_heru_link_for_workspace(workspace: Workspace) -> list[StatusIssue]:
     here names the missing path before the next agent run dies
     on resolve.
     """
-    root = workspace.root
-    pyproject_path = root / "pyproject.toml"
+    pyproject_path = workspace.root / "pyproject.toml"
     if not pyproject_path.exists():
         return []
     try:
@@ -192,7 +191,7 @@ def _probe_heru_link_for_workspace(workspace: Workspace) -> list[StatusIssue]:
     if candidate.is_absolute():
         resolved = candidate
     else:
-        resolved = (root / candidate)
+        resolved = workspace.root / candidate
     if resolved.exists():
         return []
     return [

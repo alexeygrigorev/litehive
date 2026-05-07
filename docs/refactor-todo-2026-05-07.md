@@ -70,6 +70,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate recovery evidence worktree resolution to workspace-native helper.
 - [x] Remove event-log replay root alias around workspace database path.
 - [x] Remove simple observability root aliases in status/config/venv loaders.
+- [x] Remove Heru-link status probe root alias.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`
