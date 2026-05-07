@@ -2,15 +2,14 @@
 Listing and cleanup of Litehive-managed task worktrees.
 
 Three jobs: enumerate live managed worktrees with their dirty count
-(``collect_managed_worktrees``), remove a single terminal task's
-worktree on the lifecycle hand-off (``cleanup_terminal_task_worktree``),
-and bulk-remove every cleanable worktree from the operator CLI
-(``remove_cleanable_worktrees``). Lives as a sibling of
-``litehive.worktree`` so callers that only need cleanup don't have
-to import the full ``WorktreeService`` graph.
+(``collect_managed_worktrees_for_workspace``), remove a single terminal
+task's worktree on the lifecycle hand-off
+(``cleanup_terminal_task_worktree_for_workspace``), and bulk-remove every
+cleanable worktree from the operator CLI. Lives as a sibling of
+``litehive.worktree`` so callers that only need cleanup don't have to
+import the full ``WorktreeService`` graph.
 """
 
-from pathlib import Path
 from typing import TypedDict
 
 from litehive.attention import AttentionRepository
@@ -29,13 +28,6 @@ from litehive.worktree.paths import (
     task_worktree_branch,
 )
 from litehive.workspace import Workspace
-
-
-def cleanup_terminal_task_worktree(root: Path, task: TaskRecord) -> None:
-    """
-    Path-based compatibility wrapper for terminal worktree cleanup.
-    """
-    cleanup_terminal_task_worktree_for_workspace(Workspace.from_path(root), task)
 
 
 def cleanup_terminal_task_worktree_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
@@ -59,13 +51,6 @@ def cleanup_terminal_task_worktree_for_workspace(workspace: Workspace, task: Tas
     workspace.save_task(task)
     branch = task_worktree_branch(task)
     delete_branch(root, branch)
-
-
-def collect_managed_worktrees(root: Path) -> list[ManagedWorktree]:
-    """
-    Path-based compatibility wrapper for managed worktree collection.
-    """
-    return collect_managed_worktrees_for_workspace(Workspace.from_path(root))
 
 
 def collect_managed_worktrees_for_workspace(workspace: Workspace) -> list[ManagedWorktree]:

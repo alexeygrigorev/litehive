@@ -1,10 +1,11 @@
 from pathlib import Path
 
-from litehive.worktree.cleanup import collect_managed_worktrees
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import create_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, save_task
+from litehive.workspace import Workspace
+from litehive.worktree.cleanup import collect_managed_worktrees_for_workspace
 
 
 def test_collect_managed_worktrees_marks_active_task_without_crashing(tmp_path: Path) -> None:
@@ -19,7 +20,7 @@ def test_collect_managed_worktrees_marks_active_task_without_crashing(tmp_path: 
     state.active_task_id = task.id
     save_state(tmp_path, state)
 
-    worktrees = collect_managed_worktrees(tmp_path)
+    worktrees = collect_managed_worktrees_for_workspace(Workspace.from_path(tmp_path))
 
     assert [item.task_id for item in worktrees] == [task.id]
     assert worktrees[0].active is True
