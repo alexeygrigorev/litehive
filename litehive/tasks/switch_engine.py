@@ -28,7 +28,7 @@ from litehive.tasks.audit import (
 from litehive.tasks.constants import CLOSED_TASK_STATUSES, VALID_TASK_ENGINES
 from litehive.tasks.paths import latest_subagent_base, task_dir
 from litehive.tasks.queue import move_queued_task_for_workspace
-from litehive.tasks.runtime import mark_engine_switch
+from litehive.tasks.runtime import mark_engine_switch_for_workspace
 from litehive.workspace import Workspace
 
 
@@ -151,8 +151,8 @@ def switch_task_engine_for_workspace(
             raise ValueError(f"Task {task_id} not found")
 
     previous_engine = _effective_task_engine(workspace.load_config().default_engine, task)
-    mark_engine_switch(
-        root,
+    mark_engine_switch_for_workspace(
+        workspace,
         task,
         stage=task.pipeline_status,
         from_engine=previous_engine,

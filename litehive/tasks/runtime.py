@@ -616,6 +616,47 @@ def mark_engine_switch(
     operator inspecting status would see an unexpected engine and have to
     cross-reference the audit log to find out why.
     """
+    apply_engine_switch(
+        task,
+        stage=stage,
+        from_engine=from_engine,
+        to_engine=to_engine,
+        reason=reason,
+    )
+    save_task_runtime(root, task)
+
+
+def mark_engine_switch_for_workspace(
+    workspace: Workspace,
+    task: TaskRecord,
+    stage: str,
+    from_engine: str,
+    to_engine: str,
+    reason: str,
+) -> None:
+    """
+    Stamp the task with the most recent engine swap through an injected workspace.
+    """
+    apply_engine_switch(
+        task,
+        stage=stage,
+        from_engine=from_engine,
+        to_engine=to_engine,
+        reason=reason,
+    )
+    save_task_runtime_for_workspace(workspace, task)
+
+
+def apply_engine_switch(
+    task: TaskRecord,
+    stage: str,
+    from_engine: str,
+    to_engine: str,
+    reason: str,
+) -> None:
+    """
+    In-memory variant of ``mark_engine_switch``.
+    """
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     task.runtime.execution.last_engine_switch = RuntimeEngineSwitch(
@@ -625,7 +666,6 @@ def mark_engine_switch(
         reason=reason,
         happened_at=now,
     )
-    save_task_runtime(root, task)
 
 
 def summarize_transcript(transcript: str, limit: int = 120) -> str:
