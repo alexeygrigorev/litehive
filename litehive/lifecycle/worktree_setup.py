@@ -26,22 +26,10 @@ from .persistence import SqlitePersistence, TaskNotFound, TaskState
 from .runtime_sync import _MANUAL_REVIEW_FLAG_REASONS
 
 
-def _resolve_worktree(root: Path, state: TaskState) -> Path:
-    """Look up the on-disk worktree path for a task, falling back to the workspace root when no worktree was recorded — the commit/sync nodes never want a missing path."""
-    return _resolve_worktree_for_workspace(Workspace.from_path(root), state)
-
-
 def _resolve_worktree_for_workspace(workspace: Workspace, state: TaskState) -> Path:
     """Look up the task worktree path for a task, falling back to the workspace root when no worktree was recorded."""
     _, worktree_path = _task_recorded_worktree_for_workspace(workspace, state.task_id)
     return worktree_path or workspace.root
-
-
-def _resolve_hook_execution_root(root: Path, state: TaskState) -> Path:
-    """
-    Path-based compatibility wrapper for hook execution root resolution.
-    """
-    return _resolve_hook_execution_root_for_workspace(Workspace.from_path(root), state)
 
 
 def _resolve_hook_execution_root_for_workspace(workspace: Workspace, state: TaskState) -> Path:
@@ -56,13 +44,6 @@ def _resolve_hook_execution_root_for_workspace(workspace: Workspace, state: Task
     if state.stage == PipelineState.AFTER_COMMIT:
         return workspace.root
     return _resolve_worktree_for_workspace(workspace, state)
-
-
-def _task_recorded_worktree(root: Path, task_id: str) -> tuple[TaskRecord | None, Path | None]:
-    """
-    Path-based compatibility wrapper for task worktree lookup.
-    """
-    return _task_recorded_worktree_for_workspace(Workspace.from_path(root), task_id)
 
 
 def _task_recorded_worktree_for_workspace(workspace: Workspace, task_id: str) -> tuple[TaskRecord | None, Path | None]:
