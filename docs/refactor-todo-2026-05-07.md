@@ -66,6 +66,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate hook worktree setup to workspace-native recorded-path helper.
 - [x] Migrate dirty-worktree inspection to workspace-native recorded-path helper.
 - [x] Migrate `WorktreeService` path resolution and venv linking to workspace-native helpers.
+- [x] Migrate task requeue checkout resolution to workspace-native recorded-path helper.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

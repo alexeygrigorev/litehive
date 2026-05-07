@@ -47,7 +47,7 @@ from litehive.tasks._status_helpers import (
     _queue_task,
     _reset_pipeline_state,
 )
-from litehive.worktree.paths import resolve_recorded_worktree_path
+from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace
 
 
 def _requeue_task_transition(
@@ -66,8 +66,6 @@ def _requeue_task_transition(
     is what turns the activity feed into an honest record after the task is
     requeued.
     """
-    root = workspace.root
-
     def _task_checkout_path(task: TaskRecord) -> Path:
         """
         Pick the checkout the path-divergence probe should look at.
@@ -77,12 +75,12 @@ def _requeue_task_transition(
         pass-retraction logic compares the right tree against main rather
         than always assuming the worktree is intact.
         """
-        worktree_path = resolve_recorded_worktree_path(
-            root, task.runtime.pipeline.git.worktree_path or task.git.worktree_path
+        worktree_path = resolve_recorded_worktree_path_for_workspace(
+            workspace, task.runtime.pipeline.git.worktree_path or task.git.worktree_path
         )
         if worktree_path is not None and worktree_path.exists():
             return worktree_path
-        return root
+        return workspace.root
 
     def _path_differs_from_main(checkout_path: Path, main_ref: str, relative_path: str) -> bool:
         """
@@ -116,7 +114,7 @@ def _requeue_task_transition(
         ensure_future_task_mutation_allowed_for_workspace(workspace, [task.id], state=state)
         if task.status not in {TaskStatus.FLAGGED, TaskStatus.PARKED, *CLOSED_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not flagged, parked, or closed")
-        main_ref = current_head(root)
+        main_ref = current_head(workspace.root)
         if main_ref is not None:
             checkout_path = _task_checkout_path(task)
             activity_log = workspace.task_activity(task)
