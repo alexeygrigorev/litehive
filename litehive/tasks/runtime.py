@@ -22,7 +22,11 @@ from litehive.domain.runtime import (
 )
 from litehive.domain.task import TaskRecord
 
-from litehive.state.records import write_task_runtime, save_task_runtime
+from litehive.state.records import (
+    save_task_runtime,
+    save_task_runtime_for_workspace,
+    write_task_runtime,
+)
 from litehive.state.locking import workspace_lock, workspace_mutation_guard_for_workspace
 from litehive.state.persist import load_state_for_workspace, persist_task_and_state_for_workspace
 from litehive.workspace import Workspace
@@ -425,10 +429,25 @@ def mark_subagent_started(root: Path, task: TaskRecord, ref: Subagent) -> None:
     snapshot and the operator UI can see who is running; without the
     attachment, ``stop_current_task`` would have nothing to signal.
     """
+    apply_subagent_started(task, ref)
+    save_task_runtime(root, task)
+
+
+def mark_subagent_started_for_workspace(workspace: Workspace, task: TaskRecord, ref: Subagent) -> None:
+    """
+    Attach a freshly launched subagent using an injected workspace.
+    """
+    apply_subagent_started(task, ref)
+    save_task_runtime_for_workspace(workspace, task)
+
+
+def apply_subagent_started(task: TaskRecord, ref: Subagent) -> None:
+    """
+    In-memory variant of ``mark_subagent_started``.
+    """
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     task.runtime.execution.active_subagent = _runtime_subagent_state(ref, started_at=now, updated_at=now)
-    save_task_runtime(root, task)
 
 
 def mark_subagent_pid(root: Path, task: TaskRecord, pid: int | None) -> None:
@@ -440,18 +459,36 @@ def mark_subagent_pid(root: Path, task: TaskRecord, pid: int | None) -> None:
     nothing to send SIGTERM/SIGKILL to and a hung subagent could only be
     killed manually.
     """
+    if not apply_subagent_pid(task, pid):
+        return
+    save_task_runtime(root, task)
+
+
+def mark_subagent_pid_for_workspace(workspace: Workspace, task: TaskRecord, pid: int | None) -> None:
+    """
+    Attach the OS pid through an injected workspace.
+    """
+    if not apply_subagent_pid(task, pid):
+        return
+    save_task_runtime_for_workspace(workspace, task)
+
+
+def apply_subagent_pid(task: TaskRecord, pid: int | None) -> bool:
+    """
+    In-memory variant of ``mark_subagent_pid``.
+    """
     if (
         pid is None
         or task.runtime.execution.active_subagent is None
         or task.runtime.execution.active_subagent.pid == pid
     ):
-        return
+        return False
     now = utcnow()
     task.runtime.pipeline.updated_at = now
     task.runtime.execution.active_subagent = task.runtime.execution.active_subagent.model_copy(
         update={"pid": pid, "updated_at": now}
     )
-    save_task_runtime(root, task)
+    return True
 
 
 def mark_subagent_progress(
@@ -503,11 +540,35 @@ def mark_subagent_finished(
     starts with a clean slot; leaving the subagent attached would make
     the eligibility checks think a new run was already in progress.
     """
+    apply_subagent_finished(task)
+    save_task_runtime(root, task)
+
+
+def mark_subagent_finished_for_workspace(
+    workspace: Workspace,
+    task: TaskRecord,
+    ref: Subagent,
+    transcript: str,
+    exit_code: int,
+    pid: int | None = None,
+    interruption_reason: str | None = None,
+    continuation: RuntimeEngineContinuation | None = None,
+) -> None:
+    """
+    Detach the active subagent through an injected workspace.
+    """
+    del ref, transcript, exit_code, pid, interruption_reason, continuation
+    apply_subagent_finished(task)
+    save_task_runtime_for_workspace(workspace, task)
+
+
+def apply_subagent_finished(task: TaskRecord) -> None:
+    """
+    In-memory variant of ``mark_subagent_finished``.
+    """
     now = utcnow()
     task.runtime.pipeline.updated_at = now
-    del ref, transcript, exit_code, pid, interruption_reason, continuation
     task.runtime.execution.active_subagent = None
-    save_task_runtime(root, task)
 
 
 def mark_engine_switch(

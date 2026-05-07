@@ -55,9 +55,9 @@ from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.tasks.paths import task_dir
 from litehive.tasks.report_storage import record_stage_report
 from litehive.tasks.runtime import (
-    mark_subagent_finished,
+    mark_subagent_finished_for_workspace,
     mark_subagent_progress,
-    mark_subagent_started,
+    mark_subagent_started_for_workspace,
 )
 from litehive.workspace import Workspace
 
@@ -301,7 +301,7 @@ class SubagentManager:
         )
         task.subagents.append(ref)
         save_task(self.root, task)
-        mark_subagent_started(self.root, task, ref)
+        mark_subagent_started_for_workspace(self.workspace, task, ref)
         self.sessions.write_session_start(task, base, ref, prompt)
         callbacks = SubagentRunCallbacks(
             task=task,
@@ -590,8 +590,8 @@ class SubagentManager:
         else:
             failure_kind = failure.kind
             failure_reason = failure.reason
-        mark_subagent_finished(
-            self.root,
+        mark_subagent_finished_for_workspace(
+            self.workspace,
             task,
             ref,
             transcript,

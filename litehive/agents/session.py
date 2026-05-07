@@ -32,7 +32,7 @@ from litehive.domain.agent import SubagentInactivityTimeout
 from litehive.domain.common import SubagentStatus, utcnow
 from litehive.domain.runtime import Subagent
 from litehive.domain.task import TaskRecord
-from litehive.tasks.runtime import mark_subagent_pid
+from litehive.tasks.runtime import mark_subagent_pid_for_workspace
 
 if TYPE_CHECKING:
     from litehive.sandbox.launcher import SandboxLauncher
@@ -194,7 +194,7 @@ class SubagentSessionManager:
         """
         if pid is None:
             return
-        mark_subagent_pid(self.root, task, pid)
+        mark_subagent_pid_for_workspace(self.workspace, task, pid)
         self.write_running_session_metadata(
             task,
             ref,
