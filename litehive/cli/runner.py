@@ -32,14 +32,15 @@ from litehive.state.backup import create_workspace_backup, list_workspace_backup
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.state.persist import (
     CONSECUTIVE_TASK_FAILURE_STOP_REASON,
-    load_state,
-    record_task_completion,
-    set_pool_stop_reason,
+    load_state_for_workspace,
+    record_task_completion_for_workspace,
+    set_pool_stop_reason_for_workspace,
 )
 from litehive.tasks.event_log import rebuild_sqlite_from_task_event_log
 from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.state.locking import runner_status_for_workspace
+from litehive.workspace import Workspace
 
 
 def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: typer.Typer) -> None:
@@ -231,8 +232,7 @@ def run_once(
     directly by the hook-reject circuit-breaker tests.
     """
     workspace = container.workspace
-    root = workspace.root
-    stopped_iteration = _existing_consecutive_task_failure_stop(root)
+    stopped_iteration = _existing_consecutive_task_failure_stop(workspace)
     if stopped_iteration is not None:
         return stopped_iteration
 
@@ -247,7 +247,7 @@ def run_once(
             return _RunCommandIteration(exit_code=1, ran_task=False)
 
         if task is None:
-            state = load_state(root)
+            state = load_state_for_workspace(workspace)
             return _RunCommandIteration(
                 exit_code=0,
                 ran_task=False,
@@ -273,8 +273,8 @@ def run_once(
             print(f"failed_reason: {result.failed_reason}")
         if result.failed_message:
             print(f"failed_message: {result.failed_message}")
-        consecutive_task_failures, pool_stop_reason = record_task_completion(
-            root,
+        consecutive_task_failures, pool_stop_reason = record_task_completion_for_workspace(
+            workspace,
             final_stage=result.final_stage,
         )
         if pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
@@ -288,7 +288,7 @@ def run_once(
         )
 
 
-def _existing_consecutive_task_failure_stop(workspace: Path) -> _RunCommandIteration | None:
+def _existing_consecutive_task_failure_stop(workspace: Workspace) -> _RunCommandIteration | None:
     """
     Short-circuit ``run_once`` when the pool is already in the failure-stop state.
 
@@ -298,7 +298,7 @@ def _existing_consecutive_task_failure_stop(workspace: Path) -> _RunCommandItera
     otherwise produce after the next failure, so the caller's
     handling of the stopped state stays uniform.
     """
-    state = load_state(workspace)
+    state = load_state_for_workspace(workspace)
     if state.pool_stop_reason != CONSECUTIVE_TASK_FAILURE_STOP_REASON:
         return None
     _emit_consecutive_task_failure_stop(state.consecutive_task_failures)
@@ -364,7 +364,7 @@ def _preview_single(
     workspace = container.workspace
     selection = peek_next_task_selection(workspace)
     if selection.task is None:
-        state = load_state(workspace.root)
+        state = load_state_for_workspace(workspace)
         if state.queue:
             print("No runnable task.")
         else:
@@ -423,11 +423,12 @@ def _run_drain(
     explain why the pool quit; without that record the operator
     would have to guess from the printed banner alone.
     """
-    root = container.workspace.root
+    workspace = container.workspace
+    root = workspace.root
     tasks_run = 0
     while True:
         if stop_on_dirty_git and _workspace_has_dirty_non_litehive_changes(root):
-            set_pool_stop_reason(root, "dirty_git_state")
+            set_pool_stop_reason_for_workspace(workspace, "dirty_git_state")
             print("Pool stopped: dirty_git_state")
             return 0
 
@@ -439,7 +440,7 @@ def _run_drain(
             return 0
         if not iteration.ran_task:
             if tasks_run == 0:
-                state = load_state(root)
+                state = load_state_for_workspace(workspace)
                 if state.queue:
                     print("No runnable task.")
                 else:
@@ -448,11 +449,11 @@ def _run_drain(
 
         tasks_run += 1
         if stop_on_failure and iteration.final_stage != PipelineState.DONE:
-            set_pool_stop_reason(root, "failure_detected")
+            set_pool_stop_reason_for_workspace(workspace, "failure_detected")
             print("Pool stopped: failure_detected")
             return 0
         if max_tasks is not None and tasks_run >= max_tasks:
-            set_pool_stop_reason(root, "max_tasks_reached")
+            set_pool_stop_reason_for_workspace(workspace, "max_tasks_reached")
             print("Pool stopped: max_tasks_reached")
             return 0
 
@@ -557,7 +558,7 @@ def report_command(
     workspace_obj = build_workspace(root)
     root = workspace_obj.root
     if not task_id:
-        state = load_state(root)
+        state = load_state_for_workspace(workspace_obj)
         task_id = state.active_task_id
     if not task_id:
         print("report failed: no task id provided, LITEHIVE_TASK_ID is unset, and no active task exists")

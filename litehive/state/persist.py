@@ -236,6 +236,16 @@ def save_state_without_runner_guard_for_workspace(
 
 def record_task_completion(root: Path, final_stage: PipelineState | None) -> tuple[int, str | None]:
     """
+    Path-based compatibility wrapper for runner completion bookkeeping.
+    """
+    return record_task_completion_for_workspace(Workspace.from_path(root), final_stage)
+
+
+def record_task_completion_for_workspace(
+    workspace: Workspace,
+    final_stage: PipelineState | None,
+) -> tuple[int, str | None]:
+    """
     Update the consecutive-failure counter and trigger pool stop at the limit.
 
     Called by the runner after each task finishes so a streak of failures
@@ -243,19 +253,27 @@ def record_task_completion(root: Path, final_stage: PipelineState | None) -> tup
     gate a misconfigured environment would burn through the whole queue
     before an operator noticed.
     """
+    root = workspace.root
     with workspace_lock(root):
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         if final_stage == PipelineState.DONE:
             state.consecutive_task_failures = 0
         else:
             state.consecutive_task_failures = max(0, int(state.consecutive_task_failures)) + 1
             if state.consecutive_task_failures >= CONSECUTIVE_TASK_FAILURE_LIMIT:
                 state.pool_stop_reason = CONSECUTIVE_TASK_FAILURE_STOP_REASON
-        save_state_without_runner_guard(root, state)
+        save_state_without_runner_guard_for_workspace(workspace, state)
         return state.consecutive_task_failures, state.pool_stop_reason
 
 
 def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
+    """
+    Path-based compatibility wrapper for pool stop reason updates.
+    """
+    return set_pool_stop_reason_for_workspace(Workspace.from_path(root), stop_reason)
+
+
+def set_pool_stop_reason_for_workspace(workspace: Workspace, stop_reason: str | None) -> WorkspaceState:
     """
     Set or clear the pool's stop reason.
 
@@ -264,12 +282,13 @@ def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
     leftover counter would re-trigger the same stop after one more
     failure.
     """
+    root = workspace.root
     with workspace_lock(root):
-        state = load_state(root)
+        state = load_state_for_workspace(workspace)
         if stop_reason is None and state.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
             state.consecutive_task_failures = 0
         state.pool_stop_reason = stop_reason
-        save_state_without_runner_guard(root, state)
+        save_state_without_runner_guard_for_workspace(workspace, state)
         return state
 
 

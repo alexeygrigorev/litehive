@@ -44,7 +44,7 @@ from litehive.observability.venv_health import (
     probe_broken_venv_executables_for_workspace,
 )
 from litehive.state.backup import create_scheduled_workspace_backup
-from litehive.state.persist import load_state_for_workspace, set_pool_stop_reason
+from litehive.state.persist import load_state_for_workspace, set_pool_stop_reason_for_workspace
 from litehive.state.locking import runner_status_for_workspace
 from litehive.workspace import Workspace
 
@@ -139,7 +139,7 @@ class DaemonOutput:
 
 
 def _halt_for_origin_divergence(
-    workspace: Path,
+    workspace: Workspace,
     attention_repository: AttentionRepository,
 ) -> str | None:
     """
@@ -151,10 +151,10 @@ def _halt_for_origin_divergence(
     attention-log entry, while the daemon loop owns how that fact is
     rendered to its output stream.
     """
-    divergence_reason = check_origin_divergence(workspace)
+    divergence_reason = check_origin_divergence(workspace.root)
     if divergence_reason is None:
         return None
-    set_pool_stop_reason(workspace, "diverged_from_origin")
+    set_pool_stop_reason_for_workspace(workspace, "diverged_from_origin")
     attention_repository.append(divergence_reason)
     return divergence_reason
 
@@ -465,7 +465,7 @@ class DaemonExecutor:
                     sleep_with_stop(1.0, stop_requested_fn=lambda: stop_requested)
                     continue
 
-                divergence_reason = _halt_for_origin_divergence(self.workspace, self.attention_repository)
+                divergence_reason = _halt_for_origin_divergence(self.daemon_workspace, self.attention_repository)
                 if divergence_reason is not None:
                     self.output.line(
                         "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. "
