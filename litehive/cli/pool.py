@@ -1,5 +1,4 @@
 from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
-from litehive.state.records import list_tasks
 from litehive.tasks.report_storage import load_stage_reports_for_task_id
 from litehive.workspace import Workspace
 
@@ -53,9 +52,8 @@ def _pending_pool_tasks_for_workspace(workspace: Workspace):
     """
     Collect pending pool tasks from an injected workspace.
     """
-    root = workspace.root
     pending = []
-    for task in list_tasks(root):
+    for task in workspace.list_tasks():
         if task.status in {TaskStatus.QUEUED, TaskStatus.IN_PROGRESS} and task.pipeline_status != PipelineStatus.DONE:
             pending.append(
                 _pool_task_report_entry_for_workspace(
@@ -74,9 +72,8 @@ def _resumable_pool_tasks_for_workspace(workspace: Workspace):
     """
     Collect resumable pool tasks from an injected workspace.
     """
-    root = workspace.root
     resumable = []
-    for task in list_tasks(root):
+    for task in workspace.list_tasks():
         if (
             task.status not in {TaskStatus.INTERRUPTED, TaskStatus.PARKED}
             or task.pipeline_status == PipelineStatus.DONE
@@ -102,9 +99,8 @@ def _closed_pool_tasks_for_workspace(workspace: Workspace):
     """
     Collect closed pool tasks from an injected workspace.
     """
-    root = workspace.root
     closed = []
-    for task in list_tasks(root):
+    for task in workspace.list_tasks():
         if task.status != TaskStatus.CLOSED:
             continue
         closed.append(
