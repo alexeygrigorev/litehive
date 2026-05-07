@@ -194,7 +194,7 @@ class LitehiveConfig:
     pool_max_tasks: int | None = None
     pool_stop_on_dirty_git: bool = False
     pool_stop_on_attention: bool = False
-    runner_hooks: dict[str, list[str | dict[str, object]]] = field(default_factory=dict)
+    runner_hooks: dict[str, list[dict[str, object]]] = field(default_factory=dict)
     task_time_budget_seconds: float | None = DEFAULT_TASK_TIME_BUDGET_SECONDS
     subagent_inactivity_timeout_seconds: float = DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS
     inactivity_timeout_seconds: float | None = None
@@ -312,7 +312,10 @@ def parse_litehive_config_data(data: Mapping[str, Any]) -> LitehiveConfig:
     run first because they depend on project-specific policy;
     Pydantic owns the dataclass materialization step.
     """
-    return _LITEHIVE_CONFIG_ADAPTER.validate_python(validate_config_data(data))
+    validated = validate_config_data(data)
+    if "runner_hooks" in validated:
+        validated["runner_hooks"] = normalize_runner_hooks(validated["runner_hooks"])
+    return _LITEHIVE_CONFIG_ADAPTER.validate_python(validated)
 
 
 def normalize_engine_sequence(engines: Sequence[str], field_name: str) -> list[str]:
