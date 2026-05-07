@@ -37,10 +37,9 @@ def analyze_scope_changes(workspace: Workspace) -> dict[str, Any]:
     flag. Returns a dict with the classification, reasoning, and the
     deleted/broken/healthy file lists for the recovery report.
     """
-    workspace_root = workspace.root
     try:
         try:
-            entries = diff_name_status(workspace_root, "main...HEAD")
+            entries = diff_name_status(workspace.root, "main...HEAD")
         except GitError as exc:
             raise ScopeAnalysisError(str(exc)) from exc
         deleted_files = [path for status, path in entries if status == "D"]
@@ -57,7 +56,7 @@ def analyze_scope_changes(workspace: Workspace) -> dict[str, Any]:
         broken_on_main: list[str] = []
         healthy_on_main: list[str] = []
         for file_path in deleted_files:
-            if _is_file_broken_on_main(workspace_root, file_path):
+            if _is_file_broken_on_main(workspace, file_path):
                 broken_on_main.append(file_path)
             else:
                 healthy_on_main.append(file_path)
@@ -81,7 +80,7 @@ def analyze_scope_changes(workspace: Workspace) -> dict[str, Any]:
         }
 
 
-def _is_file_broken_on_main(workspace_root: Path, file_path: str) -> bool:
+def _is_file_broken_on_main(workspace: Workspace, file_path: str) -> bool:
     """
     Decide whether a file is broken or failing on the main branch.
 
@@ -90,11 +89,12 @@ def _is_file_broken_on_main(workspace_root: Path, file_path: str) -> bool:
     syntax errors on main. The "already broken" classification is
     what licenses operator cleanup deletions during scope analysis.
     """
+    workspace_root = workspace.root
     if not path_exists_in_ref(workspace_root, "main", file_path):
         return True
     if _is_test_file(file_path):
-        return _is_test_broken_on_main(workspace_root, file_path)
-    return _has_syntax_errors_on_main(workspace_root, file_path)
+        return _is_test_broken_on_main(workspace, file_path)
+    return _has_syntax_errors_on_main(workspace, file_path)
 
 
 def _is_test_file(file_path: str) -> bool:
@@ -118,7 +118,7 @@ def _is_test_file(file_path: str) -> bool:
     )
 
 
-def _is_test_broken_on_main(workspace_root: Path, test_file: str) -> bool:
+def _is_test_broken_on_main(workspace: Workspace, test_file: str) -> bool:
     """
     True when a test file fails when run on main.
 
@@ -127,6 +127,7 @@ def _is_test_broken_on_main(workspace_root: Path, test_file: str) -> bool:
     away while the test runs, then restored regardless of the test
     outcome so the probe never leaves the worktree dirty.
     """
+    workspace_root = workspace.root
     try:
         stash_push(workspace_root, "temp-stash-for-scope-analysis")
 
@@ -154,7 +155,7 @@ def _is_test_broken_on_main(workspace_root: Path, test_file: str) -> bool:
         raise ScopeAnalysisError(f"could not test {test_file} on main: {exc}") from exc
 
 
-def _has_syntax_errors_on_main(workspace_root: Path, file_path: str) -> bool:
+def _has_syntax_errors_on_main(workspace: Workspace, file_path: str) -> bool:
     """
     True when the file is Python and parses with a SyntaxError on main.
 
@@ -164,7 +165,7 @@ def _has_syntax_errors_on_main(workspace_root: Path, file_path: str) -> bool:
     syntax check has nothing to say about them.
     """
     try:
-        contents = show_at_ref(workspace_root, "main", file_path)
+        contents = show_at_ref(workspace.root, "main", file_path)
     except GitError as exc:
         raise ScopeAnalysisError(f"could not inspect {file_path} on main: {exc}") from exc
 
