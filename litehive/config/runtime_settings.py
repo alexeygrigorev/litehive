@@ -349,9 +349,9 @@ def set_runtime_setting(
 def set_default_engine(
     workspace: Workspace,
     engine_name: str,
-    actor: str = "operator",
-    source: str = "cli",
-    context: Mapping[str, Any] | None = None,
+    actor: str,
+    source: str,
+    context: Mapping[str, Any] | None,
 ) -> RuntimeSettingChange:
     """
     Persist the workspace's default engine through the audited store.
@@ -375,9 +375,9 @@ def set_default_engine(
 def set_engine_preference(
     workspace: Workspace,
     engines: Sequence[str],
-    actor: str = "operator",
-    source: str = "cli",
-    context: Mapping[str, Any] | None = None,
+    actor: str,
+    source: str,
+    context: Mapping[str, Any] | None,
 ) -> RuntimeSettingChange:
     """
     Persist the engine fallback order through the audited store.
@@ -403,9 +403,9 @@ def set_engine_freeze(
     workspace: Workspace,
     engine_name: str,
     freeze_iso: str,
-    actor: str = "operator",
-    source: str = "cli",
-    context: Mapping[str, Any] | None = None,
+    actor: str,
+    source: str,
+    context: Mapping[str, Any] | None,
 ) -> RuntimeSettingChange:
     """
     Add or refresh one engine's freeze-until timestamp.
@@ -439,9 +439,9 @@ def set_engine_freeze(
 def clear_engine_freeze(
     workspace: Workspace,
     engine_name: str,
-    actor: str = "operator",
-    source: str = "cli",
-    context: Mapping[str, Any] | None = None,
+    actor: str,
+    source: str,
+    context: Mapping[str, Any] | None,
 ) -> RuntimeSettingChange:
     """
     Remove a single engine's freeze entry and persist the rest.

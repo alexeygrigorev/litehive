@@ -720,13 +720,22 @@ Legend:
   `sandbox_policy_summary` dictionary conversion with typed objects,
   or document why serialization requires a dict.
   Source: note 3, 28:30-28:55.
-  Completed 2026-05-07: `SubagentReportPayload` and
+  Verified 2026-05-07: `SubagentReportPayload` and
   `SubagentSessionStorageFields` now carry `SandboxPolicySummary`
   directly and serialize through `.as_dict()` only at the persisted
   JSON boundary. Added `SandboxPolicySummary.from_mapping(...)` for
   rehydrating historical session payloads during interrupted-subagent
-  recovery. Verified with focused pyrefly and subagent session/report
-  tests.
+  recovery. Traced `SubagentSessionManager.session_storage_fields`,
+  `SubagentManager._write_session_finish`,
+  `SubagentManager.write_session_progress`,
+  `_write_interrupted_subagent_artifacts`, and
+  `HeruEngineFactory._run_direct_recovery_turn`: they now pass typed
+  `SandboxPolicySummary` objects rather than resource-control dicts.
+  Verified with `rg` that `policy_summary(...).as_dict()` is gone from
+  the manager/session construction path and only report/session
+  serializers call `.as_dict()`. Reran focused ruff, pyrefly, sandbox
+  integration tests, subagent session/report/manager tests, recovery
+  tests, and direct-recovery lifecycle tests.
 - [ ] M36. Move `load_subagent_session` toward
   `Workspace.load_subagent_session(...)`, `Task.load_subagent_session`
   or another object-owned API.
@@ -1073,9 +1082,13 @@ Legend:
 - [ ] R5. Remove `set_engine_preference` if it only delegates to
   `set_runtime_setting`.
   Source: note 5, 04:44-05:12.
-- [ ] R6. Audit default arguments in runtime settings. If callers
+- [x] R6. Audit default arguments in runtime settings. If callers
   always pass values, remove defaults so values are explicit.
   Source: note 5, 05:15-05:40.
+  Completed 2026-05-07: audited runtime-setting wrapper callers and
+  removed unused defaults for `actor`, `source`, and `context` from
+  `set_default_engine`, `set_engine_preference`, `set_engine_freeze`,
+  and `clear_engine_freeze`.
 - [ ] R7. Simplify `clear_engine_freeze`: it should perform the small
   database mutation/audit needed and nothing more.
   Source: note 5, 05:55-06:25.
