@@ -28,7 +28,7 @@ from litehive.tasks.audit import (
 )
 from litehive.tasks.constants import CLOSED_TASK_STATUSES, VALID_TASK_ENGINES
 from litehive.tasks.paths import latest_subagent_base, task_dir
-from litehive.tasks.queue import move_queued_task
+from litehive.tasks.queue import move_queued_task_for_workspace
 from litehive.tasks.runtime import mark_engine_switch
 from litehive.workspace import Workspace
 
@@ -163,7 +163,7 @@ def switch_task_engine_for_workspace(
     task = workspace.require_task(task.id)
 
     if task.status == TaskStatus.QUEUED:
-        move_queued_task(root, task.id, 1)
+        move_queued_task_for_workspace(workspace, task.id, 1)
         task = workspace.require_task(task.id)
     elif task.status in {TaskStatus.INTERRUPTED, TaskStatus.PARKED, TaskStatus.FLAGGED, *CLOSED_TASK_STATUSES}:
         task = resume_task_for_workspace(workspace, task.id, front=True)
