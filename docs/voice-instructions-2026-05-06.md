@@ -758,6 +758,13 @@ Legend:
 - [ ] M38. Remove `isinstance(existing.get("created_at"), ...)` by
   making session loading return a typed object, not a dictionary.
   Source: note 3, 29:55-30:15.
+  Progress 2026-05-07: added
+  `Workspace.load_subagent_session_created_at(...) -> str | None` and
+  moved the creation-time type narrowing behind the workspace API.
+  `SubagentSessionManager` no longer performs
+  `isinstance(existing.get("created_at"), str)` in its write paths.
+  Remaining work: replace the broader session dictionary with a typed
+  loaded-session object.
 - [ ] M39. Review continuation handling. If continuation is always
   required in a given flow, remove `None`; if not, model the distinct
   start/continue states.

@@ -206,10 +206,7 @@ class SubagentSessionManager:
         codes and interruption reasons are terminal state and are
         written through full session snapshots.
         """
-        created_at = utcnow()
-        existing = self.workspace.load_subagent_session(task.id, ref.id)
-        if isinstance(existing.get("created_at"), str):
-            created_at = existing["created_at"]
+        created_at = self.workspace.load_subagent_session_created_at(task.id, ref.id) or utcnow()
         session_row = RunningSubagentSessionRow(
             fields=self.session_storage_fields(ref, created_at, utcnow()),
             pid=metadata.pid,
@@ -368,10 +365,7 @@ class SubagentSessionManager:
         debugging — sees a consistent set of artifacts instead of
         catching the snapshot mid-update.
         """
-        created_at = utcnow()
-        existing = self.workspace.load_subagent_session(task.id, ref.id)
-        if isinstance(existing.get("created_at"), str):
-            created_at = existing["created_at"]
+        created_at = self.workspace.load_subagent_session_created_at(task.id, ref.id) or utcnow()
         session_row = self.session_row_for_snapshot(ref, snapshot, created_at)
         save_subagent_artifacts(
             self.workspace,

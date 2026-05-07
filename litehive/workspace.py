@@ -259,3 +259,12 @@ class Workspace:
         from litehive.agents.session_store import load_subagent_session  # noqa: PLC0415
 
         return load_subagent_session(self, task_id, subagent_id)
+
+    def load_subagent_session_created_at(self, task_id: str, subagent_id: str) -> str | None:
+        """
+        Return the persisted creation timestamp for one subagent session.
+        """
+        created_at = self.load_subagent_session(task_id, subagent_id).get("created_at")
+        if isinstance(created_at, str):
+            return created_at
+        return None
