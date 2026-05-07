@@ -228,6 +228,33 @@ class PipelineState(StringEnum):
             case _:
                 return self
 
+    @property
+    def accepts_runner_hook(self) -> bool:
+        """
+        Whether workspace runner hooks may attach to this phase.
+
+        Hooks are allowed only at explicit before/after boundaries
+        where the lifecycle can pause safely around an agent-owned
+        stage. Recovery and merge-resolution are executable stages,
+        but they are not operator hook points because they hijack
+        control flow to repair an existing failure.
+        """
+        match self:
+            case (
+                PipelineState.BEFORE_GROOMING
+                | PipelineState.AFTER_GROOMING
+                | PipelineState.BEFORE_IMPLEMENTING
+                | PipelineState.AFTER_IMPLEMENTING
+                | PipelineState.BEFORE_TESTING
+                | PipelineState.AFTER_TESTING
+                | PipelineState.BEFORE_ACCEPTING
+                | PipelineState.AFTER_ACCEPTING
+                | PipelineState.AFTER_COMMIT
+            ):
+                return True
+            case _:
+                return False
+
 
 class TaskStage(StringEnum):
     """
@@ -292,6 +319,13 @@ class TaskStage(StringEnum):
                 return PipelineState.ACCEPTING
             case TaskStage.COMMIT_TO_GIT:
                 return PipelineState.COMMIT
+
+
+def runner_hook_points() -> frozenset[str]:
+    """
+    Return config spellings for lifecycle phases that accept runner hooks.
+    """
+    return frozenset(state.value for state in PipelineState if state.accepts_runner_hook)
 
 
 class TaskStatus(StringEnum):

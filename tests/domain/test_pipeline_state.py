@@ -7,6 +7,7 @@ from litehive.domain.common import (
     TaskStage,
     Verdict,
     pipeline_status_for_pipeline_state,
+    runner_hook_points,
     task_stage_for_pipeline_state,
 )
 from litehive.domain.failure_diagnostics import FailureDiagnostics
@@ -55,6 +56,24 @@ def test_task_stage_retry_counter_state_is_domain_behavior() -> None:
     assert TaskStage.TESTING.retry_counter_state is PipelineState.TESTING
     assert TaskStage.ACCEPTING.retry_counter_state is PipelineState.ACCEPTING
     assert TaskStage.COMMIT_TO_GIT.retry_counter_state is PipelineState.COMMIT
+
+
+def test_runner_hook_points_are_domain_stage_policy() -> None:
+    assert runner_hook_points() == frozenset(
+        {
+            "before_grooming",
+            "after_grooming",
+            "before_implementing",
+            "after_implementing",
+            "before_testing",
+            "after_testing",
+            "before_accepting",
+            "after_accepting",
+            "after_commit",
+        }
+    )
+    assert not PipelineState.RECOVERING.accepts_runner_hook
+    assert not PipelineState.MERGE_RESOLVING.accepts_runner_hook
 
 
 def test_every_pipeline_state_has_pipeline_status_projection() -> None:

@@ -83,6 +83,24 @@ class AgentRole(StringEnum):
         return _DEFAULT_AGENT_ACTIVITY_VERDICTS
 
 
+def agent_startup_guidance_keys() -> frozenset[str]:
+    """
+    Return config keys that may receive startup guidance overlays.
+
+    Normal task roles and recovery accept operator guidance. Merge
+    resolution is intentionally excluded because it is a narrow
+    system repair role rather than a configurable task-stage agent.
+    """
+    guidance_roles = {
+        AgentRole.PLANNER,
+        AgentRole.SWE,
+        AgentRole.QA,
+        AgentRole.REVIEWER,
+        AgentRole.RECOVERY,
+    }
+    return frozenset({"all", *(role.value for role in guidance_roles)})
+
+
 def known_agent_role(value: str | None) -> AgentRole | None:
     """
     Convert a persisted or adapter-supplied role string when it is known.

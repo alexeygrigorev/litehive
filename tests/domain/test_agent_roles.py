@@ -3,6 +3,7 @@ from litehive.domain.roles import (
     AgentRole,
     agent_activity_verdicts_for_role,
     agent_stage_for_task,
+    agent_startup_guidance_keys,
     agent_verdict_requires_target_stage,
     known_agent_role,
 )
@@ -20,6 +21,11 @@ def test_agent_role_owns_default_stage_relationships() -> None:
     assert AgentRole.REVIEWER.default_stage is TaskStage.ACCEPTING
     assert AgentRole.MERGE_RESOLVER.default_stage is PipelineState.MERGE_RESOLVING
     assert AgentRole.RECOVERY.default_stage is PipelineState.RECOVERING
+
+
+def test_agent_startup_guidance_keys_are_domain_role_policy() -> None:
+    assert agent_startup_guidance_keys() == frozenset({"all", "planner", "swe", "qa", "reviewer", "recovery"})
+    assert "merge-resolver" not in agent_startup_guidance_keys()
 
 
 def test_known_agent_role_keeps_unknown_boundary_values_out_of_domain() -> None:

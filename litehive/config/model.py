@@ -14,6 +14,8 @@ import re
 from typing import Any, Iterable, Mapping, Sequence
 
 from litehive.config.profiles.loader import available_process_profiles
+from litehive.domain.common import runner_hook_points
+from litehive.domain.roles import agent_startup_guidance_keys
 
 
 def _as_iterable(value: object, *, field_name: str) -> Iterable[object]:
@@ -54,24 +56,12 @@ def _as_mapping(value: object, *, field_name: str) -> Mapping[object, object]:
 # --- validation constants ---
 
 VALID_ENGINE_NAMES = frozenset({"codex", "opencode", "gemini", "copilot", "claude", "goz"})
-VALID_AGENT_STARTUP_GUIDANCE_KEYS = frozenset({"all", "planner", "swe", "qa", "reviewer", "recovery"})
+VALID_AGENT_STARTUP_GUIDANCE_KEYS = agent_startup_guidance_keys()
 VALID_RETRY_ON_FAILURE_KINDS = frozenset({"execution_limit", "timeout", "network", "service"})
 VALID_SANDBOX_NETWORK_MODES = frozenset({"none", "bridge", "host"})
 VALID_SANDBOX_WORKSPACE_MODES = frozenset({"ro", "rw"})
 VALID_SANDBOX_BACKENDS = frozenset({"docker"})
-VALID_RUNNER_HOOK_POINTS = frozenset(
-    {
-        "before_grooming",
-        "after_grooming",
-        "before_implementing",
-        "after_implementing",
-        "before_testing",
-        "after_testing",
-        "before_accepting",
-        "after_accepting",
-        "after_commit",
-    }
-)
+VALID_RUNNER_HOOK_POINTS = runner_hook_points()
 VALID_RUNNER_HOOK_ENTRY_KEYS = frozenset(
     {
         "command",

@@ -1784,9 +1784,16 @@ Legend:
   initial plan, apply workspace ordering, filter active freezes, and
   choose the first remaining engine consistently. Added a regression
   test proving a frozen default resolves to the first unfrozen fallback.
-- [ ] R21. Move recovery-stage and hijackable-stage logic out of
+- [x] R21. Move recovery-stage and hijackable-stage logic out of
   config into domain types such as `TaskStage` / `TaskRecord`.
   Source: note 4, 44:29-45:49.
+  Completed 2026-05-07: moved recovery startup-guidance key policy to
+  `domain.roles.agent_startup_guidance_keys()` and moved runner
+  hook-point policy to `PipelineState.accepts_runner_hook` plus
+  `runner_hook_points()`. `config.model` now imports those domain
+  facts instead of owning hard-coded recovery/hookable-stage lists.
+  Verified with domain tests for recovery guidance and non-hookable
+  recovery/merge stages, plus config loading/runner hook tests.
 - [ ] R22. Ensure each stage knows its agent/role and each agent/role
   knows its stages. Do not scatter role/stage dictionaries.
   Source: note 4, 45:49-46:13.
