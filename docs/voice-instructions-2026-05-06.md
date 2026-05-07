@@ -2084,15 +2084,16 @@ Legend:
   Source: note 5, 19:00-19:27; note 5, 21:25-21:52.
   Completed 2026-05-07: introduced `DaemonOutput`, a stream-bound
   daemon-loop writer with `line(...)` and `runner_wait(...)` methods.
-  `run_daemon_loop` now constructs one output object and passes only
-  its underlying stream to child subprocess log forwarding.
+  `run_daemon_loop` now constructs one output object and passes it to
+  child subprocess log forwarding for live output teeing.
 - [x] DM14. Replace daemon health check dictionaries with typed
   entries.
   Source: note 5, 19:28-19:34.
-  Completed 2026-05-07: added `DaemonHealthcheckEntry` as the
-  validated start-guard view of daemon registry metadata. The
-  health-check policy now receives that object instead of reading
-  heartbeat fields from a raw metadata dictionary.
+  Completed 2026-05-07: added `DaemonRegistryEntry` as the typed
+  daemon registry boundary. `daemon_metadata(...)` and
+  `get_workspace_daemon(...)` now return that typed entry, and the
+  daemon start health check reads `pid` and `heartbeat_at` from that
+  object instead of raw metadata dictionaries.
 - [ ] DM15. Remove wrapper functions like `clear_recorded_daemon` /
   `unregister_daemon` if they only call another function.
   Source: note 5, 19:53-20:07.
@@ -2124,8 +2125,13 @@ Legend:
   Source: note 5, 23:18-24:45.
 - [ ] DM24. Consider a `DaemonLogs` class with log-related methods.
   Source: note 5, 24:47-25:10.
-- [ ] DM25. Replace daemon metadata dictionaries with dataclasses.
+- [x] DM25. Replace daemon metadata dictionaries with dataclasses.
   Source: note 5, 25:16-25:35.
+  Completed 2026-05-07: introduced `DaemonRegistryEntry` in
+  `daemon.registry`; `daemon_metadata(...)`, `get_workspace_daemon(...)`,
+  and `stale_daemon_metadata(...)` now expose typed entries while the
+  registry keeps JSON dictionaries only at the lock-manager persistence
+  boundary.
 - [ ] DM26. Consider a `WorkspaceDaemon` object that manages daemon
   registration, lookup, and workspace daemon behavior.
   Source: note 5, 25:29-26:11.

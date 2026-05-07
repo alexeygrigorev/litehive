@@ -128,7 +128,7 @@ def stop(workspace: WorkspaceOption = Path.cwd()) -> int:
         print("daemon_status: stopped")
         print("stopped: no")
         return 1
-    print(f"pid: {entry.get('pid')}")
+    print(f"pid: {entry.pid}")
     print("daemon_status: stopped")
     print("stopped: yes")
     return 0
@@ -152,7 +152,7 @@ def restart(workspace: WorkspaceOption = Path.cwd()) -> int:
         print(f"daemon restart failed: {exc}")
         return 1
     if previous is not None:
-        previous_pid_label = previous.get("pid")
+        previous_pid_label = previous.pid
     else:
         previous_pid_label = "-"
     print(f"workspace: {workspace.resolve()}")

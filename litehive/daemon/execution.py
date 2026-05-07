@@ -11,7 +11,7 @@ itself (``run_daemon_loop``), the detach-and-register flow
 ``daemon.logs``.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import logging
@@ -47,6 +47,7 @@ from litehive.workspace import Workspace
 from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir_for_workspace
 
 from .registry import (
+    DaemonRegistryEntry,
     daemon_metadata,
     get_workspace_daemon,
     register_daemon,
@@ -129,21 +130,6 @@ class DaemonOutput:
             f"runner already active: status={status.status} pid={pid} "
             f"active_task_id={task_id} heartbeat_at={heartbeat}"
         )
-
-
-@dataclass(frozen=True, slots=True)
-class DaemonHealthcheckEntry:
-    """
-    Narrowed daemon registry row used by the start-time health check.
-
-    ``daemon_metadata`` still returns a persistence-shaped dictionary
-    until the broader metadata migration lands. This object keeps the
-    health-check policy from reaching back into that loose mapping for
-    fields after the start guard has validated the row shape.
-    """
-
-    pid: int
-    heartbeat_at: object
 
 
 def _halt_for_origin_divergence(
@@ -237,16 +223,7 @@ def _heartbeat_age_seconds(heartbeat_at: object) -> float | None:
     return max(0.0, (datetime.now(UTC) - timestamp.astimezone(UTC)).total_seconds())
 
 
-def _daemon_healthcheck_entry(entry: Mapping[str, object]) -> DaemonHealthcheckEntry | None:
-    if entry.get("status") != "running":
-        return None
-    pid = entry.get("pid")
-    if not isinstance(pid, int):
-        return None
-    return DaemonHealthcheckEntry(pid=pid, heartbeat_at=entry.get("heartbeat_at"))
-
-
-def _daemon_healthcheck_failed(entry: DaemonHealthcheckEntry, config: DaemonConfig) -> bool:
+def _daemon_healthcheck_failed(entry: DaemonRegistryEntry, config: DaemonConfig) -> bool:
     """
     Detect a wedged registered daemon that should be reclaimed.
 
@@ -685,15 +662,12 @@ def start_background_daemon(workspace: Path) -> int:
     workspace = workspace.resolve()
     daemon_config = build_workspace(workspace).load_config().daemon
     existing = daemon_metadata(workspace)
-    healthcheck_entry = _daemon_healthcheck_entry(existing) if existing is not None else None
-    if healthcheck_entry is not None:
-        if _daemon_healthcheck_failed(healthcheck_entry, daemon_config):
-            _force_kill_recorded_daemon(workspace, pid=healthcheck_entry.pid, config=daemon_config)
+    if existing is not None and existing.status == "running":
+        if existing.pid is not None and _daemon_healthcheck_failed(existing, daemon_config):
+            _force_kill_recorded_daemon(workspace, pid=existing.pid, config=daemon_config)
         else:
-            raise RuntimeError(f"daemon already running for {workspace}: pid={healthcheck_entry.pid}")
-    elif existing is not None and existing.get("status") == "running":
-        raise RuntimeError(f"daemon already running for {workspace}: pid={existing.get('pid')}")
-    if existing is not None and existing.get("status") == "stale":
+            raise RuntimeError(f"daemon already running for {workspace}: pid={existing.pid}")
+    if existing is not None and existing.status == "stale":
         unregister_daemon(workspace)
     create_workspace_venvs_ready(workspace)
     project_root = Path(__file__).resolve().parents[2]
@@ -723,13 +697,13 @@ def start_background_daemon(workspace: Path) -> int:
         if process.poll() is not None:
             raise RuntimeError("daemon failed to start")
         entry = get_workspace_daemon(workspace)
-        if entry is not None and entry.get("pid") == process.pid:
+        if entry is not None and entry.pid == process.pid:
             return process.pid
         time.sleep(daemon_config.startup_poll_interval_seconds)
     raise RuntimeError("daemon did not register before timeout")
 
 
-def stop_workspace_daemon(workspace: Path) -> dict[str, object] | None:
+def stop_workspace_daemon(workspace: Path) -> DaemonRegistryEntry | None:
     """
     Stop the daemon registered for ``workspace``, returning its prior registration.
 
@@ -745,16 +719,13 @@ def stop_workspace_daemon(workspace: Path) -> dict[str, object] | None:
     entry = daemon_metadata(workspace)
     if entry is None:
         return None
-    if entry.get("status") != "running":
+    if entry.status != "running":
         unregister_daemon(workspace)
         return None
-    pid = entry.get("pid")
-    # Registry metadata is read from SQLite/JSON and must be narrowed
-    # before using it as an OS pid.
-    if not isinstance(pid, int):
+    if entry.pid is None:
         unregister_daemon(workspace)
         return None
-    _terminate_recorded_daemon(workspace, pid=pid, config=daemon_config)
+    _terminate_recorded_daemon(workspace, pid=entry.pid, config=daemon_config)
     return entry
 
 
@@ -782,13 +753,13 @@ def daemon_status_lines_for_workspace(workspace: Workspace) -> list[str]:
     root = workspace.root
     entry = daemon_metadata(root)
     lines = [f"workspace: {root}"]
-    if entry is None or entry.get("status") != "running":
+    if entry is None or entry.status != "running":
         lines.append("daemon_status: stopped")
     else:
         lines.append("daemon_status: running")
-        lines.append(f"pid: {entry.get('pid')}")
-        lines.append(f"started_at: {entry.get('started_at')}")
-        lines.append(f"log_dir: {entry.get('log_dir')}")
+        lines.append(f"pid: {entry.pid}")
+        lines.append(f"started_at: {entry.started_at}")
+        lines.append(f"log_dir: {entry.log_dir}")
     runner = runner_status_for_workspace(workspace)
     state = load_state_for_workspace(workspace)
     lines.append(render_runner_status_line(runner, state))

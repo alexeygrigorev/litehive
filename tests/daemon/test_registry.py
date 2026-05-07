@@ -12,6 +12,7 @@ from litehive.config.model import DaemonConfig, LitehiveConfig
 from litehive.config.workspace import create_workspace
 from litehive.daemon.execution import start_background_daemon, stop_workspace_daemon
 from litehive.daemon.registry import (
+    DaemonRegistryEntry,
     daemon_lock_is_active,
     daemon_lock_path,
     daemon_metadata,
@@ -67,7 +68,7 @@ def _wait_for_daemon_metadata(
     *,
     timeout_seconds: float = 2.0,
     poll_interval_seconds: float = 0.02,
-) -> dict[str, object] | None:
+) -> DaemonRegistryEntry | None:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         entry = daemon_metadata(workspace)
@@ -88,9 +89,9 @@ def test_register_and_unregister_daemon_uses_shared_lock_manager(tmp_path: Path,
 
     entry = daemon_metadata(workspace)
     assert entry is not None
-    assert entry["status"] == "running"
-    assert entry["pid"] == os.getpid()
-    assert entry["log_dir"] == str(log_dir)
+    assert entry.status == "running"
+    assert entry.pid == os.getpid()
+    assert entry.log_dir == str(log_dir)
     assert daemon_lock_is_active(workspace) is True
     assert get_workspace_daemon(workspace) == entry
 
@@ -151,7 +152,14 @@ def test_start_background_daemon_strips_agent_env(tmp_path: Path, monkeypatch) -
     monkeypatch.setattr("litehive.daemon.execution.subprocess.Popen", fake_popen)
     monkeypatch.setattr(
         "litehive.daemon.execution.get_workspace_daemon",
-        lambda workspace: {"pid": 4321, "status": "running"},
+        lambda workspace: DaemonRegistryEntry(
+            status="running",
+            pid=4321,
+            workspace=str(workspace.resolve()),
+            started_at=None,
+            heartbeat_at=None,
+            log_dir=None,
+        ),
     )
 
     pid = start_background_daemon(tmp_path)
@@ -187,14 +195,14 @@ def test_stop_workspace_daemon_escalates_to_sigkill_when_sigterm_ignored(tmp_pat
         entry = _wait_for_daemon_metadata(workspace)
         assert daemon_lock_is_active(workspace) is True
         assert entry is not None
-        assert entry["status"] == "running"
-        assert entry["pid"] == sleeper.pid
+        assert entry.status == "running"
+        assert entry.pid == sleeper.pid
         started = time.monotonic()
         entry = stop_workspace_daemon(workspace)
         elapsed = time.monotonic() - started
 
         assert entry is not None
-        assert entry["pid"] == sleeper.pid
+        assert entry.pid == sleeper.pid
         sleeper.wait(timeout=5)
         assert sleeper.returncode == -signal.SIGKILL
         assert elapsed < 3.0
@@ -234,8 +242,8 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
     try:
         entry = _wait_for_daemon_metadata(workspace)
         assert entry is not None
-        assert entry["status"] == "running"
-        assert entry["pid"] == sleeper.pid
+        assert entry.status == "running"
+        assert entry.pid == sleeper.pid
         monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready", lambda *args, **kwargs: None)
         class FakeProcess:
             pid = 4321
@@ -246,7 +254,14 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
         monkeypatch.setattr("litehive.daemon.execution.subprocess.Popen", lambda *args, **kwargs: FakeProcess())
         monkeypatch.setattr(
             "litehive.daemon.execution.get_workspace_daemon",
-            lambda workspace: {"pid": 4321, "status": "running"},
+            lambda workspace: DaemonRegistryEntry(
+                status="running",
+                pid=4321,
+                workspace=str(workspace.resolve()),
+                started_at=None,
+                heartbeat_at=None,
+                log_dir=None,
+            ),
         )
 
         pid = start_background_daemon(workspace)
@@ -288,8 +303,8 @@ def test_start_background_daemon_does_not_kill_live_pid_from_stale_metadata(tmp_
         assert daemon_lock_is_active(workspace) is False
         entry = daemon_metadata(workspace)
         assert entry is not None
-        assert entry["status"] == "stale"
-        assert entry["pid"] == sleeper.pid
+        assert entry.status == "stale"
+        assert entry.pid == sleeper.pid
         monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready", lambda *args, **kwargs: None)
 
         class FakeProcess:
@@ -301,7 +316,14 @@ def test_start_background_daemon_does_not_kill_live_pid_from_stale_metadata(tmp_
         monkeypatch.setattr("litehive.daemon.execution.subprocess.Popen", lambda *args, **kwargs: FakeProcess())
         monkeypatch.setattr(
             "litehive.daemon.execution.get_workspace_daemon",
-            lambda workspace: {"pid": 4321, "status": "running"},
+            lambda workspace: DaemonRegistryEntry(
+                status="running",
+                pid=4321,
+                workspace=str(workspace.resolve()),
+                started_at=None,
+                heartbeat_at=None,
+                log_dir=None,
+            ),
         )
 
         pid = start_background_daemon(workspace)

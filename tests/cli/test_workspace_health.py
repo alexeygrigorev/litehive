@@ -15,6 +15,7 @@ from litehive.cli.workspace import (
 )
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import create_workspace
+from litehive.daemon.registry import DaemonRegistryEntry
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.reports import StageReport
@@ -39,7 +40,14 @@ def test_health_daemon_status_defaults_to_stopped(tmp_path: Path, monkeypatch) -
 def test_health_daemon_status_reports_running_pid(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         "litehive.cli.workspace.daemon_metadata",
-        lambda root: {"status": "running", "pid": 4242},
+        lambda root: DaemonRegistryEntry(
+            status="running",
+            pid=4242,
+            workspace=str(root.resolve()),
+            started_at=None,
+            heartbeat_at=None,
+            log_dir=None,
+        ),
     )
 
     assert health_daemon_status(tmp_path) == ("running", "4242")

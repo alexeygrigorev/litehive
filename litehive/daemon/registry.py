@@ -12,10 +12,11 @@ module is the daemon-specific consumer.
 """
 
 from contextlib import contextmanager
+from dataclasses import dataclass
 import logging
 from pathlib import Path
 import threading
-from typing import TextIO
+from typing import Literal, TextIO
 
 from litehive.config.paths import workspace_path
 from litehive.state.lock_manager import WorkspaceLockManager
@@ -27,6 +28,51 @@ logger = logging.getLogger(__name__)
 
 _DAEMON_LOCKS: dict[Path, TextIO] = {}
 _DAEMON_LOCKS_MUTEX = threading.Lock()
+
+
+@dataclass(frozen=True, slots=True)
+class DaemonRegistryEntry:
+    """
+    Typed daemon registration row exposed to daemon/status consumers.
+
+    The lock manager still persists JSON-shaped metadata because that
+    is the on-disk format. The registry converts that boundary shape
+    once so callers do not keep reaching into ``dict[str, object]``
+    for pid, status, heartbeat, and log path fields.
+    """
+
+    status: Literal["running", "stale"]
+    pid: int | None
+    workspace: str | None
+    started_at: str | None
+    heartbeat_at: object
+    log_dir: str | None
+
+    @classmethod
+    def from_metadata(cls, metadata: dict[str, object], status: Literal["running", "stale"]) -> "DaemonRegistryEntry":
+        pid_value = metadata.get("pid")
+        if isinstance(pid_value, int):
+            pid = pid_value
+        else:
+            pid = None
+        workspace = _optional_text_field(metadata, "workspace")
+        started_at = _optional_text_field(metadata, "started_at")
+        log_dir = _optional_text_field(metadata, "log_dir")
+        return cls(
+            status=status,
+            pid=pid,
+            workspace=workspace,
+            started_at=started_at,
+            heartbeat_at=metadata.get("heartbeat_at"),
+            log_dir=log_dir,
+        )
+
+
+def _optional_text_field(metadata: dict[str, object], key: str) -> str | None:
+    value = metadata.get(key)
+    if isinstance(value, str):
+        return value
+    return None
 
 
 def daemon_lock_path(workspace: Path) -> Path:
@@ -106,7 +152,7 @@ def _clear_stale_daemon_metadata(workspace: Path, pid: int | None = None) -> Non
     manager.clear_stale_state(expected_pid=pid)
 
 
-def daemon_metadata(workspace: Path) -> dict[str, object] | None:
+def daemon_metadata(workspace: Path) -> DaemonRegistryEntry | None:
     """
     Return the persisted daemon row tagged ``running`` or ``stale``.
 
@@ -125,12 +171,10 @@ def daemon_metadata(workspace: Path) -> dict[str, object] | None:
         status = "running"
     else:
         status = "stale"
-    payload = dict(metadata)
-    payload["status"] = status
-    return payload
+    return DaemonRegistryEntry.from_metadata(metadata, status=status)
 
 
-def get_workspace_daemon(workspace: Path) -> dict[str, object] | None:
+def get_workspace_daemon(workspace: Path) -> DaemonRegistryEntry | None:
     """
     Return the daemon row only when a live daemon is registered.
 
@@ -142,7 +186,7 @@ def get_workspace_daemon(workspace: Path) -> dict[str, object] | None:
     metadata = daemon_metadata(workspace)
     if metadata is None:
         return None
-    if metadata.get("status") == "running":
+    if metadata.status == "running":
         return metadata
     return None
 
@@ -262,7 +306,7 @@ def stale_daemon_metadata(workspace: Path):
     callers can keep their handler symmetric.
     """
     metadata = daemon_metadata(workspace)
-    if metadata is None or metadata.get("status") != "stale":
+    if metadata is None or metadata.status != "stale":
         yield None
         return
     yield metadata

@@ -108,16 +108,15 @@ def _probe_daemon_status(root: Path) -> list[StatusIssue]:
                 ),
             )
         ]
-    if entry is None or entry.get("status") != "stale":
+    if entry is None or entry.status != "stale":
         return []
-    pid = entry.get("pid")
-    if isinstance(pid, int) and not runner_pid_is_alive(pid):
+    if entry.pid is not None and not runner_pid_is_alive(entry.pid):
         return [
             StatusIssue(
                 key="daemon_status",
                 severity="ERROR",
                 message=(
-                    f"STOPPED (pid {pid} not alive) — restart the daemon with `litehive start` or `litehive restart`."
+                    f"STOPPED (pid {entry.pid} not alive) — restart the daemon with `litehive start` or `litehive restart`."
                 ),
             )
         ]
