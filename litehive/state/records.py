@@ -22,7 +22,6 @@ from litehive.state.store import runtime_store_for_workspace
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
 from litehive.state.locking import workspace_lock, workspace_mutation_guard, workspace_mutation_guard_for_workspace
 from litehive.state.persist import (
-    load_state,
     load_state_for_workspace,
     save_state_without_runner_guard_for_workspace,
     write_atomic_files_and_then,
@@ -531,7 +530,7 @@ def create_task_for_workspace(
     from litehive.tasks.queue import validate_task_dependencies_for_workspace  # noqa: PLC0415
 
     with workspace_lock(root):
-        state = load_state(root, bootstrap=False)
+        state = load_state_for_workspace(workspace, bootstrap=False)
         task_id = f"T-{_reserve_next_task_numbers_for_workspace(workspace, state)[0]:04d}"
         slug = slugify(title)
         if depends_on:
@@ -677,7 +676,7 @@ def create_follow_up_tasks_for_workspace(
     created_tasks: list[TaskRecord] = []
     created_dirs: list[Path] = []
     with workspace_mutation_guard_for_workspace(workspace), workspace_lock(root):
-        state = load_state(root, bootstrap=False)
+        state = load_state_for_workspace(workspace, bootstrap=False)
         reserved_numbers = _reserve_next_task_numbers_for_workspace(workspace, state, count=len(follow_ups))
 
         for next_number, follow_up in zip(reserved_numbers, follow_ups):
@@ -866,6 +865,21 @@ def list_tasks_state_first(
     include_runtime: bool = False,
 ) -> list[TaskRecord]:
     """
+    Path-based compatibility wrapper for priority-ordered task listing.
+    """
+    return list_tasks_state_first_for_workspace(
+        Workspace.from_path(root),
+        state=state,
+        include_runtime=include_runtime,
+    )
+
+
+def list_tasks_state_first_for_workspace(
+    workspace: Workspace,
+    state: WorkspaceState | None = None,
+    include_runtime: bool = False,
+) -> list[TaskRecord]:
+    """
     Return tasks ordered by workspace priority.
 
     Active task first, then queued tasks in queue order, then everything
@@ -873,10 +887,13 @@ def list_tasks_state_first(
     ordering directly so the user sees the work-in-flight at the top
     without having to re-sort client-side.
     """
-    task_by_id = {task.id: task for task in _load_tasks_from_store(root, include_runtime=include_runtime, strict=True)}
+    task_by_id = {
+        task.id: task
+        for task in _load_tasks_from_store_for_workspace(workspace, include_runtime=include_runtime, strict=True)
+    }
 
     if state is None:
-        workspace_state = load_state(root)
+        workspace_state = load_state_for_workspace(workspace)
     else:
         workspace_state = state
     ordered_ids: list[str] = []

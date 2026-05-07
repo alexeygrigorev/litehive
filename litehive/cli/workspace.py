@@ -45,8 +45,8 @@ from litehive.observability.status_diagnostics import (
     status_has_problems,
 )
 from litehive.recovery.workspace_repair import repair_workspace_state
-from litehive.state.records import list_tasks_state_first
-from litehive.state.persist import load_state
+from litehive.state.records import list_tasks_state_first_for_workspace as list_tasks_state_first
+from litehive.state.persist import load_state_for_workspace
 from litehive.domain.task_ops import WorkspaceConflictError, WorkspaceRepairSummary
 from litehive.worktree.cleanup import collect_managed_worktrees_for_workspace
 from litehive.worktree.inspection import inspect_dirty_worktree_gate
@@ -168,7 +168,7 @@ def status_command(
     for line in render_active_task_section(status.active_task, status.config.default_engine):
         print(line)
 
-    all_tasks = list_tasks_state_first(workspace, state=status.state)
+    all_tasks = list_tasks_state_first(ws, state=status.state)
     last_done = find_last_completed_task(all_tasks)
     print()
     for line in render_last_completed_section(last_done, ws):
@@ -221,7 +221,7 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     end_time = time.perf_counter()
     duration_ms = (end_time - start_time) * 1000
 
-    state = load_state(workspace)
+    state = load_state_for_workspace(workspace_obj)
     for line in repair_summary_lines(
         summary,
         result_label="repaired",
@@ -262,8 +262,8 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     create_workspace(workspace)
     ws = build_workspace(workspace)
     root = ws.root
-    state = load_state(root)
-    tasks = list_tasks_state_first(root, state=state, include_runtime=True)
+    state = load_state_for_workspace(ws)
+    tasks = list_tasks_state_first(ws, state=state, include_runtime=True)
     if state.active_task_id:
         active_task = ws.get_task(state.active_task_id)
     else:
