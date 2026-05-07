@@ -45,6 +45,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate `config.loading.load_config(root)` callers that already hold `Workspace`.
 - [x] Add a production guardrail against raw workspace-root constructor regressions.
 - [x] Remove dead raw-root parameter from recovery skip scan helper.
+- [x] Remove duplicate cached root field from `WorktreeService`.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

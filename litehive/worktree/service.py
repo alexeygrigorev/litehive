@@ -84,8 +84,8 @@ class WorktreeService:
     Worktree decisions shared by lifecycle, recovery, and the worktree CLI.
 
     One instance per workspace; methods scope all git operations
-    under ``self.root``. ``sync_task_worktree`` is the heart —
-    everything else is either a thin wrapper over a sibling module
+    under ``self.workspace.root``. ``sync_task_worktree`` is the heart
+    — everything else is either a thin wrapper over a sibling module
     or a private rebase/merge helper. Lifecycle pre-exec drives
     sync; recovery uses the cleanup/inspection helpers; the CLI
     drives rescue.
@@ -100,7 +100,6 @@ class WorktreeService:
         workspace and forget about path threading.
         """
         self.workspace = workspace
-        self.root = workspace.root
 
     def sync_task_worktree(
         self,
@@ -123,14 +122,14 @@ class WorktreeService:
         files — that exception is the contract between this
         function and the merge-resolver agent.
         """
-        if not is_git_repo(self.root):
+        if not is_git_repo(self.workspace.root):
             return WorktreeSyncResult(changed=False)
 
         task = self.workspace.get_task(task_id)
         if task is None:
             raise GitError(f"task {task_id} not found while creating worktree")
 
-        recorded = resolve_recorded_worktree_path(self.root, get_task_worktree_path(task))
+        recorded = resolve_recorded_worktree_path(self.workspace.root, get_task_worktree_path(task))
         if recorded is None or not recorded.exists():
             branch = task_worktree_branch(task)
             existing = self.registered_worktree_for_branch(branch)
@@ -139,11 +138,11 @@ class WorktreeService:
                 self.workspace.save_task(task)
                 recorded = existing
             else:
-                worktree = task_worktree_path(self.root, task)
+                worktree = task_worktree_path(self.workspace.root, task)
                 worktree.parent.mkdir(parents=True, exist_ok=True)
                 self.prune_stale_worktrees()
-                add_worktree_branch(self.root, branch, worktree, force=True)
-                ensure_worktree_venv_link(self.root, worktree)
+                add_worktree_branch(self.workspace.root, branch, worktree, force=True)
+                ensure_worktree_venv_link(self.workspace.root, worktree)
                 set_task_worktree_path(task, serialize_worktree_path(worktree))
                 self.workspace.save_task(task)
                 return WorktreeSyncResult(changed=True, worktree_path=worktree)
@@ -215,7 +214,7 @@ class WorktreeService:
         call instead of three separate git invocations.
         """
         worktree_rel = get_task_worktree_path(task)
-        worktree_path = resolve_recorded_worktree_path(self.root, worktree_rel)
+        worktree_path = resolve_recorded_worktree_path(self.workspace.root, worktree_rel)
         if worktree_rel is None or worktree_path is None or not worktree_path.exists():
             return TaskWorktreeInspection(
                 task_id=task.id,
@@ -231,7 +230,7 @@ class WorktreeService:
             worktree_path=worktree_path,
             exists=True,
             uncommitted=worktree_uncommitted_changes(worktree_path),
-            committed_ahead_of_main=worktree_committed_changes(self.root, worktree_path),
+            committed_ahead_of_main=worktree_committed_changes(self.workspace.root, worktree_path),
         )
 
     def task_has_missing_recorded_worktree(self, task_id: str) -> bool:
@@ -283,7 +282,7 @@ class WorktreeService:
         commits. Raises ``GitError`` to halt the batch loudly
         rather than performing a partial rescue.
         """
-        require_clean_main_checkout(self.root)
+        require_clean_main_checkout(self.workspace.root)
 
     def prune_stale_worktrees(self) -> None:
         """
@@ -295,7 +294,7 @@ class WorktreeService:
         ``--expire now`` skips the default grace period so cleanup
         is immediate.
         """
-        prune_worktrees(self.root, expire_now=True)
+        prune_worktrees(self.workspace.root, expire_now=True)
 
     def registered_worktree_for_branch(self, branch: str) -> Path | None:
         """
@@ -306,7 +305,7 @@ class WorktreeService:
         recorded path but git still has the branch checked out
         somewhere. Returns ``None`` if no live worktree matches.
         """
-        porcelain = list_worktrees_porcelain(self.root)
+        porcelain = list_worktrees_porcelain(self.workspace.root)
 
         current_path: Path | None = None
         current_branch: str | None = None
@@ -359,9 +358,9 @@ class WorktreeService:
         IS the main checkout (some single-task workflows reuse
         main directly).
         """
-        if worktree.resolve() == self.root.resolve():
+        if worktree.resolve() == self.workspace.root.resolve():
             return False
-        main_head = current_head(self.root)
+        main_head = current_head(self.workspace.root)
         if main_head is None:
             return False
         before = self._head(worktree)
