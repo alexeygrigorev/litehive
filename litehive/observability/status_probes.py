@@ -18,7 +18,7 @@ from typing import Mapping
 from pydantic import ValidationError
 
 from litehive.daemon.logs import latest_run_all_log_dir_for_workspace
-from litehive.daemon.registry import daemon_metadata
+from litehive.daemon.registry import daemon_metadata_for_workspace
 from litehive.domain.common import PipelineStatus, RuntimeStageStatus, TaskExecutionStatus, TaskStatus
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
@@ -99,7 +99,7 @@ def _probe_daemon_status_for_workspace(workspace: Workspace) -> list[StatusIssue
     surfaced so the operator can fix the lock file directly.
     """
     try:
-        entry = daemon_metadata(workspace.root)
+        entry = daemon_metadata_for_workspace(workspace)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         return [
             StatusIssue(

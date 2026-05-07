@@ -19,7 +19,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 
 ## Next Queues
 
-- [ ] Migrate `state.persist` path compatibility wrappers where callers already hold `Workspace`:
+- [x] Migrate `state.persist` path compatibility wrappers where callers already hold `Workspace`:
   - [x] Pool stop/completion helpers used by runner and daemon.
   - [x] Remaining load/save wrappers in CLI/task/recovery callers.
 - [x] Move agent task mutation target from raw root to `Workspace`.
