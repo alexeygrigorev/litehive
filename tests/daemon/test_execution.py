@@ -27,7 +27,7 @@ def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monke
     subprocess_calls: list[tuple[str, ...]] = []
     sleep_calls = 0
 
-    def fake_runner_status(workspace: Path) -> RunnerStatusState:
+    def fake_runner_status(workspace: Workspace) -> RunnerStatusState:
         del workspace
         nonlocal runner_checks
         runner_checks += 1
@@ -59,7 +59,7 @@ def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monke
             save_state(tmp_path, state)
         return 0
 
-    monkeypatch.setattr("litehive.daemon.execution.runner_status", fake_runner_status)
+    monkeypatch.setattr("litehive.daemon.execution.runner_status_for_workspace", fake_runner_status)
     monkeypatch.setattr("litehive.daemon.execution.sleep_with_stop", fake_sleep)
     monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
     monkeypatch.setattr("litehive.daemon.execution.maybe_run_workspace_backup", lambda *args, **kwargs: None)

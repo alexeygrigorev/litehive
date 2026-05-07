@@ -37,8 +37,8 @@ from litehive.observability.status import (
 )
 from litehive.observability.venv_health import daemon_broken_venv_message, probe_broken_venv_executables
 from litehive.state.backup import create_scheduled_workspace_backup
-from litehive.state.persist import load_state, load_state_for_workspace, set_pool_stop_reason
-from litehive.state.locking import runner_pid_is_alive, runner_status
+from litehive.state.persist import load_state_for_workspace, set_pool_stop_reason
+from litehive.state.locking import runner_pid_is_alive, runner_status_for_workspace
 from litehive.workspace import Workspace
 
 from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir
@@ -601,7 +601,7 @@ def run_daemon_loop(
             _emit("", stream=output_stream)
             _emit(f"== iteration {iteration} ==", stream=output_stream)
 
-            live_runner = runner_status(workspace)
+            live_runner = runner_status_for_workspace(daemon_workspace)
             if _runner_is_live(live_runner):
                 _emit_runner_wait(live_runner, stream=output_stream)
                 sleep_with_stop(1.0, stop_requested_fn=lambda: stop_requested)
@@ -796,7 +796,7 @@ def daemon_status_lines_for_workspace(workspace: Workspace) -> list[str]:
         lines.append(f"pid: {entry.get('pid')}")
         lines.append(f"started_at: {entry.get('started_at')}")
         lines.append(f"log_dir: {entry.get('log_dir')}")
-    runner = runner_status(root)
+    runner = runner_status_for_workspace(workspace)
     state = load_state_for_workspace(workspace)
     lines.append(render_runner_status_line(runner, state))
     latest_dir = latest_run_all_log_dir(root)

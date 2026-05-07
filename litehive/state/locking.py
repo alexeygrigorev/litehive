@@ -187,7 +187,21 @@ def runner_lock_is_active(root: Path) -> bool:
     return _runner_lock_manager(root, held_in_process=lambda: root in RUNNER_LOCKS).is_active()
 
 
+def runner_lock_is_active_for_workspace(workspace: Workspace) -> bool:
+    """
+    Probe whether this workspace's runner lock is currently held.
+    """
+    return runner_lock_is_active(workspace.root)
+
+
 def runner_status_needs_reconciliation(root: Path) -> bool:
+    """
+    Path-based compatibility wrapper for stale runner-state detection.
+    """
+    return runner_status_needs_reconciliation_for_workspace(Workspace.from_path(root))
+
+
+def runner_status_needs_reconciliation_for_workspace(workspace: Workspace) -> bool:
     """
     Detect leftover "running" markers when no runner holds the lock.
 
@@ -197,15 +211,14 @@ def runner_status_needs_reconciliation(root: Path) -> bool:
     runner crashed and left the workspace wedged.
     """
     # inline: state.records and state.persist top-level-import state.locking (would cycle).
-    from litehive.state.records import list_tasks  # noqa: PLC0415
-    from litehive.state.persist import load_state  # noqa: PLC0415
+    from litehive.state.persist import load_state_for_workspace  # noqa: PLC0415
 
-    state = load_state(root)
+    state = load_state_for_workspace(workspace)
     if state.active_task_id is not None:
         return True
     return any(
         task.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING
-        for task in list_tasks(root, strict=False)
+        for task in workspace.list_tasks(strict=False)
     )
 
 
@@ -245,6 +258,13 @@ def heartbeat_is_late(heartbeat_at: str | None) -> bool:
 
 def runner_status(root: Path) -> RunnerStatusState:
     """
+    Path-based compatibility wrapper for runner status resolution.
+    """
+    return runner_status_for_workspace(Workspace.from_path(root))
+
+
+def runner_status_for_workspace(workspace: Workspace) -> RunnerStatusState:
+    """
     Resolve the workspace's authoritative runner status.
 
     Returns RUNNING/LATE/STALE/empty and opportunistically clears
@@ -252,15 +272,15 @@ def runner_status(root: Path) -> RunnerStatusState:
     already clean. The canonical entry point used by the CLI status
     command and the runner guard before it tries to acquire.
     """
-    root = root.resolve()
+    root = workspace.root.resolve()
     status = read_runner_lock_metadata(root)
-    if runner_lock_is_active(root):
+    if runner_lock_is_active_for_workspace(workspace):
         if heartbeat_is_late(status.heartbeat_at):
             return status.model_copy(update={"status": RunnerStatus.LATE})
         return status.model_copy(update={"status": RunnerStatus.RUNNING})
     if not runner_metadata_present(status):
         return RunnerStatusState()
-    if runner_status_needs_reconciliation(root):
+    if runner_status_needs_reconciliation_for_workspace(workspace):
         return status.model_copy(update={"status": RunnerStatus.STALE})
     clear_runner_lock_metadata(root)
     return RunnerStatusState()
