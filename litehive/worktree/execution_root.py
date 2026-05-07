@@ -18,7 +18,6 @@ from litehive.fs_cleanup import remove_tree_logged
 from litehive.git.ops import add_worktree, current_head, is_git_repo, rebase_worktree_onto
 from litehive.state.records import (
     get_task_worktree_path,
-    save_task,
     set_task_worktree_path,
 )
 from litehive.tasks.journal import append_journal
@@ -58,7 +57,7 @@ def resolve_task_execution_root_for_workspace(
     if worktree_path is not None:
         if not worktree_path.exists():
             set_task_worktree_path(task, None)
-            save_task(root, task)
+            workspace.save_task(task)
         else:
             main_head = current_head(root)
             if main_head:
@@ -83,6 +82,6 @@ def resolve_task_execution_root_for_workspace(
     add_worktree(root, worktree_path, ref=current_head(root) or "HEAD")
     ensure_worktree_venv_link(root, worktree_path)
     set_task_worktree_path(task, serialize_worktree_path(worktree_path))
-    save_task(root, task)
+    workspace.save_task(task)
     append_journal(workspace, task, f"Created task worktree at `{get_task_worktree_path(task)}`.")
     return worktree_path
