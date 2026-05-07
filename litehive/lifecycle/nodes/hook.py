@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Protocol
 
-from litehive.domain.common import PipelineState, cap_feedback
+from litehive.domain.common import PipelineState
+from litehive.feedback import cap_feedback
 
 from ..events import Event, HookOk, Reject
 from ..persistence import TaskState

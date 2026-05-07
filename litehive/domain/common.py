@@ -1,5 +1,5 @@
 """
-Domain vocabulary and timestamp/feedback helpers.
+Domain vocabulary and timestamp helpers.
 
 The enums here (``PipelineState``, ``TaskStage``, ``PipelineStatus``,
 ``PipelineMode``, ``TaskStatus``, ``OutcomeKind``, ``OutcomeReasonCode``,
@@ -11,9 +11,7 @@ because renames would rot silently. Convert at the boundary using
 ``pipeline_status_for_pipeline_state``.
 
 ``utcnow`` is the project-wide source of "now" so persisted timestamps
-stay text-comparable; ``cap_feedback`` truncates long agent feedback
-to fit prompt context windows without losing the pointer to the full
-trace.
+stay text-comparable.
 """
 
 from datetime import UTC, datetime
@@ -26,10 +24,6 @@ from heru.types import (
     LiveEventKind,
     LiveEventRole,
 )
-
-
-FEEDBACK_CAP = 2000
-TRUNCATION_MARKER = "\n\n… [truncated — full execution trace in subagent artifacts]"
 
 
 class StringEnum(str, Enum):
@@ -64,21 +58,6 @@ def utcnow() -> str:
     same second compare exactly equal instead of differing by jitter.
     """
     return datetime.now(UTC).replace(microsecond=0).isoformat()
-
-
-def cap_feedback(text: str, limit: int = FEEDBACK_CAP) -> str:
-    """
-    Truncate long subagent feedback for inclusion in a prompt.
-
-    Replacing the tail with ``TRUNCATION_MARKER`` keeps prompts under
-    engine context limits while pointing readers (and downstream agents)
-    at the full execution-trace artifact. Used by every prompt that
-    quotes prior agent output back to the next agent — a missing cap
-    would let one chatty agent crash the next one's context budget.
-    """
-    if len(text) <= limit:
-        return text
-    return text[: limit - len(TRUNCATION_MARKER)] + TRUNCATION_MARKER
 
 
 # ── litehive-native task-lifecycle vocabularies ─────────────────────────────
@@ -643,7 +622,6 @@ RunnerExecutionStatus = RunnerStatus
 __all__ = [
     "EngineLimitKind",
     "EngineMonitoringSource",
-    "FEEDBACK_CAP",
     "LiveEventKind",
     "LiveEventRole",
     "OutcomeKind",
@@ -658,9 +636,7 @@ __all__ = [
     "TaskExecutionStatus",
     "TaskStage",
     "TaskStatus",
-    "TRUNCATION_MARKER",
     "Verdict",
-    "cap_feedback",
     "canonical_pipeline_state",
     "pipeline_stage_key",
     "pipeline_status_for_pipeline_state",

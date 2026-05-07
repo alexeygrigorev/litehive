@@ -9,7 +9,6 @@ from litehive.domain.common import (
     PipelineState,
     Verdict,
     canonical_pipeline_state,
-    cap_feedback,
     task_stage_for_pipeline_state,
 )
 from litehive.domain.reports import (
@@ -18,6 +17,7 @@ from litehive.domain.reports import (
     TaskActivityEntry,
     canonical_report_pipeline_state,
 )
+from litehive.feedback import cap_feedback
 from litehive.domain.task import TaskRecord
 from litehive.tasks.journal import append_journal
 from litehive.tasks.report_storage import record_stage_report

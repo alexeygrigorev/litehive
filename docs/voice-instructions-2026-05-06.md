@@ -953,10 +953,17 @@ Legend:
   true conditional values: `SubagentResult.failure` on successful runs,
   `SubagentResult.continuation` for engines without resume handles, and
   `EngineFailure.classification` for failures without a routing class.
-- [ ] D9. Move utility concepts out of `domain/common.py` when they
+- [x] D9. Move utility concepts out of `domain/common.py` when they
   are not domain concepts: `utc_now`, feedback cap/truncation marker,
   `cap_feedback`, and similar helpers.
   Source: note 6, 01:36-02:10.
+  Completed 2026-05-07: moved feedback truncation constants and
+  `cap_feedback` to `litehive.feedback`, updated lifecycle and test
+  imports to use that utility boundary, and left `domain/reports.py`
+  as the report-facing re-export because those constants are part of
+  report truncation behavior. `utcnow` still lives in `domain/common.py`
+  as the project-wide persisted timestamp helper and should be reviewed
+  separately if timestamp ownership changes.
 - [ ] D10. Split `domain/common.py` if section comments are a sign
   that too many unrelated concepts live in one file.
   Source: note 6, 02:10-02:22.
