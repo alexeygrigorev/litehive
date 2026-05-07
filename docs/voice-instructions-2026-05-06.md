@@ -1190,9 +1190,13 @@ Legend:
   Completed 2026-05-07: production artifact writes now go through
   `subagent_artifacts(...).save(...)`; the legacy free function remains
   as a compatibility wrapper for tests and older call sites.
-- [ ] SA4. Define these as domain rules so artifact/session behavior
+- [x] SA4. Define these as domain rules so artifact/session behavior
   is not a pile of functions spread through the code.
   Source: note 4, 09:19-09:29.
+  Completed 2026-05-07: added code-style rules that subagent
+  artifacts belong to one workspace task/subagent and that
+  session/report/event-stream persistence should be owned by a bound
+  store/service instead of scattered direct writes.
 - [ ] SA5. Audit every function/method whose first argument is
   `workspace`. Most should become a method on `Workspace` or a
   focused workspace service.

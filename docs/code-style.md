@@ -80,6 +80,15 @@ from tests.support.helpers import make_workspace, run_cli
 - Keep one source of truth for runtime state.
 - Do not mirror the same execution state across multiple models and then keep them in sync with bridge code.
 - If a state machine owns task execution state, read that state directly instead of copying it into another task/runtime layer.
+- Subagent artifacts belong to a concrete workspace task and
+  subagent. Code that writes a subagent session, report, or event
+  stream should use a bound store/service that carries
+  `workspace`, `task_id`, and `subagent_id` together instead of
+  threading those identifiers through unrelated helpers.
+- Session/report/event-stream persistence is one domain concern.
+  Do not scatter direct writes across modules when a session manager
+  or subagent artifact store can own the write and preserve the other
+  artifact slices.
 - Do not split one logical transition across multiple modules unless the split removes real complexity.
 - Prefer one owning module per concern:
   - one owner for task transitions
