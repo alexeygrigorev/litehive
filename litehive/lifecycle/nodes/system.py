@@ -243,7 +243,6 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         """
         super().__init__()
         self.workspace = workspace
-        self.workspace_root = workspace.root
         self.worktree_resolver = worktree_resolver
         self.main_ref = main_ref
 

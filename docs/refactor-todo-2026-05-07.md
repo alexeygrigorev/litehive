@@ -32,6 +32,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove duplicate raw workspace root constructor argument from `HeruEngineAdapter`.
 - [x] Move `SubprocessHookRunner` constructor from raw root to injected `Workspace`.
 - [x] Move `GitCommitNode` constructor from raw root to injected `Workspace`.
+- [x] Remove duplicate cached root field from `GitWorktreeSyncNode`.
 - [x] Migrate `config.loading.load_config(root)` callers that already hold `Workspace`.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
