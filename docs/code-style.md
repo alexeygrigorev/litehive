@@ -75,6 +75,13 @@ from tests.support.helpers import make_workspace, run_cli
 - Do not keep loaders “helpful” by swallowing bad current config and returning an empty/default config object.
 - Do not fall back to a generic/default mode when the caller already provided a current required key and it is invalid.
 
+## Type Annotations
+
+- Functions and methods must have explicit return annotations. Pyrefly
+  treats `unannotated-return` as an error; existing debt is recorded in
+  `pyrefly-baseline.json`, and new missing return annotations must be
+  fixed instead of added to the baseline.
+
 ## State And Ownership
 
 - Keep one source of truth for runtime state.

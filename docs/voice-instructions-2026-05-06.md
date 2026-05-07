@@ -2225,9 +2225,19 @@ Legend:
 
 ## Type Checker And Guardrail Instructions
 
-- [ ] T1. Make the type checker catch functions with missing return
+- [x] T1. Make the type checker catch functions with missing return
   annotations when they return values.
   Source: note 4, 31:26-32:03.
+  Completed 2026-05-07: enabled pyrefly's `unannotated-return`
+  diagnostic as an error in `pyproject.toml` and refreshed
+  `pyrefly-baseline.json` with existing debt so new missing return
+  annotations fail `make typecheck`. Added an architecture guardrail
+  that asserts the pyrefly setting remains enabled and documented the
+  rule in `docs/code-style.md`. Verified the exact checker path with a
+  temporary pyrefly project where `def f(): return 1` fails with
+  `[unannotated-return]`, then reran the repository pyrefly baseline
+  check, the architecture guardrail test, `make typecheck`, and
+  `make test`.
 - [ ] T2. Make the type checker catch untyped variables/parameters
   like root/completed/flagged in the pool code.
   Source: note 4, 32:03-32:23.

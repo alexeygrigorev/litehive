@@ -203,6 +203,13 @@ def test_process_profiles_do_not_use_packaged_yaml() -> None:
     assert "litehive/config/profiles/*.yaml" not in wheel_include
 
 
+def test_pyrefly_requires_return_annotations() -> None:
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    pyrefly_config = pyproject["tool"]["pyrefly"]
+
+    assert pyrefly_config["errors"]["unannotated-return"] == "error"
+
+
 def test_merge_warning_type_is_not_reintroduced() -> None:
     """
     Keep merge feedback on structured task/report fields, not a warning class.
