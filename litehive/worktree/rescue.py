@@ -36,7 +36,7 @@ from litehive.git.ops import (
     stdout_or_none as git_stdout_or_none,
     unmerged_files,
 )
-from litehive.state.locking import ensure_future_task_mutation_allowed, workspace_lock
+from litehive.state.locking import ensure_future_task_mutation_allowed_for_workspace, workspace_lock
 from litehive.state.persist import (
     load_state_for_workspace,
     persist_task_and_state_without_runner_guard_for_workspace,
@@ -440,7 +440,7 @@ def _finalize_rescue_for_workspace(workspace: Workspace, task: TaskRecord, outco
             raise WorkspaceConflictError(
                 f"task {task.id} is still state.active_task_id; worktree rescue refuses to race with the runner"
             )
-        ensure_future_task_mutation_allowed(root, [task.id], state=state)
+        ensure_future_task_mutation_allowed_for_workspace(workspace, [task.id], state=state)
 
         state.unmerged_worktrees = [entry for entry in state.unmerged_worktrees if entry.task_id != task.id]
         clear_task_worktree_path(task)

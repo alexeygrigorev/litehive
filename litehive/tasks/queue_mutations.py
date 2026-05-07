@@ -13,7 +13,7 @@ from litehive.domain.common import OutcomeKind, PipelineStatus, TaskExecutionSta
 from litehive.domain.runtime import TaskOutcomeState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.locking import (
-    ensure_future_task_mutation_allowed,
+    ensure_future_task_mutation_allowed_for_workspace,
     workspace_lock,
 )
 from litehive.state.persist import (
@@ -87,7 +87,7 @@ def _enqueue_task_for_workspace(workspace: Workspace, task_id: str, front: bool)
     root = workspace.root
     with workspace_lock(root):
         state = load_state_for_workspace(workspace)
-        ensure_future_task_mutation_allowed(root, [task_id], state=state)
+        ensure_future_task_mutation_allowed_for_workspace(workspace, [task_id], state=state)
         task = require_task(root, task_id)
         before_task = snapshot_task_audit_state(task)
         queue_before = list(state.queue)
@@ -137,7 +137,7 @@ def move_queued_task_for_workspace(workspace: Workspace, task_id: str, position:
     root = workspace.root
     with workspace_lock(root):
         state = load_state_for_workspace(workspace)
-        ensure_future_task_mutation_allowed(root, [task_id], state=state)
+        ensure_future_task_mutation_allowed_for_workspace(workspace, [task_id], state=state)
         task = require_task(root, task_id)
         before_task = snapshot_task_audit_state(task)
         queue_before = list(state.queue)
@@ -231,7 +231,7 @@ def prioritize_queued_tasks_for_workspace(workspace: Workspace, task_ids: list[s
     root = workspace.root
     with workspace_lock(root):
         state = load_state_for_workspace(workspace)
-        ensure_future_task_mutation_allowed(root, task_ids, state=state)
+        ensure_future_task_mutation_allowed_for_workspace(workspace, task_ids, state=state)
         queue_before = list(state.queue)
         missing = [task_id for task_id in task_ids if task_id not in state.queue]
         if missing:

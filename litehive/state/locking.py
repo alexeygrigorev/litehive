@@ -602,6 +602,17 @@ def ensure_future_task_mutation_allowed(
     state: WorkspaceState | None = None,
 ) -> None:
     """
+    Path-based compatibility wrapper for future-task mutation checks.
+    """
+    ensure_future_task_mutation_allowed_for_workspace(Workspace.from_path(root), task_ids, state=state)
+
+
+def ensure_future_task_mutation_allowed_for_workspace(
+    workspace: Workspace,
+    task_ids: list[str],
+    state: WorkspaceState | None = None,
+) -> None:
+    """
     Guard CLI edits against tasks the runner is actively driving.
 
     Raises ``WorkspaceConflictError`` when the user tries to mutate a
@@ -609,11 +620,12 @@ def ensure_future_task_mutation_allowed(
     queue reorder, and similar mutation entrypoints so an in-flight
     transition cannot have its inputs changed mid-run.
     """
+    root = workspace.root
     # inline: state.records / tasks.queue top-level-import state.locking (would cycle).
     from litehive.state.records import get_task  # noqa: PLC0415
-    from litehive.tasks.queue import is_task_eligible_for_execution, active_task_markers  # noqa: PLC0415
+    from litehive.tasks.queue import active_task_markers_for_workspace, is_task_eligible_for_execution  # noqa: PLC0415
 
-    markers = active_task_markers(root, state)
+    markers = active_task_markers_for_workspace(workspace, state)
     conflicts: list[str] = []
     for task_id in task_ids:
         if task_id not in markers:
