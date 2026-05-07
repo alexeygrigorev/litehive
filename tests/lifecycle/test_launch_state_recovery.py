@@ -13,7 +13,7 @@ from litehive.lifecycle.types import PipelineMode
 from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, save_task
-from litehive.tasks.completed_task_recovery import recover_completed_task
+from litehive.tasks.completed_task_recovery import recover_completed_task_for_workspace
 from litehive.tasks.queue import dequeue_next_task
 from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
 
@@ -104,7 +104,7 @@ def test_run_task_restarts_recovered_completed_task_from_ready(tmp_path: Path, m
     save_task(tmp_path, task)
     _seed_terminal_pipeline_state(tmp_path, task.id, entry_stage=PipelineState.IMPLEMENTING, stage=PipelineState.DONE)
 
-    recovered = recover_completed_task(tmp_path, task.id)
+    recovered = recover_completed_task_for_workspace(Workspace.from_path(tmp_path), task.id)
     result, calls, routes = _run_recovered_task(tmp_path, monkeypatch, recovered.id)
 
     assert result.final_stage == "done"
@@ -140,7 +140,7 @@ def test_completed_task_recovery_then_close_reconciles_all_state_layers(tmp_path
     assert state_before_recovery.active_task_id != task.id
 
     # Recover the completed task
-    recovered_task = recover_completed_task(tmp_path, task.id)
+    recovered_task = recover_completed_task_for_workspace(Workspace.from_path(tmp_path), task.id)
 
     # Verify recovery placed task in queue with correct status
     state_after_recovery = load_state(tmp_path)

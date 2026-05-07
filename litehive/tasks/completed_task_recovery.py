@@ -1,7 +1,5 @@
 """Operator recovery helpers for already-completed tasks."""
 
-from pathlib import Path
-
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import GitError
@@ -24,13 +22,6 @@ def require_completed_task(task: TaskRecord, action: str) -> None:
     """
     if task.status != TaskStatus.DONE or task.pipeline_status != PipelineStatus.DONE:
         raise GitError(f"Task {task.id} is not completed; cannot {action}")
-
-
-def recover_completed_task(root: Path, task_id: str) -> TaskRecord:
-    """
-    Path-based compatibility wrapper for completed-task recovery.
-    """
-    return recover_completed_task_for_workspace(Workspace.from_path(root), task_id)
 
 
 def recover_completed_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord:
