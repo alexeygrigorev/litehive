@@ -13,7 +13,7 @@ from litehive.tasks.runtime import (
     mark_stage_started_for_workspace,
     mark_subagent_finished,
     mark_subagent_started,
-    mark_task_outcome,
+    mark_task_outcome_for_workspace,
     mark_task_run_started_for_workspace,
 )
 from litehive.workspace import Workspace
@@ -96,8 +96,10 @@ def test_task_outcome_failure_diagnostics_are_typed_and_persist_as_object(tmp_pa
     create_workspace(tmp_path)
     task = create_task(tmp_path, title="Typed outcome diagnostics")
 
-    mark_task_outcome(
-        tmp_path,
+    workspace = Workspace.from_path(tmp_path)
+
+    mark_task_outcome_for_workspace(
+        workspace,
         task,
         kind=TaskOutcomeKind.FLAGGED,
         stage="implementing",

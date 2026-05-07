@@ -283,6 +283,23 @@ def set_task_retry_state(
     save_task_runtime(root, task)
 
 
+def set_task_retry_state_for_workspace(
+    workspace: Workspace,
+    task: TaskRecord,
+    retry_count: int,
+    retry_limit: int,
+) -> None:
+    """
+    Persist retry counters through an injected workspace.
+    """
+    _apply_task_retry_state(
+        task,
+        retry_count=retry_count,
+        retry_limit=retry_limit,
+    )
+    save_task_runtime_for_workspace(workspace, task)
+
+
 def clear_task_outcome(root: Path, task: TaskRecord) -> None:
     """
     Reset the last-outcome record on disk.
@@ -294,6 +311,14 @@ def clear_task_outcome(root: Path, task: TaskRecord) -> None:
     """
     _clear_task_outcome(task)
     save_task_runtime(root, task)
+
+
+def clear_task_outcome_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
+    """
+    Reset the last-outcome record through an injected workspace.
+    """
+    _clear_task_outcome(task)
+    save_task_runtime_for_workspace(workspace, task)
 
 
 def _apply_task_retry_state(
@@ -359,6 +384,37 @@ def mark_task_outcome(
         failure_diagnostics=failure_diagnostics,
     )
     save_task_runtime(root, task)
+
+
+def mark_task_outcome_for_workspace(
+    workspace: Workspace,
+    task: TaskRecord,
+    kind: TaskOutcomeKind | str,
+    stage: str,
+    reason_code: OutcomeReasonCode | str,
+    reason: str,
+    retry_count: int,
+    retry_limit: int,
+    follow_up_task_id: str | None = None,
+    failure_classification: str | None = None,
+    failure_diagnostics: FailureDiagnostics | dict[str, FailureDiagnosticValue] | None = None,
+) -> None:
+    """
+    Record the verdict that ended a stage through an injected workspace.
+    """
+    apply_task_outcome(
+        task,
+        kind=kind,
+        stage=stage,
+        reason_code=reason_code,
+        reason=reason,
+        retry_count=retry_count,
+        retry_limit=retry_limit,
+        follow_up_task_id=follow_up_task_id,
+        failure_classification=failure_classification,
+        failure_diagnostics=failure_diagnostics,
+    )
+    save_task_runtime_for_workspace(workspace, task)
 
 
 def apply_task_outcome(
