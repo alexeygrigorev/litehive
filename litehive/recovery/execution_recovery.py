@@ -1,7 +1,5 @@
 """Execution recovery helpers."""
 
-from pathlib import Path
-
 from litehive.domain.task_ops import WorkspaceRepairSummary
 from litehive.recovery.interrupted_subagent import mark_interrupted_subagent
 from litehive.recovery.interruption_state import (
@@ -57,7 +55,6 @@ def recover_stale_runner_state_for_workspace(
         state = load_state_for_workspace(workspace)
         running_task_ids = _running_task_ids(workspace)
         if _can_skip_recovery_scan(
-            root,
             state.active_task_id,
             running_task_ids,
             current_thread_owns_runner_guard=current_thread_owns_runner_guard(root),
@@ -118,7 +115,6 @@ def recover_stale_runner_state_for_workspace(
 
 
 def _can_skip_recovery_scan(
-    root: Path,
     active_task_id: str | None,
     running_task_ids: list[str],
     current_thread_owns_runner_guard: bool,
@@ -133,7 +129,6 @@ def _can_skip_recovery_scan(
     pointer, no repair candidates, no held lock) is the unambiguous
     "nothing to do" shape so skipping it is safe.
     """
-    del root
     return (
         not running_task_ids
         and active_task_id is None
