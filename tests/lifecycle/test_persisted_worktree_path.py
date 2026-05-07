@@ -134,7 +134,7 @@ def test_agent_and_commit_use_persisted_worktree_path(
     )
     assert sync_node.sync(_state(task.id, PipelineState.WORKTREE_SYNC)) is True
 
-    adapter = HeruEngineAdapter("codex", workspace, workspace=Workspace.from_path(workspace))
+    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(workspace))
     session = Session()
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
     monkeypatch.setattr(

@@ -446,7 +446,7 @@ def test_agent_node_retries_timeout_via_existing_retry_flow(
     resume_id: str,
 ) -> None:
     task = create_task(tmp_path, title=f"{engine_name} timeout retry")
-    adapter = HeruEngineAdapter(engine_name, tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter(engine_name, workspace=Workspace.from_path(tmp_path))
     store = InMemorySessionStore()
     node = _HeruPromptAgent(
         PipelineState.IMPLEMENTING,
@@ -481,7 +481,7 @@ def test_agent_node_retries_timeout_via_existing_retry_flow(
 
 def test_agent_node_nudges_timeout_retry_with_existing_codex_thread_id(tmp_path, monkeypatch) -> None:
     task = create_task(tmp_path, title="codex timeout nudge")
-    adapter = HeruEngineAdapter("codex", tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
     store = InMemorySessionStore()
     node = _HeruPromptAgent(
         PipelineState.IMPLEMENTING,

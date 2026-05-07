@@ -73,7 +73,7 @@ def test_heru_engine_adapter_updates_session_from_subagent_result_continuation(t
     task = create_task(tmp_path, title="resume", goal="keep continuation")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("codex", tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
 
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
     monkeypatch.setattr(
@@ -93,7 +93,7 @@ def test_heru_engine_adapter_passes_resume_session_id_to_subagent_manager(tmp_pa
     task = create_task(tmp_path, title="resume", goal="reuse continuation")
     session = Session(engine_session_id="codex-thread-123")
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("codex", tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
 
     _StubManager.last_kwargs = None
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
@@ -130,7 +130,7 @@ def test_heru_engine_adapter_launches_all_supported_engines(
     task = create_task(tmp_path, title=f"{engine_name} launch", goal="spawn through Heru")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter(engine_name, tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter(engine_name, workspace=Workspace.from_path(tmp_path))
 
     class _EngineSpecificStubManager(_StubManager):
         def run(self, task, **kwargs) -> SubagentResult:
@@ -316,7 +316,6 @@ def test_heru_engine_adapter_runs_recovery_from_litehive_source_checkout(tmp_pat
     )
     adapter = HeruEngineAdapter(
         "codex",
-        tmp_path,
         workspace=Workspace.from_path(tmp_path),
         config=load_config(tmp_path),
     )
@@ -342,7 +341,7 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_on_pre_start_subagent
     task = create_task(tmp_path, title="direct recovery handoff", goal="recover startup failures")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("codex", tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
     captured: dict[str, Any] = {}
 
     class FakeCodexAdapter:
@@ -410,7 +409,7 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_when_engine_is_unavai
     task = create_task(tmp_path, title="missing binary handoff", goal="recover unavailable engine")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("codex", tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
     captured: dict[str, Any] = {}
 
     class FakeEngine:
@@ -495,7 +494,7 @@ def test_heru_engine_adapter_does_not_launch_direct_recovery_after_started_run_f
     task = create_task(tmp_path, title="started failure", goal="preserve post-start failures")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("codex", tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
     captured = {"called": False}
 
     class FakeEngine:
@@ -567,7 +566,7 @@ def test_heru_engine_adapter_returns_direct_recovery_verdict_during_recovering_s
             message="implementing crashed",
         ),
     )
-    adapter = HeruEngineAdapter("codex", tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
     captured: dict[str, Any] = {}
 
     class FakeCodexAdapter:
@@ -622,7 +621,7 @@ def test_heru_engine_adapter_reuses_failed_turn_continuation_on_retry(tmp_path, 
     task = create_task(tmp_path, title="resume timeout", goal="reuse continuation after timeout")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("codex", tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
 
     _StubManager.last_kwargs = None
     _TimeoutThenResumeManager.calls = 0
@@ -665,7 +664,7 @@ def test_heru_engine_adapter_retries_crash_once_with_resume_id(
     task = create_task(tmp_path, title=f"{engine_name} crash resume", goal="retry crashed run once")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter(engine_name, tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter(engine_name, workspace=Workspace.from_path(tmp_path))
 
     _ScriptedManager.calls = 0
     _ScriptedManager.last_kwargs = []
@@ -714,7 +713,7 @@ def test_heru_engine_adapter_skips_crash_resume_without_resume_id(
     task = create_task(tmp_path, title=f"{engine_name} no resume id", goal="skip crash resume without continuation id")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter(engine_name, tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter(engine_name, workspace=Workspace.from_path(tmp_path))
 
     _ScriptedManager.calls = 0
     _ScriptedManager.last_kwargs = []
@@ -748,7 +747,7 @@ def test_heru_engine_adapter_crash_resume_requires_fresh_resume_id(tmp_path, mon
     task = create_task(tmp_path, title="resume id required", goal="only fresh continuation can trigger crash resume")
     session = Session(engine_session_id="existing-session")
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("gemini", tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("gemini", workspace=Workspace.from_path(tmp_path))
 
     _ScriptedManager.calls = 0
     _ScriptedManager.last_kwargs = []
@@ -778,7 +777,7 @@ def test_heru_engine_adapter_only_attempts_crash_resume_once(tmp_path, monkeypat
     task = create_task(tmp_path, title="single crash resume", goal="resume at most once per crash")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("opencode", tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("opencode", workspace=Workspace.from_path(tmp_path))
     continuation = RuntimeEngineContinuation(session_id="opencode-session-123")
 
     _ScriptedManager.calls = 0
@@ -822,7 +821,7 @@ def test_heru_engine_adapter_runs_subagent_in_task_worktree(tmp_path, monkeypatc
 
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("codex", tmp_path, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
 
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
     monkeypatch.setattr(
@@ -844,7 +843,7 @@ def test_heru_engine_adapter_passes_selected_model_to_subagent_manager(
     task = create_task(tmp_path, title="model handoff", goal="use configured model")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("goz", tmp_path, workspace=Workspace.from_path(tmp_path)).with_model("goz-preview-model")
+    adapter = HeruEngineAdapter("goz", workspace=Workspace.from_path(tmp_path)).with_model("goz-preview-model")
 
     _StubManager.last_kwargs = None
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)

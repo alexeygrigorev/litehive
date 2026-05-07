@@ -400,7 +400,6 @@ class HeruEngineAdapter:
     def __init__(
         self,
         engine_name: str,
-        workspace_root: Path,
         *,
         workspace: Workspace,
         config: LitehiveConfig | None = None,
@@ -414,8 +413,8 @@ class HeruEngineAdapter:
         mutable adapter state — each pick gets its own instance.
         """
         self.name = engine_name
-        self.workspace_root = Path(workspace_root)
         self.workspace = workspace
+        self.workspace_root = workspace.root
         self.config = config
         self.model_name = model_name
 
@@ -430,7 +429,6 @@ class HeruEngineAdapter:
         """
         return HeruEngineAdapter(
             self.name,
-            self.workspace_root,
             workspace=self.workspace,
             config=self.config,
             model_name=model_name,
@@ -822,9 +820,8 @@ def _is_retryable_failure(exc: Exception) -> bool:
 
 def heru_engine_factory(workspace: Workspace, config: LitehiveConfig):
     """Return a callable that produces ``HeruEngineAdapter`` instances."""
-    root = workspace.root
 
     def _factory(engine_name: str) -> Engine:
-        return HeruEngineAdapter(engine_name, root, workspace=workspace, config=config)
+        return HeruEngineAdapter(engine_name, workspace=workspace, config=config)
 
     return _factory
