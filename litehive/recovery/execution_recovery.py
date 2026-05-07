@@ -18,8 +18,8 @@ from litehive.recovery.running_task_recovery import (
     update_active_task_after_recovery,
 )
 from litehive.state.locking import (
-    current_thread_owns_runner_guard,
-    runner_lock_is_held,
+    current_thread_owns_runner_guard_for_workspace,
+    runner_lock_is_held_for_workspace,
     workspace_lock,
 )
 from litehive.state.persist import (
@@ -57,8 +57,8 @@ def recover_stale_runner_state_for_workspace(
         if _can_skip_recovery_scan(
             state.active_task_id,
             running_task_ids,
-            current_thread_owns_runner_guard=current_thread_owns_runner_guard(root),
-            runner_lock_held=runner_lock_is_held(root),
+            current_thread_owns_runner_guard=current_thread_owns_runner_guard_for_workspace(workspace),
+            runner_lock_held=runner_lock_is_held_for_workspace(workspace),
             has_repair_candidates=has_nonrunning_resumable_repair_candidates(workspace),
         ):
             return False

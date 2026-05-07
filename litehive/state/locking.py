@@ -412,6 +412,17 @@ def current_thread_owns_runner_guard(root: Path) -> bool:
     return existing is not None and existing.owner_thread_id == owner_thread_id
 
 
+def current_thread_owns_runner_guard_for_workspace(workspace: Workspace) -> bool:
+    """
+    Distinguish reentrant calls from foreign threads for an injected workspace.
+    """
+    root = workspace.root.resolve()
+    owner_thread_id = threading.get_ident()
+    with RUNNER_LOCKS_MUTEX:
+        existing = RUNNER_LOCKS.get(root)
+    return existing is not None and existing.owner_thread_id == owner_thread_id
+
+
 def runner_pid_is_alive(pid: object) -> bool:
     """
     The single liveness oracle used by every lock-related code path.
@@ -466,6 +477,13 @@ def runner_lock_pid_is_stale(root: Path) -> bool:
     return _runner_lock_manager(root.resolve()).pid_is_stale()
 
 
+def runner_lock_pid_is_stale_for_workspace(workspace: Workspace) -> bool:
+    """
+    True when the injected workspace's runner lock records a dead PID.
+    """
+    return _runner_lock_manager_for_workspace(workspace).pid_is_stale()
+
+
 def runner_lock_is_held(root: Path) -> bool:
     """
     Probe whether this thread or another process holds the runner guard.
@@ -476,6 +494,16 @@ def runner_lock_is_held(root: Path) -> bool:
     """
     root = root.resolve()
     return _runner_lock_manager(root, held_in_process=lambda: current_thread_owns_runner_guard(root)).is_active()
+
+
+def runner_lock_is_held_for_workspace(workspace: Workspace) -> bool:
+    """
+    Probe whether this thread or another process holds the injected workspace's runner guard.
+    """
+    return _runner_lock_manager_for_workspace(
+        workspace,
+        held_in_process=lambda: current_thread_owns_runner_guard_for_workspace(workspace),
+    ).is_active()
 
 
 def runner_conflict_message(root: Path) -> str:

@@ -22,10 +22,10 @@ from litehive.recovery.interruption_state import (
     stale_interruption_reason,
 )
 from litehive.state.locking import (
-    current_thread_owns_runner_guard,
-    read_runner_lock_metadata,
-    runner_lock_is_held,
-    runner_lock_pid_is_stale,
+    current_thread_owns_runner_guard_for_workspace,
+    read_runner_lock_metadata_for_workspace,
+    runner_lock_is_held_for_workspace,
+    runner_lock_pid_is_stale_for_workspace,
     runner_metadata_present,
     subagent_process_is_stale,
 )
@@ -111,9 +111,8 @@ def can_attempt_stale_runner_recovery(
     """
     if len(running_task_ids) > 1:
         return False
-    root = workspace.root
-    if not current_thread_owns_runner_guard(root) and runner_lock_is_held(root):
-        if not runner_lock_pid_is_stale(root):
+    if not current_thread_owns_runner_guard_for_workspace(workspace) and runner_lock_is_held_for_workspace(workspace):
+        if not runner_lock_pid_is_stale_for_workspace(workspace):
             config = workspace.load_config()
             if config.inactivity_timeout_seconds is None:
                 return False
@@ -147,7 +146,7 @@ def recover_running_tasks(
             continue
         if task_id != state.active_task_id and not should_requeue_commit_stage_task(task):
             if state.active_task_id is not None:
-                metadata = read_runner_lock_metadata(workspace.root)
+                metadata = read_runner_lock_metadata_for_workspace(workspace)
                 if not runner_metadata_present(metadata):
                     continue
         task_mutated, journal_message, prioritize = _recover_stale_running_task(workspace, task, summary=summary)

@@ -53,6 +53,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Move `WorktreeService` committed-change inspection to a workspace-native helper.
 - [x] Add workspace-native backup helpers and migrate CLI/daemon callers.
 - [x] Add workspace-native rebuild-safety helpers and migrate event-log replay.
+- [x] Add workspace-native runner-lock probes and migrate recovery callers.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`
