@@ -19,7 +19,6 @@ from litehive.domain.common import canonical_pipeline_state
 from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.lifecycle.transitions import list_transitions
-from litehive.state.records import get_task_record
 from litehive.tasks.report_storage import latest_recovery_report, latest_stage_report
 
 app = make_typer(invoke_without_command=True)
@@ -131,7 +130,7 @@ def pipeline_journal_command(
 
     print(f"task: {task_id}")
     print(f"stage: {state.stage}")
-    task = get_task_record(workspace_obj.root, task_id)
+    task = workspace_obj.get_task_record(task_id)
     if task is not None:
         stage_report = latest_stage_report(workspace_obj, task)
         if stage_report is not None:
