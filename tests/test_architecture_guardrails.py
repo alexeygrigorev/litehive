@@ -422,8 +422,10 @@ def test_production_constructors_do_not_take_raw_workspace_roots() -> None:
     forbidden_self_attributes = {"workspace_root", "main_repo_root"}
     found_constructor_args: list[str] = []
     found_self_attributes: list[str] = []
+    found_cached_workspace_roots: list[str] = []
     for path in _python_files():
         tree = _tree(path)
+        parents = _parent_map(tree)
         rel = path.relative_to(REPO_ROOT)
         for class_node in (node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)):
             for node in class_node.body:
@@ -436,11 +438,29 @@ def test_production_constructors_do_not_take_raw_workspace_roots() -> None:
             if not isinstance(node, ast.Attribute) or node.attr not in forbidden_self_attributes:
                 continue
             if isinstance(node.value, ast.Name) and node.value.id == "self":
-                owner = _enclosing_definition_name(node, _parent_map(tree))
+                owner = _enclosing_definition_name(node, parents)
                 found_self_attributes.append(f"{rel}:{owner}:self.{node.attr}")
+        for node in ast.walk(tree):
+            value: ast.AST | None = None
+            targets: list[ast.expr] = []
+            if isinstance(node, ast.Assign):
+                value = node.value
+                targets = list(node.targets)
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.expr):
+                value = node.value
+                targets = [node.target]
+            if value is None or ast.unparse(value) not in {"workspace.root", "workspace.root.resolve()"}:
+                continue
+            for target in targets:
+                if not isinstance(target, ast.Attribute) or not target.attr.endswith("root"):
+                    continue
+                if isinstance(target.value, ast.Name) and target.value.id == "self":
+                    owner = _enclosing_definition_name(target, parents)
+                    found_cached_workspace_roots.append(f"{rel}:{owner}:self.{target.attr}")
 
     assert sorted(found_constructor_args) == sorted(allowed_constructor_args)
     assert found_self_attributes == []
+    assert found_cached_workspace_roots == []
 
 
 def test_production_getattr_calls_stay_explicitly_allowlisted() -> None:
