@@ -640,9 +640,7 @@ def ensure_future_task_mutation_allowed_for_workspace(
     queue reorder, and similar mutation entrypoints so an in-flight
     transition cannot have its inputs changed mid-run.
     """
-    root = workspace.root
-    # inline: state.records / tasks.queue top-level-import state.locking (would cycle).
-    from litehive.state.records import get_task  # noqa: PLC0415
+    # inline: tasks.queue top-level-imports state.locking (would cycle).
     from litehive.tasks.queue import active_task_markers_for_workspace, is_task_eligible_for_execution  # noqa: PLC0415
 
     markers = active_task_markers_for_workspace(workspace, state)
@@ -650,7 +648,7 @@ def ensure_future_task_mutation_allowed_for_workspace(
     for task_id in task_ids:
         if task_id not in markers:
             continue
-        task = get_task(root, task_id)
+        task = workspace.get_task(task_id)
         marker_set = set(markers[task_id])
         if (
             marker_set == {"workspace.active_task_id"}
