@@ -1079,9 +1079,14 @@ Legend:
 - [ ] R4. Runtime setting values and contexts should be normal typed
   objects or strings, not broad `Mapping`/`Any` payloads.
   Source: note 5, 04:09-04:35.
-- [ ] R5. Remove `set_engine_preference` if it only delegates to
+- [x] R5. Remove `set_engine_preference` if it only delegates to
   `set_runtime_setting`.
   Source: note 5, 04:44-05:12.
+  Reviewed 2026-05-07: kept `set_engine_preference` because it does
+  not only delegate; it normalizes and validates the engine sequence
+  with `normalize_engine_sequence(...)` before the audited write.
+  Removing it would push that validation back into CLI callers or
+  allow malformed preference rows into the audit log.
 - [x] R6. Audit default arguments in runtime settings. If callers
   always pass values, remove defaults so values are explicit.
   Source: note 5, 05:15-05:40.
