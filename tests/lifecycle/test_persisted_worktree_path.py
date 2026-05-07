@@ -19,7 +19,11 @@ from litehive.lifecycle.events import Pass
 from litehive.state.records import create_task, get_task_worktree_path, require_task
 from litehive.state.store import runtime_store_for_workspace
 from litehive.workspace import Workspace
-from litehive.worktree.paths import resolve_recorded_worktree_path, task_worktree_branch, task_worktree_path
+from litehive.worktree.paths import (
+    resolve_recorded_worktree_path_for_workspace,
+    task_worktree_branch,
+    task_worktree_path_for_workspace,
+)
 
 
 def _stub_execution() -> CLIExecutionResult:
@@ -96,7 +100,7 @@ def test_worktree_sync_persists_runtime_worktree_path(tmp_path: Path) -> None:
     _git_ok(workspace, "commit", "-m", "initial")
 
     task = create_task(workspace, title="Persist worktree")
-    worktree = task_worktree_path(workspace, task)
+    worktree = task_worktree_path_for_workspace(Workspace.from_path(workspace), task)
     node = GitWorktreeSyncNode(
         workspace=Workspace.from_path(workspace),
         worktree_resolver=lambda state: worktree,
@@ -108,7 +112,7 @@ def test_worktree_sync_persists_runtime_worktree_path(tmp_path: Path) -> None:
     assert changed is True
     assert stored is not None
     assert stored.pipeline.git.worktree_path is not None
-    resolved = resolve_recorded_worktree_path(workspace, stored.pipeline.git.worktree_path)
+    resolved = resolve_recorded_worktree_path_for_workspace(Workspace.from_path(workspace), stored.pipeline.git.worktree_path)
     assert resolved is not None
     assert resolved.exists()
 
@@ -128,7 +132,7 @@ def test_agent_and_commit_use_persisted_worktree_path(
     _git_ok(workspace, "commit", "-m", "initial")
 
     task = create_task(workspace, title="Persisted checkout")
-    worktree = task_worktree_path(workspace, task)
+    worktree = task_worktree_path_for_workspace(Workspace.from_path(workspace), task)
     sync_node = GitWorktreeSyncNode(
         workspace=Workspace.from_path(workspace),
         worktree_resolver=lambda state: worktree,
@@ -169,7 +173,7 @@ def test_agent_and_commit_use_persisted_worktree_path(
         recorded_task = require_task(workspace, state.task_id)
         recorded = get_task_worktree_path(recorded_task)
         assert recorded is not None
-        resolved = resolve_recorded_worktree_path(workspace, recorded)
+        resolved = resolve_recorded_worktree_path_for_workspace(Workspace.from_path(workspace), recorded)
         assert resolved is not None
         return resolved
 
@@ -195,7 +199,7 @@ def test_commit_ignores_untracked_embedded_git_repos_in_task_worktree(tmp_path: 
     _git_ok(workspace, "commit", "-m", "initial")
 
     task = create_task(workspace, title="Scratch repo in worktree")
-    worktree = task_worktree_path(workspace, task)
+    worktree = task_worktree_path_for_workspace(Workspace.from_path(workspace), task)
     sync_node = GitWorktreeSyncNode(
         workspace=Workspace.from_path(workspace),
         worktree_resolver=lambda state: worktree,
@@ -211,7 +215,7 @@ def test_commit_ignores_untracked_embedded_git_repos_in_task_worktree(tmp_path: 
         recorded_task = require_task(workspace, state.task_id)
         recorded = get_task_worktree_path(recorded_task)
         assert recorded is not None
-        resolved = resolve_recorded_worktree_path(workspace, recorded)
+        resolved = resolve_recorded_worktree_path_for_workspace(Workspace.from_path(workspace), recorded)
         assert resolved is not None
         return resolved
 

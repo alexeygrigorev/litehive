@@ -10,7 +10,7 @@ from litehive.state.records import create_task, save_task
 from litehive.domain.common import TaskStatus
 from litehive.worktree.cleanup import remove_cleanable_worktrees_for_workspace
 from litehive.worktree.execution_root import resolve_task_execution_root_for_workspace
-from litehive.worktree.paths import ensure_worktree_venv_link, task_worktree_path
+from litehive.worktree.paths import ensure_worktree_venv_link_for_workspace, task_worktree_path_for_workspace
 from litehive.workspace import Workspace
 
 
@@ -71,7 +71,7 @@ def test_resolve_task_execution_root_accepts_injected_workspace(tmp_path: Path) 
 
     worktree = resolve_task_execution_root_for_workspace(Workspace.from_path(workspace), task)
 
-    assert worktree == task_worktree_path(workspace, task)
+    assert worktree == task_worktree_path_for_workspace(Workspace.from_path(workspace), task)
     assert worktree.exists()
 
 
@@ -88,7 +88,7 @@ def test_ensure_worktree_venv_link_logs_target_and_raises_on_cleanup_failure(
     with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
         with caplog.at_level(logging.INFO, logger="litehive.worktree"):
             with pytest.raises(OSError, match="failed to delete worktree venv directory .*permission denied"):
-                ensure_worktree_venv_link(workspace, worktree)
+                ensure_worktree_venv_link_for_workspace(Workspace.from_path(workspace), worktree)
 
     assert f"Deleting worktree venv directory {worktree / '.venv'}" in caplog.text
     assert f"Failed to delete worktree venv directory {worktree / '.venv'}" in caplog.text
@@ -109,7 +109,7 @@ def test_resolve_task_execution_root_logs_target_and_raises_on_worktree_cleanup_
     _git_ok(workspace, "commit", "-m", "initial")
 
     task = create_task(workspace, title="Cleanup stale worktree")
-    stale_worktree = task_worktree_path(workspace, task)
+    stale_worktree = task_worktree_path_for_workspace(Workspace.from_path(workspace), task)
     stale_worktree.mkdir(parents=True)
 
     with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
@@ -129,7 +129,7 @@ def test_remove_cleanable_worktrees_includes_closed_tasks(tmp_path: Path) -> Non
     create_workspace(workspace)
 
     task = create_task(workspace, title="Closed worktree cleanup")
-    worktree = task_worktree_path(workspace, task)
+    worktree = task_worktree_path_for_workspace(Workspace.from_path(workspace), task)
     worktree.mkdir(parents=True)
     task.status = TaskStatus.CLOSED
     task.close_reason = "deferred"

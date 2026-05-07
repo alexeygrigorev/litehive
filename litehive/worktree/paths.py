@@ -28,9 +28,9 @@ from litehive.workspace import Workspace
 logger = logging.getLogger("litehive.worktree.paths")
 
 
-def task_worktree_path(root: Path, task: TaskRecord) -> Path:
+def task_worktree_path_for_workspace(workspace: Workspace, task: TaskRecord) -> Path:
     """
-    Compute the canonical worktree location for a task.
+    Compute the canonical worktree location for a task in an injected workspace.
 
     Layout is ``<workspace>/worktrees/<id>-<slug>`` so creation and
     lookup agree on placement; if the two sides ever disagreed,
@@ -38,14 +38,7 @@ def task_worktree_path(root: Path, task: TaskRecord) -> Path:
     worktree on each call. Centralizing the layout here is the only
     place to change it.
     """
-    return workspace_path(root, "worktrees") / f"{task.id}-{task.slug}"
-
-
-def task_worktree_path_for_workspace(workspace: Workspace, task: TaskRecord) -> Path:
-    """
-    Compute the canonical worktree location for an injected workspace.
-    """
-    return task_worktree_path(workspace.root, task)
+    return workspace_path(workspace.root, "worktrees") / f"{task.id}-{task.slug}"
 
 
 def task_worktree_branch(task: TaskRecord) -> str:
@@ -59,9 +52,9 @@ def task_worktree_branch(task: TaskRecord) -> str:
     return f"litehive/{task.id}-{task.slug}"
 
 
-def is_managed_worktree_path(root: Path, worktree_path: str | None) -> bool:
+def is_managed_worktree_path_for_workspace(workspace: Workspace, worktree_path: str | None) -> bool:
     """
-    Whether a stored worktree path belongs to the litehive-managed tree.
+    Whether a stored worktree path belongs to an injected workspace.
 
     Rescue and cleanup use this to refuse touching paths the operator
     moved or hand-edited — modifying a path outside the
@@ -75,21 +68,17 @@ def is_managed_worktree_path(root: Path, worktree_path: str | None) -> bool:
     if not path.is_absolute():
         return False
     try:
-        return path.resolve().is_relative_to(workspace_path(root, "worktrees").resolve())
+        return path.resolve().is_relative_to(workspace_path(workspace.root, "worktrees").resolve())
     except OSError:
         return False
 
 
-def is_managed_worktree_path_for_workspace(workspace: Workspace, worktree_path: str | None) -> bool:
+def resolve_recorded_worktree_path_for_workspace(
+    workspace: Workspace,
+    worktree_path: str | None,
+) -> Path | None:
     """
-    Whether a stored worktree path belongs to an injected workspace.
-    """
-    return is_managed_worktree_path(workspace.root, worktree_path)
-
-
-def resolve_recorded_worktree_path(root: Path, worktree_path: str | None) -> Path | None:
-    """
-    Turn a stored worktree path back into an absolute resolved ``Path``.
+    Turn a stored worktree path back into an absolute path for an injected workspace.
 
     Pairs with :func:`serialize_worktree_path`: serializing always
     writes an absolute string, but old records may carry a
@@ -102,18 +91,8 @@ def resolve_recorded_worktree_path(root: Path, worktree_path: str | None) -> Pat
         return None
     path = Path(worktree_path).expanduser()
     if not path.is_absolute():
-        path = root / path
+        path = workspace.root / path
     return path.resolve()
-
-
-def resolve_recorded_worktree_path_for_workspace(
-    workspace: Workspace,
-    worktree_path: str | None,
-) -> Path | None:
-    """
-    Turn a stored worktree path back into an absolute path for an injected workspace.
-    """
-    return resolve_recorded_worktree_path(workspace.root, worktree_path)
 
 
 def serialize_worktree_path(path: Path) -> str:
@@ -128,9 +107,9 @@ def serialize_worktree_path(path: Path) -> str:
     return str(path.expanduser().resolve())
 
 
-def ensure_worktree_venv_link(root: Path, worktree_path: Path) -> Path | None:
+def ensure_worktree_venv_link_for_workspace(workspace: Workspace, worktree_path: Path) -> Path | None:
     """
-    Symlink the worktree's ``.venv`` to the main repo's venv.
+    Symlink the worktree's ``.venv`` to the injected workspace's main venv.
 
     Used after creating a new task worktree so the agent inside it
     can invoke the same ``python``/``uv``/test runners that work at
@@ -140,7 +119,7 @@ def ensure_worktree_venv_link(root: Path, worktree_path: Path) -> Path | None:
     worktree. Returns the symlink path on success, ``None`` when the
     main repo has no ``.venv`` to link against.
     """
-    main_venv = (root / ".venv").expanduser()
+    main_venv = (workspace.root / ".venv").expanduser()
     if not (main_venv.exists() or main_venv.is_symlink()):
         return None
 
@@ -160,10 +139,3 @@ def ensure_worktree_venv_link(root: Path, worktree_path: Path) -> Path | None:
 
     worktree_venv.symlink_to(main_venv, target_is_directory=main_venv.is_dir())
     return worktree_venv
-
-
-def ensure_worktree_venv_link_for_workspace(workspace: Workspace, worktree_path: Path) -> Path | None:
-    """
-    Symlink a worktree venv to the injected workspace's main venv.
-    """
-    return ensure_worktree_venv_link(workspace.root, worktree_path)

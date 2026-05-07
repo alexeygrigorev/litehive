@@ -77,6 +77,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate Heru factory execution-root helpers away from local root aliases.
 - [x] Remove final worktree rescue apply-flow root alias.
 - [x] Remove unused path-based committed worktree changes wrapper.
+- [x] Remove path-based worktree path helpers after migrating callers to workspace helpers.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

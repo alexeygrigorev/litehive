@@ -28,7 +28,7 @@ from litehive.tasks.journal import render_task_journal
 from litehive.tasks.queue import dequeue_next_task
 from litehive.tasks.paths import task_dir
 from litehive.tasks.report_storage import load_stage_reports
-from litehive.worktree.paths import serialize_worktree_path, task_worktree_branch, task_worktree_path
+from litehive.worktree.paths import serialize_worktree_path, task_worktree_branch, task_worktree_path_for_workspace
 from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
 
 pytestmark = pytest.mark.integration
@@ -696,7 +696,7 @@ def _init_workspace_git_repo(root: Path, *, config: LitehiveConfig | None = None
 
 
 def _prepare_committed_task_worktree(root: Path, task, *, filename: str = "merged.txt") -> Path:
-    worktree = task_worktree_path(root, task)
+    worktree = task_worktree_path_for_workspace(Workspace.from_path(root), task)
     worktree.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["git", "worktree", "add", "-q", "-b", task_worktree_branch(task), str(worktree), "HEAD"],
@@ -756,7 +756,7 @@ def test_run_task_flags_time_budget_exceeded_and_preserves_worktree(tmp_path: Pa
     task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert task is not None
     assert task.id == first.id
-    worktree = task_worktree_path(tmp_path, task)
+    worktree = task_worktree_path_for_workspace(Workspace.from_path(tmp_path), task)
     branch = task_worktree_branch(task)
 
     result = run_task(
@@ -811,7 +811,7 @@ def test_run_task_runs_after_implementing_hook_in_task_worktree(tmp_path: Path) 
     create_task(tmp_path, title="After implementing hook path")
     task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert task is not None
-    expected_worktree = task_worktree_path(tmp_path, task)
+    expected_worktree = task_worktree_path_for_workspace(Workspace.from_path(tmp_path), task)
 
     result = run_task(
         tmp_path,
@@ -1024,7 +1024,7 @@ def test_run_task_merge_conflict_failure_journal_stays_distinct_from_noop_reconc
     create_task(tmp_path, title="Merge conflict failure")
     task = dequeue_next_task(Workspace.from_path(tmp_path))
     assert task is not None
-    worktree = task_worktree_path(tmp_path, task)
+    worktree = task_worktree_path_for_workspace(Workspace.from_path(tmp_path), task)
     worktree.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["git", "worktree", "add", "-q", "-b", task_worktree_branch(task), str(worktree), "HEAD"],

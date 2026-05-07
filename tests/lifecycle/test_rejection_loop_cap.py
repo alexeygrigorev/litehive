@@ -15,7 +15,7 @@ from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.workspace import Workspace
 from litehive.state.records import create_task, get_task, save_task
 from litehive.tasks.status import requeue_task_for_workspace
-from litehive.worktree.paths import resolve_recorded_worktree_path, task_worktree_branch
+from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace, task_worktree_branch
 
 from tests.support.helpers import _cmd_status
 
@@ -69,7 +69,10 @@ def test_rejection_loop_flags_task_preserves_worktree_and_branch(tmp_path: Path)
     assert pipeline_state.rejection_loop.count == 3
     assert refreshed.runtime.pipeline.git.worktree_path is not None
 
-    worktree = resolve_recorded_worktree_path(tmp_path, refreshed.runtime.pipeline.git.worktree_path)
+    worktree = resolve_recorded_worktree_path_for_workspace(
+        Workspace.from_path(tmp_path),
+        refreshed.runtime.pipeline.git.worktree_path,
+    )
     assert worktree is not None
     assert worktree.exists()
 

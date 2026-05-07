@@ -17,7 +17,7 @@ from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.workspace import Workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, get_task_worktree_path
-from litehive.worktree.paths import resolve_recorded_worktree_path, task_worktree_path
+from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace, task_worktree_path_for_workspace
 
 pytestmark = pytest.mark.integration
 
@@ -102,10 +102,10 @@ def _task_execution_root(workspace: Path, task_id: str) -> Path:
         return workspace
     recorded = get_task_worktree_path(task)
     if recorded:
-        resolved = resolve_recorded_worktree_path(workspace, recorded)
+        resolved = resolve_recorded_worktree_path_for_workspace(Workspace.from_path(workspace), recorded)
         if resolved is not None and resolved.exists():
             return resolved
-    expected = task_worktree_path(workspace, task)
+    expected = task_worktree_path_for_workspace(Workspace.from_path(workspace), task)
     return expected if expected.exists() else workspace
 
 

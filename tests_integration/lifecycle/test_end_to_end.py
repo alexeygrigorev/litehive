@@ -37,7 +37,7 @@ from litehive.lifecycle.persistence import Limits, SqlitePersistence
 from litehive.lifecycle.types import PipelineMode
 from litehive.domain.recovery import RecoveryTrigger
 from litehive.state.records import get_task, get_task_worktree_path
-from litehive.worktree.paths import resolve_recorded_worktree_path
+from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace
 from tests.support.lifecycle_fakes import InMemorySessionStore
 
 from litehive.config.model import LitehiveConfig
@@ -285,7 +285,7 @@ class _WorktreeCommitEngine:
         if state.stage == "implementing":
             task = get_task(self.root, state.task_id)
             assert task is not None
-            worktree = resolve_recorded_worktree_path(self.root, get_task_worktree_path(task))
+            worktree = resolve_recorded_worktree_path_for_workspace(Workspace.from_path(self.root), get_task_worktree_path(task))
             assert worktree is not None and worktree.exists()
             self.observed_worktree = worktree
             status = subprocess.run(
