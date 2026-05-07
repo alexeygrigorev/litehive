@@ -18,6 +18,7 @@ workspace root and session context.
 from typing import Callable, cast
 
 from litehive.config.engine_models import (
+    EngineSelectionRequest,
     select_engine_for_workspace,
 )
 from litehive.config.model import LitehiveConfig
@@ -116,25 +117,13 @@ class ConfigBackedEngineSelector:
         if task is None:
             return None
 
-        if self.check_quota:
-            selection = select_engine_for_workspace(
-                self.workspace,
-                task,
-                self.config,
-                engine_override=self.engine_override,
-                model_override=self.model_override,
-                excluded_engine_names=excluded,
-            )
-        else:
-            selection = select_engine_for_workspace(
-                self.workspace,
-                task,
-                self.config,
-                engine_override=self.engine_override,
-                model_override=self.model_override,
-                excluded_engine_names=excluded,
-                check_quota=False,
-            )
+        request = EngineSelectionRequest(
+            engine_override=self.engine_override,
+            model_override=self.model_override,
+            excluded_engine_names=excluded,
+            check_quota=self.check_quota,
+        )
+        selection = select_engine_for_workspace(self.workspace, task, self.config, request)
         if selection.engine_name is None:
             return None
 

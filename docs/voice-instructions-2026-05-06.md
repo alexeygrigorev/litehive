@@ -1733,7 +1733,7 @@ Legend:
   `EngineQuotaBlock | None`; selection reads `reason` and
   `freeze_until` fields instead of tuple-unpacking. Verified with
   focused pyrefly and `uv run pytest tests/config/test_engine_freeze.py -q`.
-- [ ] R17. Simplify `select_engine`; it has too many parameters and
+- [x] R17. Simplify `select_engine`; it has too many parameters and
   too much branching.
   Source: note 4, 41:58-42:28.
   Progress 2026-05-07: extracted candidate engine order construction
@@ -1742,6 +1742,11 @@ Legend:
   the main selection loop. Remaining work: split freeze/quota/
   availability handling or move the selection request shape into a
   small object.
+  Completed 2026-05-07: introduced `EngineSelectionRequest` for the
+  optional selection controls and routed CLI, lifecycle, recovery, and
+  direct tests through it. `select_engine_for_workspace(...)` now takes
+  the task/config plus one request object instead of six optional
+  control parameters.
 - [ ] R18. Move engine lookup/order logic into config/domain object
   methods where appropriate, for example `config.get_engine(...)`.
   Source: note 4, 42:28-43:05.

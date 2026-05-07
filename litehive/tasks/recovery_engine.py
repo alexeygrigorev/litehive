@@ -23,7 +23,7 @@ def resolve_recovery_engine(
     # inline: kept so tests can monkey-patch ``select_engine_for_workspace`` on the
     # config.engine_models module (the canonical home) and have callers
     # here see it.
-    from litehive.config.engine_models import select_engine_for_workspace  # noqa: PLC0415
+    from litehive.config.engine_models import EngineSelectionRequest, select_engine_for_workspace  # noqa: PLC0415
 
     if config is None:
         return "codex", None
@@ -36,8 +36,7 @@ def resolve_recovery_engine(
         workspace,
         task,
         config,
-        engine_override=engine_override,
-        require_available=True,
+        EngineSelectionRequest(engine_override=engine_override, require_available=True),
     )
     if selection.engine_name is None:
         raise GitError(selection.blocked_reason)

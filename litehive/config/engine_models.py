@@ -71,23 +71,49 @@ class EngineSelection:
     blocked_reason: str = ""
 
 
+@dataclass(frozen=True)
+class EngineSelectionRequest:
+    """
+    Optional controls for one engine-selection pass.
+
+    Attributes:
+        engine_override: Operator-selected engine that replaces the
+            task/config default engine for this pass.
+        model_override: Operator-selected model passed to engines that
+            support model overrides.
+        engine_names: Explicit candidate engine list, used by recovery
+            and tests that need to bypass task/config planning.
+        excluded_engine_names: Engines already ruled out by the caller
+            during this run.
+        require_available: Whether to ask Heru if each candidate is
+            available before selecting it.
+        check_quota: Whether to run quota checks and persist quota-driven
+            freezes.
+    """
+
+    engine_override: str | None = None
+    model_override: str | None = None
+    engine_names: list[str] | None = None
+    excluded_engine_names: Collection[str] = ()
+    require_available: bool = False
+    check_quota: bool = True
+
+
 def _candidate_engine_order(
     task: TaskRecord,
     config: LitehiveConfig,
-    engine_override: str | None,
-    engine_names: list[str] | None,
-    excluded_engine_names: Collection[str],
+    request: EngineSelectionRequest,
 ) -> list[str]:
     """
     Build the ordered candidate engines before freeze/quota filtering.
     """
-    excluded = set(excluded_engine_names)
-    if engine_names is not None:
-        return [engine_name for engine_name in engine_names if engine_name not in excluded]
+    excluded = set(request.excluded_engine_names)
+    if request.engine_names is not None:
+        return [engine_name for engine_name in request.engine_names if engine_name not in excluded]
     plan = resolve_engine_plan(
         task,
         config,
-        engine_override=engine_override,
+        engine_override=request.engine_override,
     )
     return [
         engine_name
@@ -239,12 +265,7 @@ def select_engine_for_workspace(
     workspace: Workspace,
     task: TaskRecord,
     config: LitehiveConfig,
-    engine_override: str | None = None,
-    model_override: str | None = None,
-    engine_names: list[str] | None = None,
-    excluded_engine_names: Collection[str] = (),
-    require_available: bool = False,
-    check_quota: bool = True,
+    request: EngineSelectionRequest | None = None,
 ) -> EngineSelection:
     """
     Pick the engine and model the next stage will use from an injected workspace.
@@ -257,13 +278,11 @@ def select_engine_for_workspace(
     task transitions into an agent-driven stage and by the
     recovery agent when picking a fallback engine.
     """
-    order = _candidate_engine_order(
-        task,
-        config,
-        engine_override,
-        engine_names,
-        excluded_engine_names,
-    )
+    if request is None:
+        selection_request = EngineSelectionRequest()
+    else:
+        selection_request = request
+    order = _candidate_engine_order(task, config, selection_request)
     frozen_engines = active_engine_freezes(config)
     attempts = [engine_name for engine_name in order if engine_name not in frozen_engines]
     skipped: list[EngineSkip] = []
@@ -276,7 +295,7 @@ def select_engine_for_workspace(
             blocked_reason="all candidate engines are frozen",
         )
     for engine_name in attempts:
-        if require_available:
+        if selection_request.require_available:
             try:
                 if not get_engine(engine_name).is_available():
                     skipped.append(EngineSkip(engine_name=engine_name, reason=f"{engine_name} unavailable"))
@@ -292,7 +311,7 @@ def select_engine_for_workspace(
         expired_freeze = (
             engine_name not in frozen_engines and parse_utc_datetime(config.engine_freeze.get(engine_name)) is not None
         )
-        if check_quota:
+        if selection_request.check_quota:
             quota_block = engine_quota_block(engine_name)
         else:
             quota_block = None
@@ -316,7 +335,7 @@ def select_engine_for_workspace(
                 task,
                 config,
                 engine_name=engine_name,
-                model_override=model_override,
+                model_override=selection_request.model_override,
             ),
             engine_attempts=attempts,
             skipped=skipped,

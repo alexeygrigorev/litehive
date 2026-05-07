@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import cast
 
 import pytest
 import yaml
@@ -17,6 +17,7 @@ from litehive.cli.app import app
 from litehive.config.engine_quota import EngineQuotaBlock
 from litehive.config.engine_models import (
     EngineSelection,
+    EngineSelectionRequest,
     clear_persisted_engine_freeze_for_workspace,
     parse_engine_freeze_until,
     persist_engine_freeze_iso_for_workspace,
@@ -641,7 +642,7 @@ def test_select_engine_skips_current_heru_quota_status_shape(
         Workspace.from_path(tmp_path),
         task,
         config,
-        engine_names=["codex", "claude"],
+        EngineSelectionRequest(engine_names=["codex", "claude"]),
     )
 
     assert selection.engine_name == "claude"
@@ -769,11 +770,16 @@ def test_lifecycle_selector_uses_shared_select_engine_when_task_record_missing(
 
     workspace = Workspace.from_path(tmp_path)
 
-    def fake_select_engine(workspace: Workspace, task: TaskRecord, config: LitehiveConfig, **kwargs) -> EngineSelection:
+    def fake_select_engine(
+        workspace: Workspace,
+        task: TaskRecord,
+        config: LitehiveConfig,
+        request: EngineSelectionRequest | None = None,
+    ) -> EngineSelection:
         captured["workspace"] = workspace
         captured["task"] = task
         captured["config"] = config
-        captured["kwargs"] = kwargs
+        captured["request"] = request
         return EngineSelection(
             engine_name="gemini",
             model_name="gemini-2.5-pro",
@@ -802,19 +808,15 @@ def test_lifecycle_selector_uses_shared_select_engine_when_task_record_missing(
     assert isinstance(captured["task"], TaskRecord)
     assert captured["task"].id == "T-4040"
     assert captured["task"].pipeline_status == "implementing"
-    assert captured["kwargs"] == {
-        "engine_override": None,
-        "model_override": None,
-        "excluded_engine_names": frozenset({"codex"}),
-    }
+    assert captured["request"] == EngineSelectionRequest(excluded_engine_names=frozenset({"codex"}))
 
 
 @pytest.mark.parametrize(
-    ("recovery_engine", "default_engine", "expected_kwargs"),
+    ("recovery_engine", "default_engine", "expected_request"),
     [
-        ("auto", "codex", {"engine_override": None, "require_available": True}),
-        (None, "codex", {"engine_override": None, "require_available": True}),
-        ("codex", "gemini", {"engine_override": "codex", "require_available": True}),
+        ("auto", "codex", EngineSelectionRequest(require_available=True)),
+        (None, "codex", EngineSelectionRequest(require_available=True)),
+        ("codex", "gemini", EngineSelectionRequest(engine_override="codex", require_available=True)),
     ],
 )
 def test_recovery_engine_uses_shared_select_engine(
@@ -822,7 +824,7 @@ def test_recovery_engine_uses_shared_select_engine(
     monkeypatch: pytest.MonkeyPatch,
     recovery_engine: str | None,
     default_engine: str,
-    expected_kwargs: dict[str, object],
+    expected_request: EngineSelectionRequest,
 ) -> None:
     from litehive.tasks.recovery_engine import resolve_recovery_engine
 
@@ -838,11 +840,16 @@ def test_recovery_engine_uses_shared_select_engine(
     task = create_task(tmp_path, title="Recovery selection")
     config = load_config(tmp_path)
 
-    def fake_select_engine(workspace: Workspace, task: TaskRecord, config: LitehiveConfig, **kwargs) -> EngineSelection:
+    def fake_select_engine(
+        workspace: Workspace,
+        task: TaskRecord,
+        config: LitehiveConfig,
+        request: EngineSelectionRequest | None = None,
+    ) -> EngineSelection:
         captured["workspace"] = workspace
         captured["task"] = task
         captured["config"] = config
-        captured["kwargs"] = kwargs
+        captured["request"] = request
         return EngineSelection(
             engine_name="gemini",
             model_name="gemini-2.5-pro",
@@ -860,7 +867,7 @@ def test_recovery_engine_uses_shared_select_engine(
     assert captured["workspace"] == workspace
     assert captured["task"] == task
     assert captured["config"] == config
-    assert captured["kwargs"] == expected_kwargs
+    assert captured["request"] == expected_request
 
 
 def test_recovery_auto_engine_respects_shared_selector_blocked_result(tmp_path: Path) -> None:
@@ -880,7 +887,12 @@ def test_recovery_auto_engine_respects_shared_selector_blocked_result(tmp_path: 
     task = create_task(tmp_path, title="Recovery freeze repro")
     config = load_config(tmp_path)
 
-    selection = select_engine_for_workspace(Workspace.from_path(tmp_path), task, config, require_available=True)
+    selection = select_engine_for_workspace(
+        Workspace.from_path(tmp_path),
+        task,
+        config,
+        EngineSelectionRequest(require_available=True),
+    )
 
     assert selection.engine_name is None
     assert selection.blocked_reason == "all candidate engines are frozen"
@@ -890,17 +902,17 @@ def test_recovery_auto_engine_respects_shared_selector_blocked_result(tmp_path: 
 
 
 @pytest.mark.parametrize(
-    ("recovery_engine", "default_engine", "selector_kwargs"),
+    ("recovery_engine", "default_engine", "selector_request"),
     [
-        (None, "codex", {}),
-        ("codex", "gemini", {"engine_override": "codex"}),
+        (None, "codex", EngineSelectionRequest(require_available=True)),
+        ("codex", "gemini", EngineSelectionRequest(engine_override="codex", require_available=True)),
     ],
 )
 def test_recovery_non_auto_branches_skip_frozen_engines(
     tmp_path: Path,
     recovery_engine: str | None,
     default_engine: str,
-    selector_kwargs: dict[str, Any],
+    selector_request: EngineSelectionRequest,
 ) -> None:
     from litehive.config.engine_models import select_engine_for_workspace
     from litehive.tasks.recovery_engine import resolve_recovery_engine
@@ -918,7 +930,7 @@ def test_recovery_non_auto_branches_skip_frozen_engines(
     task = create_task(tmp_path, title=f"Recovery branch {recovery_engine!r}")
     config = load_config(tmp_path)
 
-    selection = select_engine_for_workspace(Workspace.from_path(tmp_path), task, config, require_available=True, **selector_kwargs)
+    selection = select_engine_for_workspace(Workspace.from_path(tmp_path), task, config, selector_request)
     engine_name, _model_name = resolve_recovery_engine(Workspace.from_path(tmp_path), task, config)
 
     assert selection.engine_name == "gemini"

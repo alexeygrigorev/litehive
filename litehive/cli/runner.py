@@ -9,7 +9,7 @@ import typer
 
 from litehive.cli.agent_cli import block_if_agent
 from litehive.cli.common import WorkspaceOption, choice, require_subcommand
-from litehive.config.engine_models import select_engine_for_workspace
+from litehive.config.engine_models import EngineSelectionRequest, select_engine_for_workspace
 from litehive.config.environment import LitehiveEnvironment
 from litehive.config.paths import workspace_path
 from litehive.config.runtime_settings import load_runtime_setting_audit_entries, load_runtime_settings
@@ -375,8 +375,7 @@ def _preview_single(
         workspace,
         selection.task,
         container.config,
-        engine_override=engine,
-        model_override=model,
+        EngineSelectionRequest(engine_override=engine, model_override=model),
     )
     print(f"task: {selection.task.id} {selection.task.title}")
     if engine_selection.engine_name is None:
