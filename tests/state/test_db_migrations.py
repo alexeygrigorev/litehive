@@ -60,6 +60,18 @@ def _create_broken_venv_binary(checkout_root: Path, binary_name: str, cache_root
     cache_target.unlink()
 
 
+def _migration_versions() -> list[int]:
+    return [migration.version for migration in available_migrations()]
+
+
+def _latest_migration_version() -> int:
+    return max(_migration_versions())
+
+
+def _next_migration_version() -> int:
+    return _latest_migration_version() + 1
+
+
 def test_embedded_initial_migration_is_discoverable() -> None:
     migrations = available_migrations()
 
@@ -74,6 +86,7 @@ def test_embedded_initial_migration_is_discoverable() -> None:
         "0007_task_metadata_and_process_state.sql",
         "0008_remove_pipeline_session_turn_metric.sql",
         "0009_attention_log.sql",
+        "0010_subagent_id_counters.sql",
     ]
     assert migrations[0].version == 1
     assert "CREATE TABLE IF NOT EXISTS pool_state" in migrations[0].sql
@@ -109,9 +122,11 @@ def test_connect_workspace_db_closes_connection_on_context_exit(tmp_path: Path) 
 
 def test_db_status_and_dry_run_report_pending_migrations(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
+    next_version = _next_migration_version()
+    next_name = f"{next_version:04d}_add_marker.sql"
     staged = (
         *available_migrations(),
-        Migration(version=10, name="0010_add_marker.sql", sql="CREATE TABLE marker (id INTEGER PRIMARY KEY);"),
+        Migration(version=next_version, name=next_name, sql="CREATE TABLE marker (id INTEGER PRIMARY KEY);"),
     )
     monkeypatch.setattr("litehive.db.schema.available_migrations", lambda: staged)
 
@@ -119,13 +134,13 @@ def test_db_status_and_dry_run_report_pending_migrations(tmp_path: Path, monkeyp
     dry_run = CliRunner().invoke(app, ["db", "migrate", "--dry-run", "--workspace", str(tmp_path)])
 
     assert status.exit_code == 0, status.output
-    assert "schema_version: 9" in status.output
+    assert f"schema_version: {_latest_migration_version()}" in status.output
     assert "pending_migrations: 1" in status.output
-    assert "pending: 0010_add_marker.sql" in status.output
+    assert f"pending: {next_name}" in status.output
 
     assert dry_run.exit_code == 0, dry_run.output
     assert "dry_run: yes" in dry_run.output
-    assert "would_apply: 0010_add_marker.sql" in dry_run.output
+    assert f"would_apply: {next_name}" in dry_run.output
 
     with sqlite3.connect(workspace_path(tmp_path, "data.db")) as connection:
         marker = connection.execute(
@@ -136,11 +151,12 @@ def test_db_status_and_dry_run_report_pending_migrations(tmp_path: Path, monkeyp
 
 def test_apply_pending_migrations_rolls_back_failed_migration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ensure_workspace(tmp_path)
+    next_version = _next_migration_version()
     staged = (
         *available_migrations(),
         Migration(
-            version=10,
-            name="0010_broken.sql",
+            version=next_version,
+            name=f"{next_version:04d}_broken.sql",
             sql=("CREATE TABLE broken_marker (id INTEGER PRIMARY KEY);INSERT INTO missing_table(value) VALUES (1);"),
         ),
     )
@@ -157,7 +173,7 @@ def test_apply_pending_migrations_rolls_back_failed_migration(tmp_path: Path, mo
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'broken_marker'"
         ).fetchone()
 
-    assert applied_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert applied_versions == _migration_versions()
     assert broken_marker is None
 
 
@@ -206,7 +222,7 @@ def test_migration_0005_does_not_import_deprecated_task_yaml(tmp_path: Path) -> 
     with pytest.raises(TaskLaunchFailure, match="missing from SQLite task_intent"):
         peek_next_task(Workspace.from_path(tmp_path))
 
-    assert applied_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert applied_versions == _migration_versions()
     assert intent_rows == []
     assert queue_row is not None
     assert json.loads(queue_row["payload"]) == ["T-0001"]
@@ -223,11 +239,13 @@ def test_daemon_run_applies_pending_migrations_before_start(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ensure_workspace(tmp_path)
+    next_version = _next_migration_version()
+    next_name = f"{next_version:04d}_daemon_marker.sql"
     staged = (
         *available_migrations(),
         Migration(
-            version=10,
-            name="0010_daemon_marker.sql",
+            version=next_version,
+            name=next_name,
             sql="CREATE TABLE daemon_marker (id INTEGER PRIMARY KEY);",
         ),
     )
@@ -250,7 +268,7 @@ def test_daemon_run_applies_pending_migrations_before_start(
         daemon_marker = connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'daemon_marker'"
         ).fetchone()
-    assert applied_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert applied_versions == [*_migration_versions(), next_version]
     assert daemon_marker is not None
 
 
@@ -312,7 +330,7 @@ def test_legacy_workspace_db_rebuild_replays_task_event_log_without_task_yaml_re
         rows = connection.execute("SELECT task_id FROM task_state ORDER BY task_id").fetchall()
         queue_row = connection.execute("SELECT payload FROM queue WHERE workspace_key = 'workspace'").fetchone()
 
-    assert applied_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert applied_versions == _migration_versions()
     assert rows == [(task.id,)]
     assert queue_row is not None
     assert json.loads(queue_row[0]) == [task.id]
