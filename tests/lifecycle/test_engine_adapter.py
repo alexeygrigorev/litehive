@@ -876,7 +876,7 @@ def test_latest_verdict_after_allows_clean_implementing_noop(tmp_path, monkeypat
     )
     monkeypatch.setattr(
         "litehive.lifecycle.heru_factory.execution_checkout_status",
-        lambda workspace_root, task: (tmp_path, []),
+        lambda workspace, task: (tmp_path, []),
     )
 
     verdict = latest_verdict_after(
@@ -921,7 +921,7 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
     record_stage_report(Workspace.from_path(tmp_path), task, record)
     monkeypatch.setattr(
         "litehive.lifecycle.heru_factory.execution_checkout_status",
-        lambda workspace_root, task: (tmp_path, []),
+        lambda workspace, task: (tmp_path, []),
     )
 
     verdict = latest_verdict_after(
@@ -974,7 +974,7 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
     )
     monkeypatch.setattr(
         "litehive.lifecycle.heru_factory.execution_checkout_status",
-        lambda workspace_root, task: (tmp_path, [" M foo.py"]),
+        lambda workspace, task: (tmp_path, [" M foo.py"]),
     )
 
     verdict = latest_verdict_after(
@@ -1084,7 +1084,7 @@ def test_latest_verdict_after_includes_retry_summary_metadata(tmp_path, monkeypa
     )
     monkeypatch.setattr(
         "litehive.lifecycle.heru_factory.execution_checkout_status",
-        lambda workspace_root, task: (tmp_path, [" M litehive/lifecycle/prompt_serializer.py"]),
+        lambda workspace, task: (tmp_path, [" M litehive/lifecycle/prompt_serializer.py"]),
     )
 
     verdict = latest_verdict_after(

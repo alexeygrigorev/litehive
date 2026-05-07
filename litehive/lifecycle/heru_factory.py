@@ -139,10 +139,11 @@ def _allowed_verdicts_for_stage(stage: TaskActivityStage) -> set[Verdict]:
     return {Verdict.PASS, Verdict.REJECT}
 
 
-def _execution_checkout_path(workspace_root: Path, task) -> Path:
+def _execution_checkout_path(workspace: Workspace, task) -> Path:
     """Resolve the working directory the subagent should run in for a task —
     the per-task worktree if one was recorded, otherwise the workspace root.
     Falls back to the workspace so engines never see a missing cwd."""
+    workspace_root = workspace.root
     return (
         resolve_recorded_worktree_path(
             workspace_root,
@@ -152,11 +153,12 @@ def _execution_checkout_path(workspace_root: Path, task) -> Path:
     )
 
 
-def _recovery_execution_root(workspace_root: Path, config: LitehiveConfig | None) -> Path:
+def _recovery_execution_root(workspace: Workspace, config: LitehiveConfig | None) -> Path:
     """Recovery agents edit litehive's own source tree, not the user's task
     worktree. Resolve ``litehive_source_path`` from config and run the recovery
     turn there; fall back to the workspace if the source path is unset or
     unreadable."""
+    workspace_root = workspace.root
     if config is None:
         return workspace_root
     raw_source = str(config.litehive_source_path or "").strip()
@@ -174,21 +176,21 @@ def _recovery_execution_root(workspace_root: Path, config: LitehiveConfig | None
     return workspace_root
 
 
-def _agent_execution_root(workspace_root: Path, task, role: str, config: LitehiveConfig | None) -> Path:
+def _agent_execution_root(workspace: Workspace, task, role: str, config: LitehiveConfig | None) -> Path:
     """Pick the cwd for the subagent based on role: recovery agents fix
     litehive itself (source tree), every other role works inside the task's
     worktree."""
     if role == "recovery":
-        return _recovery_execution_root(workspace_root, config)
-    return _execution_checkout_path(workspace_root, task)
+        return _recovery_execution_root(workspace, config)
+    return _execution_checkout_path(workspace, task)
 
 
-def execution_checkout_status(workspace_root: Path, task) -> tuple[Path, list[str] | None]:
+def execution_checkout_status(workspace: Workspace, task) -> tuple[Path, list[str] | None]:
     """Return the task's execution checkout and its ``git status --porcelain``
     lines. Used by the implementing-pass guard to decide whether the SWE
     actually edited files; ``None`` means no git repo or git refused to answer
     and the caller should not flag a hallucination on that basis."""
-    checkout = _execution_checkout_path(workspace_root, task)
+    checkout = _execution_checkout_path(workspace, task)
     if not is_git_repo(checkout):
         return checkout, None
     try:
@@ -347,7 +349,6 @@ def latest_verdict_after(
     previous or parallel session for the same stage. Returns ``None``
     when nothing newer landed — caller raises ``NudgeRequired``.
     """
-    workspace_root = workspace.root
     task = workspace.get_task(task_id)
     if task is None:
         return None
@@ -361,7 +362,7 @@ def latest_verdict_after(
         return None
     changed_files = normalized_files_changed(latest.files_changed)
     if stage == TaskStage.IMPLEMENTING and latest.verdict == Verdict.PASS:
-        checkout, worktree_status = execution_checkout_status(workspace_root, task)
+        checkout, worktree_status = execution_checkout_status(workspace, task)
         if worktree_status == [] and changed_files:
             return _rewrite_hallucinated_implementing_pass(
                 workspace,
@@ -414,7 +415,6 @@ class HeruEngineAdapter:
         """
         self.name = engine_name
         self.workspace = workspace
-        self.workspace_root = workspace.root
         self.config = config
         self.model_name = model_name
 
@@ -459,7 +459,7 @@ class HeruEngineAdapter:
         role = prompt.role
         prompt_text = serialize_prompt(prompt, task_record=task, workspace=self.workspace)
         config = self.config or self.workspace.load_config()
-        execution_root = _agent_execution_root(self.workspace_root, task, role=role, config=config)
+        execution_root = _agent_execution_root(self.workspace, task, role=role, config=config)
 
         before_turn = datetime.now(UTC)
         try:
@@ -625,7 +625,7 @@ class HeruEngineAdapter:
         the original startup exception.
         """
         recovery_prompt = self._direct_recovery_prompt(task=task, state=state, startup_message=startup_message)
-        recovery_execution_root = _agent_execution_root(self.workspace_root, task, role="recovery", config=self.config)
+        recovery_execution_root = _agent_execution_root(self.workspace, task, role="recovery", config=self.config)
         after_ts = datetime.min.replace(tzinfo=UTC)
         if state.stage == PipelineState.RECOVERING:
             previous_recovery = self.workspace.task_activity(task).latest_entry(
@@ -747,7 +747,7 @@ class HeruEngineAdapter:
             cwd=execution_root,
             extra_env={
                 "LITEHIVE_TASK_ID": task_id,
-                "LITEHIVE_WORKSPACE_ROOT": str(self.workspace_root),
+                "LITEHIVE_WORKSPACE_ROOT": str(self.workspace.root),
                 "LITEHIVE_AGENT_ROLE": "recovery",
                 "LITEHIVE_SUBAGENT_ID": str(source_subagent_id),
                 "LITEHIVE_STAGE": PipelineState.RECOVERING.value,
