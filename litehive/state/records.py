@@ -601,7 +601,7 @@ def _follow_up_journal_messages(
     Each entry records the parent task and originating stage so
     the journal of the new task explains its provenance even if
     the parent record is later deleted. Caller:
-    :func:`create_follow_up_tasks`.
+    :func:`create_follow_up_tasks_for_workspace`.
     """
     messages: dict[str, str] = {}
     for task, follow_up in zip(created_tasks, follow_ups):
@@ -623,7 +623,7 @@ def _follow_up_audit_entries(
     Threads the post-creation queue snapshot so each entry records
     the queue ordering at the moment the follow-up was created;
     consistent with how :func:`create_task` audits a single task.
-    Caller: :func:`create_follow_up_tasks`.
+    Caller: :func:`create_follow_up_tasks_for_workspace`.
     """
     entries: list = []
     for task in created_tasks:
@@ -646,8 +646,8 @@ def _follow_up_audit_entries(
     return entries
 
 
-def create_follow_up_tasks(
-    root: Path,
+def create_follow_up_tasks_for_workspace(
+    workspace: Workspace,
     parent_task: TaskRecord,
     stage: str,
     follow_ups: list[FollowUpTaskSpec],
@@ -665,12 +665,13 @@ def create_follow_up_tasks(
     if stage not in {TaskStage.GROOMING, TaskStage.TESTING, TaskStage.ACCEPTING}:
         return []
 
+    root = workspace.root
     create_workspace(root)
     created_tasks: list[TaskRecord] = []
     created_dirs: list[Path] = []
-    with workspace_mutation_guard(root), workspace_lock(root):
+    with workspace_mutation_guard_for_workspace(workspace), workspace_lock(root):
         state = load_state(root, bootstrap=False)
-        reserved_numbers = _reserve_next_task_numbers(root, state, count=len(follow_ups))
+        reserved_numbers = _reserve_next_task_numbers_for_workspace(workspace, state, count=len(follow_ups))
 
         for next_number, follow_up in zip(reserved_numbers, follow_ups):
             task_id = f"T-{next_number:04d}"
@@ -707,8 +708,8 @@ def create_follow_up_tasks(
             stage=stage,
         )
         audit_entries = _follow_up_audit_entries(created_tasks, state.queue)
-        _persist_created_tasks(
-            root,
+        _persist_created_tasks_for_workspace(
+            workspace,
             tasks=created_tasks,
             state=state,
             task_journal_messages=journal_messages,

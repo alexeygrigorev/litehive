@@ -7,7 +7,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [ ] Finish `state.records` workspace migration:
   - [x] Add workspace-native helper path for task-number reservation.
   - [x] Add workspace-native helper path for created-task persistence.
-  - [ ] Switch `create_task_for_workspace` to the workspace-native helpers.
+  - [x] Switch `create_task_for_workspace` to the workspace-native helpers.
   - [ ] Keep path wrappers only where external/path-based callers still require them.
 - [ ] Reduce remaining `runtime_store(root)` production calls:
   - [ ] `state.records.py`

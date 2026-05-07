@@ -14,7 +14,7 @@ from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.reports import FollowUpTaskSpec
 from litehive.state.persist import load_state, save_state
-from litehive.state.records import create_follow_up_tasks, create_task, get_task, list_tasks, save_task
+from litehive.state.records import create_follow_up_tasks_for_workspace, create_task, get_task, list_tasks, save_task
 from litehive.tasks.status import update_task_for_workspace
 from litehive.workspace import Workspace
 
@@ -398,8 +398,8 @@ def test_create_follow_up_tasks_persists_queue_and_creation_source(tmp_path: Pat
     create_workspace(tmp_path)
     parent = create_task(tmp_path, title="Parent task")
 
-    created = create_follow_up_tasks(
-        tmp_path,
+    created = create_follow_up_tasks_for_workspace(
+        Workspace.from_path(tmp_path),
         parent_task=parent,
         stage="accepting",
         follow_ups=[
