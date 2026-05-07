@@ -57,6 +57,27 @@ class SandboxPolicySummary:
     credential_inputs: tuple[str, ...] = ()
     propagated_mounts: tuple[str, ...] = ()
 
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> "SandboxPolicySummary":
+        """
+        Rehydrate a policy summary from the JSON resource-control field.
+
+        Session recovery reads historical SQLite payloads as mappings;
+        this is the boundary that narrows that JSON shape back into the
+        typed policy object used by report/session construction.
+        """
+        return cls(
+            enabled=bool(payload.get("enabled")),
+            backend=_optional_str(payload.get("backend")),
+            runtime=_optional_str(payload.get("runtime")),
+            image=_optional_str(payload.get("image")),
+            network_mode=_optional_str(payload.get("network_mode")),
+            workspace_mode=_optional_str(payload.get("workspace_mode")),
+            environment=_string_tuple(payload.get("environment")),
+            credential_inputs=_string_tuple(payload.get("credential_inputs")),
+            propagated_mounts=_string_tuple(payload.get("propagated_mounts")),
+        )
+
     def as_dict(self) -> dict[str, object]:
         """Serialize the policy summary into the ``resource_control`` field of subagent reports so operators can audit how each engine was confined."""
         return {
@@ -97,6 +118,28 @@ class SandboxPolicySummary:
         if self.propagated_mounts:
             details.append(f"mounts={','.join(self.propagated_mounts)}")
         return "sandbox[" + " ".join(details) + "]"
+
+
+def _optional_str(value: object) -> str | None:
+    """
+    Return a string only when a JSON payload already contains one.
+    """
+    if isinstance(value, str):
+        return value
+    return None
+
+
+def _string_tuple(value: object) -> tuple[str, ...]:
+    """
+    Narrow a JSON list field into the tuple shape used in policy summaries.
+    """
+    if not isinstance(value, list):
+        return ()
+    strings: list[str] = []
+    for item in value:
+        if isinstance(item, str):
+            strings.append(item)
+    return tuple(strings)
 
 
 class SandboxError(RuntimeError):

@@ -7,7 +7,7 @@ import tempfile
 import pytest
 
 from heru.base import CLIInvocation
-from litehive.agents.sandbox import SandboxLauncher, SandboxProfile, sandbox_profile_for_role
+from litehive.agents.sandbox import SandboxLauncher, SandboxPolicySummary, SandboxProfile, sandbox_profile_for_role
 from litehive.config.model import LitehiveConfig, ExternalEngineSandboxConfig, ExternalEngineSandboxPolicy
 
 
@@ -68,6 +68,29 @@ def test_sandbox_launcher_policy_summary_enabled(temp_workspace, docker_sandbox_
     assert summary.image == "litehive-external-engine:latest"
     assert summary.network_mode == "none"
     assert summary.workspace_mode == "rw"
+
+
+def test_sandbox_policy_summary_rehydrates_resource_control_payload():
+    """Test resource-control JSON is narrowed back into a typed policy summary."""
+    summary = SandboxPolicySummary.from_mapping(
+        {
+            "enabled": True,
+            "backend": "docker",
+            "runtime": "docker",
+            "image": "litehive-external-engine:latest",
+            "network_mode": "none",
+            "workspace_mode": "rw",
+            "environment": ["CODEX_API_KEY", 123],
+            "credential_inputs": ["OPENAI_API_KEY"],
+            "propagated_mounts": ["/tmp/cache"],
+        }
+    )
+
+    assert summary.enabled
+    assert summary.backend == "docker"
+    assert summary.environment == ("CODEX_API_KEY",)
+    assert summary.credential_inputs == ("OPENAI_API_KEY",)
+    assert summary.propagated_mounts == ("/tmp/cache",)
 
 
 @patch("shutil.which")

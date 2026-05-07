@@ -7,6 +7,7 @@ from litehive.agents.session_store import (
     save_subagent_artifacts,
 )
 from litehive.agents.session_snapshots import InterruptedSubagentSessionRow, SubagentSessionStorageFields
+from litehive.agents.sandbox import SandboxPolicySummary
 from litehive.domain.common import SubagentStatus, utcnow
 from litehive.domain.runtime import RuntimeSubagentState
 from litehive.domain.task import TaskRecord
@@ -135,9 +136,9 @@ def _write_interrupted_subagent_artifacts(
     created_at = str(existing_session.get("created_at") or subagent.started_at)
     resource_control_value = existing_session.get("resource_control")
     if isinstance(resource_control_value, dict):
-        resource_control = resource_control_value
+        resource_control = SandboxPolicySummary.from_mapping(resource_control_value)
     else:
-        resource_control = {}
+        resource_control = SandboxPolicySummary(enabled=False)
     session_row = InterruptedSubagentSessionRow(
         fields=SubagentSessionStorageFields(
             id=subagent.id,

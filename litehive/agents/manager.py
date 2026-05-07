@@ -689,7 +689,7 @@ class SubagentManager:
                 summary=f"{report_stage}: agent did not submit verdict via litehive agent report CLI",
                 tests={"added": 0, "passing": 0},
                 warnings=warnings,
-                resource_control=self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
+                resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
                 interruption_reason=interruption_reason,
                 continuation=continuation_payload,
             )
@@ -708,7 +708,7 @@ class SubagentManager:
                 files_changed=files_changed,
                 tests=report.tests,
                 warnings=report.warnings,
-                resource_control=self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
+                resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
                 interruption_reason=interruption_reason,
                 continuation=continuation_payload,
             )
@@ -807,7 +807,7 @@ class SubagentManager:
             status=SubagentStatus(ref.status),
             summary="",
             tests={"added": 0, "passing": 0},
-            resource_control=self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
+            resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
         )
         if transcript.strip():
             report = self._parse_execution_report(
@@ -831,7 +831,7 @@ class SubagentManager:
                     status=SubagentStatus(ref.status),
                     summary=f"{report_stage}: agent did not submit verdict via litehive agent report CLI",
                     tests={"added": 0, "passing": 0},
-                    resource_control=self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
+                    resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
                     continuation=continuation_payload,
                 )
             else:
@@ -846,7 +846,7 @@ class SubagentManager:
                     ),
                     tests=report.tests,
                     warnings=report.warnings,
-                    resource_control=self.sandbox.policy_summary(ref.engine, ref.role).as_dict(),
+                    resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
                     continuation=continuation_payload,
                 )
         self.sessions.write_session_snapshot(

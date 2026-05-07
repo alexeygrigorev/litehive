@@ -716,10 +716,17 @@ Legend:
   writes in `SubagentManager`. Verified with event serialization tests,
   focused subagent manager/event-stream tests, pyrefly, ruff, and
   operator status/activity tests.
-- [ ] M35. Replace `resource_control_as_dict` and
+- [x] M35. Replace `resource_control_as_dict` and
   `sandbox_policy_summary` dictionary conversion with typed objects,
   or document why serialization requires a dict.
   Source: note 3, 28:30-28:55.
+  Completed 2026-05-07: `SubagentReportPayload` and
+  `SubagentSessionStorageFields` now carry `SandboxPolicySummary`
+  directly and serialize through `.as_dict()` only at the persisted
+  JSON boundary. Added `SandboxPolicySummary.from_mapping(...)` for
+  rehydrating historical session payloads during interrupted-subagent
+  recovery. Verified with focused pyrefly and subagent session/report
+  tests.
 - [ ] M36. Move `load_subagent_session` toward
   `Workspace.load_subagent_session(...)`, `Task.load_subagent_session`
   or another object-owned API.

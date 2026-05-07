@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Mapping
 
+from litehive.agents.sandbox import SandboxPolicySummary
 from litehive.domain.common import SubagentStatus
 
 
@@ -23,7 +24,7 @@ class SubagentReportPayload:
     files_changed: list[str] = field(default_factory=list)
     tests: Mapping[str, object] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
-    resource_control: Mapping[str, object] = field(default_factory=dict)
+    resource_control: SandboxPolicySummary = field(default_factory=lambda: SandboxPolicySummary(enabled=False))
     interruption_reason: str | None = None
     continuation: Mapping[str, object] | None = None
 
@@ -37,7 +38,7 @@ class SubagentReportPayload:
             "files_changed": list(self.files_changed),
             "tests": dict(self.tests),
             "warnings": list(self.warnings),
-            "resource_control": dict(self.resource_control),
+            "resource_control": self.resource_control.as_dict(),
             "interruption_reason": self.interruption_reason,
             "continuation": self.continuation_payload(),
         }

@@ -1,5 +1,6 @@
 from heru.types import RuntimeEngineContinuation
 
+from litehive.agents.sandbox import SandboxPolicySummary
 from litehive.agents.session_reports import SubagentReportPayload
 from litehive.agents.session_snapshots import (
     InterruptedSubagentSessionRow,
@@ -51,7 +52,7 @@ def test_running_subagent_session_row_serializes_without_terminal_fields() -> No
         sandbox="workspace-write",
         created_at="created",
         updated_at="updated",
-        resource_control={"policy": "sandboxed"},
+        resource_control=SandboxPolicySummary(enabled=True, backend="docker"),
     )
     row = RunningSubagentSessionRow(fields=fields, pid=None, continuation=None)
 
@@ -73,7 +74,7 @@ def test_terminal_subagent_session_row_requires_exit_code() -> None:
         sandbox="workspace-write",
         created_at="created",
         updated_at="updated",
-        resource_control={"policy": "sandboxed"},
+        resource_control=SandboxPolicySummary(enabled=True, backend="docker"),
     )
     row = TerminalSubagentSessionRow(fields=fields, exit_code=0, pid=4242)
 
@@ -95,7 +96,7 @@ def test_interrupted_subagent_session_row_keeps_resume_fields_separate() -> None
         sandbox="workspace-write",
         created_at="created",
         updated_at="updated",
-        resource_control={"policy": "sandboxed"},
+        resource_control=SandboxPolicySummary(enabled=True, backend="docker"),
     )
     row = InterruptedSubagentSessionRow(
         fields=fields,

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from heru.types import RuntimeEngineContinuation
 
+from litehive.agents.sandbox import SandboxPolicySummary
 from litehive.agents.session_reports import SubagentReportPayload
 from litehive.domain.common import SubagentStatus
 
@@ -69,7 +70,7 @@ class SubagentSessionStorageFields:
     sandbox: str
     created_at: str
     updated_at: str
-    resource_control: dict[str, object]
+    resource_control: SandboxPolicySummary
 
     def as_dict(self) -> dict[str, object]:
         """
@@ -84,7 +85,7 @@ class SubagentSessionStorageFields:
             "sandbox": self.sandbox,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "resource_control": self.resource_control,
+            "resource_control": self.resource_control.as_dict(),
         }
 
 
