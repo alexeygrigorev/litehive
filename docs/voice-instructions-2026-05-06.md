@@ -986,9 +986,17 @@ Legend:
   `TaskOutcomeKind` describes the terminal bucket for the whole task,
   and `OutcomeReasonCode` describes the machine-readable reason that
   produced that bucket.
-- [ ] D13. Structure the domain documentation with clear sections and
+- [x] D13. Structure the domain documentation with clear sections and
   lists. It currently reads like many things mixed together.
   Source: note 6, 03:45-04:15.
+  Verified 2026-05-07: restructured `docs/domain.md` "Core
+  Vocabulary" into explicit `Task Lifecycle`, `Pipeline Progress`, and
+  `Reports And Verdicts` sections. The relationship between
+  `TaskStatus`, `TaskOutcomeKind`, `OutcomeReasonCode`, `PipelineState`,
+  `PipelineStatus`, `TaskStage`, `Verdict`, and `StageReport` is now
+  documented as scan-friendly lists instead of mixed prose. Verified
+  with the domain-doc architecture guardrail, domain enum tests, ruff,
+  and pyrefly on the touched docs/domain paths.
 - [x] D14. Explain how `Verdict.FAIL`, `Verdict.REJECT`, outcome
   kind, and outcome reason code differ.
   Source: note 6, 04:15-04:33.

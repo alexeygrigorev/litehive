@@ -45,26 +45,44 @@ stable across refactors.
 - Use `rationale` for operator or agent explanation text.
 - Use `message` for human-readable event or report text.
 
-## Core Distinctions
+## Core Vocabulary
 
-`TaskStatus` is the operator-visible lifecycle category: `queued`,
-`in_progress`, `interrupted`, `parked`, `done`, `closed`, or `flagged`.
+### Task Lifecycle
 
-`PipelineState` is the internal runner state machine. It includes executable
-agent stages, hook states, system states, recovery, merge resolution, and
-terminal states.
+- `TaskStatus` is the operator-visible lifecycle category: `queued`,
+  `in_progress`, `interrupted`, `parked`, `done`, `closed`, or `flagged`.
+- `TaskOutcomeKind` is the terminal bucket for the whole task: done, closed,
+  flagged, blocked, interrupted, cancelled, won't-do, deferred, or duplicate.
+- `OutcomeReasonCode` is the machine-readable reason that produced a task
+  outcome: retry exhaustion, hallucinated completion, operator cancellation,
+  missing acceptance criteria, merge conflict, and similar routing facts.
+- Close outcomes such as `wont_do`, `deferred`, `duplicate`, and
+  `execution_cancelled` are close reasons, not task statuses.
 
-`PipelineStatus` is only a coarse display projection persisted on task records.
-It is not the state machine.
+### Pipeline Progress
 
-`StageReport.pipeline_state` uses the `ReportPipelineState` projection from
-`litehive/domain/reports.py`. Stage report verdicts are canonically `pass`,
-`reject`, or `blocked`; broader activity verdicts are normalized at the report
-boundary.
+- `PipelineState` is the internal runner state machine. It includes executable
+  agent stages, hook states, system states, recovery, merge resolution, and
+  terminal states.
+- `PipelineStatus` is only a coarse display projection persisted on task
+  records. It is not the state machine.
+- `TaskStage` is the operator-facing work phase used for reports, prompts, and
+  retry buckets: grooming, implementing, testing, accepting, or commit-to-git.
 
-Close outcomes such as `wont_do`, `deferred`, `duplicate`, and
-`execution_cancelled` are close reasons, not task statuses. Merge failures are
-represented as flagged tasks with `flag_reason = "merge_failed"`.
+### Reports And Verdicts
+
+- `Verdict` describes an agent or hook decision for one stage. It is not a task
+  outcome.
+- `Verdict.FAIL` is the generic negative verdict kept for older hook and
+  activity vocabulary.
+- `Verdict.REJECT` is the explicit agent or reviewer decision that a submitted
+  stage result is unacceptable.
+- `StageReport.pipeline_state` uses the `ReportPipelineState` projection from
+  `litehive/domain/reports.py`.
+- Stage report verdicts are canonically `pass`, `reject`, or `blocked`;
+  broader activity verdicts are normalized at the report boundary.
+- Merge failures are represented as flagged tasks with
+  `flag_reason = "merge_failed"`.
 
 ## Recovery Vocabulary
 
