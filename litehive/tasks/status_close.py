@@ -19,8 +19,8 @@ from litehive.tasks.constants import (
 )
 from litehive.state.locking import (
     ensure_future_task_mutation_allowed_for_workspace,
-    read_runner_lock_metadata,
-    runner_lock_is_held,
+    read_runner_lock_metadata_for_workspace,
+    runner_lock_is_held_for_workspace,
     workspace_lock,
 )
 from litehive.state.persist import load_state_for_workspace
@@ -128,8 +128,8 @@ def _close_task_transition(
         active_subagent_pid = None
     else:
         active_subagent_pid = task_snapshot.runtime.execution.active_subagent.pid
-    if runner_lock_is_held(root):
-        runner_metadata = read_runner_lock_metadata(root)
+    if runner_lock_is_held_for_workspace(workspace):
+        runner_metadata = read_runner_lock_metadata_for_workspace(workspace)
     else:
         runner_metadata = None
     if state.active_task_id == task_id or (runner_metadata is not None and runner_metadata.active_task_id == task_id):

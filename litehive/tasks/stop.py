@@ -22,8 +22,8 @@ from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.domain.task_ops import StopTaskSummary, WorkspaceConflictError
 from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
 from litehive.state.locking import (
-    read_runner_lock_metadata,
-    runner_lock_is_held,
+    read_runner_lock_metadata_for_workspace,
+    runner_lock_is_held_for_workspace,
     runner_pid_is_alive,
     workspace_lock,
 )
@@ -147,33 +147,32 @@ def stop_current_task(
     ``litehive queue stop`` and by the engine-switch flow when it must
     interrupt the active task first.
     """
-    root = workspace.root
     state = load_state_for_workspace(workspace)
     try:
         active_task_id = _active_task_id_for_stop(workspace, state)
     except ValueError:
-        metadata = read_runner_lock_metadata(root)
-        if runner_lock_is_held(root) and metadata.active_task_id:
+        metadata = read_runner_lock_metadata_for_workspace(workspace)
+        if runner_lock_is_held_for_workspace(workspace) and metadata.active_task_id:
             active_task_id = metadata.active_task_id
         else:
             raise
     runner_pid: int | None = None
-    if runner_lock_is_held(root):
+    if runner_lock_is_held_for_workspace(workspace):
         deadline = time.monotonic() + max(wait_timeout_seconds, 0.0)
         sleep_interval = max(poll_interval_seconds, 0.01)
-        metadata = read_runner_lock_metadata(root)
+        metadata = read_runner_lock_metadata_for_workspace(workspace)
         pid = metadata.pid
-        while runner_lock_is_held(root) and not runner_pid_is_alive(pid) and time.monotonic() < deadline:
+        while runner_lock_is_held_for_workspace(workspace) and not runner_pid_is_alive(pid) and time.monotonic() < deadline:
             time.sleep(sleep_interval)
-            metadata = read_runner_lock_metadata(root)
+            metadata = read_runner_lock_metadata_for_workspace(workspace)
             pid = metadata.pid
         if runner_pid_is_alive(pid) and pid is not None:
             runner_pid = int(pid)
             os.kill(runner_pid, signal.SIGINT)
             deadline = time.monotonic() + max(wait_timeout_seconds, 0.0)
-            while runner_lock_is_held(root) and time.monotonic() < deadline:
+            while runner_lock_is_held_for_workspace(workspace) and time.monotonic() < deadline:
                 time.sleep(sleep_interval)
-            if runner_lock_is_held(root):
+            if runner_lock_is_held_for_workspace(workspace):
                 raise WorkspaceConflictError(
                     f"runner for task {active_task_id} did not stop cleanly after SIGINT (pid={runner_pid})"
                 )
