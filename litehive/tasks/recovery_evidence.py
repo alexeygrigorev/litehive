@@ -18,7 +18,7 @@ from litehive.tasks.paths import (
     status_entry_paths,
 )
 from litehive.tasks.report_storage import latest_stage_report
-from litehive.worktree.paths import resolve_recorded_worktree_path
+from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace
 from litehive.workspace import Workspace
 
 
@@ -38,7 +38,6 @@ def collect_recovery_evidence(
     hand.
     """
     evidence: list[RecoveryEvidenceItem] = []
-    root = workspace.root
     activity_entries = workspace.task_activity(task).load()
     task_events = read_events(workspace, task)
     latest_report = latest_stage_report(workspace, task)
@@ -181,14 +180,14 @@ def collect_recovery_evidence(
                 RecoveryEvidenceItem(
                     kind="subagent_artifact",
                     label=label,
-                    path=str(display_path.relative_to(root)),
+                    path=str(display_path.relative_to(workspace.root)),
                     exists=exists or path is not None,
                     summary=f"artifact from {subagent_base.name}",
                 )
             )
     if latest_run_log is not None:
         try:
-            log_display_path = str(latest_run_log.relative_to(root))
+            log_display_path = str(latest_run_log.relative_to(workspace.root))
         except ValueError:
             log_display_path = str(latest_run_log)
         evidence.append(
@@ -216,13 +215,13 @@ def collect_recovery_evidence(
         )
     )
 
-    if is_git_repo(root):
-        worktree_path = resolve_recorded_worktree_path(
-            root, task.runtime.pipeline.git.worktree_path or task.git.worktree_path
+    if is_git_repo(workspace.root):
+        worktree_path = resolve_recorded_worktree_path_for_workspace(
+            workspace, task.runtime.pipeline.git.worktree_path or task.git.worktree_path
         )
         worktree_rel = get_task_worktree_path(task)
         try:
-            root_status = status_porcelain(root)
+            root_status = status_porcelain(workspace.root)
         except GitError:
             root_status = []
         worktree_status: list[str] = []
@@ -236,7 +235,7 @@ def collect_recovery_evidence(
                 kind="git",
                 label="main checkout git state",
                 exists=True,
-                summary=f"head={current_head(root) or 'missing'} dirty={len(root_status)}",
+                summary=f"head={current_head(workspace.root) or 'missing'} dirty={len(root_status)}",
                 metadata={"dirty_paths": status_entry_paths(root_status)},
             )
         )
