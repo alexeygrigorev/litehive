@@ -256,13 +256,6 @@ def heartbeat_is_late(heartbeat_at: str | None) -> bool:
         return False
 
 
-def runner_status(root: Path) -> RunnerStatusState:
-    """
-    Path-based compatibility wrapper for runner status resolution.
-    """
-    return runner_status_for_workspace(Workspace.from_path(root))
-
-
 def runner_status_for_workspace(workspace: Workspace) -> RunnerStatusState:
     """
     Resolve the workspace's authoritative runner status.

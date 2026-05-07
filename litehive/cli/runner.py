@@ -39,7 +39,7 @@ from litehive.state.persist import (
 from litehive.tasks.event_log import rebuild_sqlite_from_task_event_log
 from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection
 from litehive.tasks.audit import load_task_audit_entries
-from litehive.state.locking import runner_status
+from litehive.state.locking import runner_status_for_workspace
 
 
 def register_root_commands(app: typer.Typer, backup_app: typer.Typer, db_app: typer.Typer) -> None:
@@ -648,7 +648,7 @@ def backup_restore(
     if daemon is not None:
         print("backup restore failed: workspace daemon is running")
         return 1
-    runner = runner_status(workspace)
+    runner = runner_status_for_workspace(build_workspace(workspace))
     if runner.status in {"running", "late"}:
         print("backup restore failed: workspace runner is active")
         return 1
