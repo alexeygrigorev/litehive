@@ -47,6 +47,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove dead raw-root parameter from recovery skip scan helper.
 - [x] Remove duplicate cached root field from `WorktreeService`.
 - [x] Remove duplicate cached root field from `DockerSandboxLauncher`.
+- [x] Remove duplicate cached root field from `RuntimeStore`.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

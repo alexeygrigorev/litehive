@@ -57,7 +57,6 @@ class RuntimeStore:
         on every call.
         """
         self.workspace = workspace
-        self.root = workspace.root
 
     def bootstrap(self) -> None:
         """
@@ -70,7 +69,7 @@ class RuntimeStore:
         """
         with self.workspace.connect() as connection:
             self.create_workspace_state_rows(connection)
-            if consume_rebuilt_database_marker(self.root):
+            if consume_rebuilt_database_marker(self.workspace.root):
                 connection.commit()
             connection.commit()
         if self._should_rebuild_from_task_event_log():
@@ -126,7 +125,7 @@ class RuntimeStore:
         exist so a cold workspace renders as "no state" rather than
         raising.
         """
-        db_path = workspace_path(self.root, "data.db")
+        db_path = workspace_path(self.workspace.root, "data.db")
         if not db_path.exists():
             return None
         with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as connection:
