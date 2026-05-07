@@ -53,104 +53,125 @@ def engine_command(
     duplicate command signatures.
     """
     if action == "status":
-        if name:
-            print("engine status: does not take positional arguments")
-            return 1
-        container = build_container(workspace)
-        for line in _render_engine_status_lines(container.config):
-            print(line)
-        return 0
+        return _engine_status_command(workspace, name)
     workspace_obj = build_workspace(workspace)
     if action == "audit":
-        for line in _render_engine_audit_lines(workspace_obj, key=name, limit=limit):
-            print(line)
-        return 0
+        return _engine_audit_command(workspace_obj, name, limit)
     if action == "default":
-        if name is None or name not in ENGINE_CHOICES:
-            print(f"engine default: unknown engine '{name}'")
-            return 1
-        if reason:
-            default_context = {"reason": reason}
-        else:
-            default_context = None
-        change = set_default_engine(
-            workspace_obj,
-            name,
-            actor="operator",
-            source="cli",
-            context=default_context,
-        )
-        print(f"default_engine: {change.old_value} -> {change.new_value}")
-        if change.changed:
-            updated_label = "yes"
-        else:
-            updated_label = "no"
-        print(f"updated: {updated_label}")
-        return 0
+        return _engine_default_command(workspace_obj, name, reason)
     if action == "preference":
-        try:
-            preference = _parse_engine_preference(name)
-        except ValueError as exc:
-            print(f"engine preference: {exc}")
-            return 1
-        if preference is None:
-            print("engine preference: provide a comma-separated engine list")
-            return 1
-        if reason:
-            preference_context = {"reason": reason}
-        else:
-            preference_context = None
-        try:
-            change = set_engine_preference(
-                workspace_obj,
-                preference,
-                actor="operator",
-                source="cli",
-                context=preference_context,
-            )
-        except ValueError as exc:
-            print(f"engine preference: {exc}")
-            return 1
-        print(f"engine_preference: {_engine_list_label(change.old_value)} -> {_engine_list_label(change.new_value)}")
-        if change.changed:
-            updated_label = "yes"
-        else:
-            updated_label = "no"
-        print(f"updated: {updated_label}")
-        return 0
+        return _engine_preference_command(workspace_obj, name, reason)
     if name is None or name not in ENGINE_CHOICES:
         print(f"engine {action}: unknown engine '{name}'")
         return 1
     if action == "freeze":
-        freeze_iso = parse_engine_freeze_until(until)
-        if freeze_iso is None:
-            print("engine freeze: --until must be ISO date YYYY-MM-DD")
-            return 1
-        persist_engine_freeze_iso_for_workspace(
-            workspace_obj,
-            engine_name=name,
-            freeze_iso=freeze_iso,
+        return _engine_freeze_command(workspace_obj, name, until, reason)
+    return _engine_unfreeze_command(workspace_obj, name, reason)
+
+
+def _engine_status_command(workspace: Path, name: str | None) -> int:
+    if name:
+        print("engine status: does not take positional arguments")
+        return 1
+    container = build_container(workspace)
+    for line in _render_engine_status_lines(container.config):
+        print(line)
+    return 0
+
+
+def _engine_audit_command(workspace: Workspace, key: str | None, limit: int) -> int:
+    for line in _render_engine_audit_lines(workspace, key=key, limit=limit):
+        print(line)
+    return 0
+
+
+def _engine_default_command(workspace: Workspace, name: str | None, reason: str | None) -> int:
+    if name is None or name not in ENGINE_CHOICES:
+        print(f"engine default: unknown engine '{name}'")
+        return 1
+    change = set_default_engine(
+        workspace,
+        name,
+        actor="operator",
+        source="cli",
+        context=_engine_reason_context(reason),
+    )
+    print(f"default_engine: {change.old_value} -> {change.new_value}")
+    print(f"updated: {_updated_label(change.changed)}")
+    return 0
+
+
+def _engine_preference_command(workspace: Workspace, name: str | None, reason: str | None) -> int:
+    try:
+        preference = _parse_engine_preference(name)
+    except ValueError as exc:
+        print(f"engine preference: {exc}")
+        return 1
+    if preference is None:
+        print("engine preference: provide a comma-separated engine list")
+        return 1
+    try:
+        change = set_engine_preference(
+            workspace,
+            preference,
             actor="operator",
             source="cli",
-            reason=reason,
+            context=_engine_reason_context(reason),
         )
-        if reason:
-            reason_part = f" reason={reason}"
-        else:
-            reason_part = ""
-        print(f"engine_frozen: {name} until {freeze_iso}" + reason_part)
-        return 0
-    if not clear_persisted_engine_freeze_for_workspace(
-        workspace_obj,
+    except ValueError as exc:
+        print(f"engine preference: {exc}")
+        return 1
+    print(f"engine_preference: {_engine_list_label(change.old_value)} -> {_engine_list_label(change.new_value)}")
+    print(f"updated: {_updated_label(change.changed)}")
+    return 0
+
+
+def _engine_freeze_command(workspace: Workspace, name: str, until: str | None, reason: str | None) -> int:
+    freeze_iso = parse_engine_freeze_until(until)
+    if freeze_iso is None:
+        print("engine freeze: --until must be ISO date YYYY-MM-DD")
+        return 1
+    persist_engine_freeze_iso_for_workspace(
+        workspace,
+        engine_name=name,
+        freeze_iso=freeze_iso,
+        actor="operator",
+        source="cli",
+        reason=reason,
+    )
+    if reason:
+        reason_part = f" reason={reason}"
+    else:
+        reason_part = ""
+    print(f"engine_frozen: {name} until {freeze_iso}" + reason_part)
+    return 0
+
+
+def _engine_unfreeze_command(workspace: Workspace, name: str, reason: str | None) -> int:
+    unfrozen = clear_persisted_engine_freeze_for_workspace(
+        workspace,
         engine_name=name,
         actor="operator",
         source="cli",
         reason=reason,
-    ):
+    )
+    if not unfrozen:
         print(f"engine unfreeze: {name} is not frozen")
         return 1
     print(f"engine_unfrozen: {name}")
     return 0
+
+
+def _engine_reason_context(reason: str | None) -> dict[str, str] | None:
+    if reason:
+        return {"reason": reason}
+    return None
+
+
+def _updated_label(changed: bool) -> str:
+    if changed:
+        return "yes"
+    return "no"
 
 
 def _parse_engine_preference(value: str | None) -> list[str] | None:

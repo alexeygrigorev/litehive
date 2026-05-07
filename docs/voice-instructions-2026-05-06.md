@@ -1379,8 +1379,11 @@ Legend:
   a workspace handle directly because they do not need the config
   object.
   Source: note 4, 19:28-20:00.
-- [ ] C10. Split long engine command functions according to the
+- [x] C10. Split long engine command functions according to the
   25-line function-size rule.
+  Completed 2026-05-07: split `engine_command` into small
+  status/audit/default/preference/freeze/unfreeze helpers while
+  preserving the existing single Typer command surface.
   Source: note 4, 20:00-20:36.
 - [ ] C11. Rework `EngineCommand`: remove default/preference command
   behavior from CLI if it can be configured in YAML; keep engine
