@@ -9,6 +9,8 @@ tree and operators can land on the most recent session from one
 """
 
 import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 import shutil
 
@@ -17,6 +19,46 @@ from litehive.workspace import Workspace
 logger = logging.getLogger(__name__)
 
 _RUN_ALL_SESSION_RETENTION = 8
+
+
+@dataclass(frozen=True, slots=True)
+class DaemonLogs:
+    """
+    Run-all log path helper bound to one workspace.
+
+    The daemon executor uses this object to prepare a session
+    directory, while CLI/status wrappers use it to locate the latest
+    run-all session or matching log file without recomputing runtime
+    paths in multiple modules.
+    """
+
+    workspace: Workspace
+
+    def run_all_base(self) -> Path:
+        return self.workspace.runtime_path("logs", "run-all")
+
+    def prepare_session(self, session_dir: Path | None = None) -> Path:
+        log_base = self.run_all_base()
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        log_root = session_dir or (log_base / timestamp)
+        log_root.mkdir(parents=True, exist_ok=True)
+        self.prune_sessions()
+        return log_root
+
+    def prune_sessions(self, keep: int = _RUN_ALL_SESSION_RETENTION) -> None:
+        prune_run_all_log_dirs(self.run_all_base(), keep=keep)
+
+    def latest_run_all_dir(self) -> Path | None:
+        log_base = self.run_all_base()
+        if not log_base.exists():
+            return None
+        candidates = sorted(path for path in log_base.iterdir() if path.is_dir())
+        if candidates:
+            return candidates[-1]
+        return None
+
+    def latest_matching(self, pattern: str) -> Path | None:
+        return latest_matching(self.latest_run_all_dir(), pattern)
 
 
 def latest_run_all_log_dir(workspace: Path) -> Path | None:
@@ -41,13 +83,7 @@ def latest_run_all_log_dir_for_workspace(workspace: Workspace) -> Path | None:
     enumerate session names. Returns ``None`` for a workspace that
     has never run a daemon session.
     """
-    log_base = workspace.runtime_path("logs", "run-all")
-    if not log_base.exists():
-        return None
-    candidates = sorted(path for path in log_base.iterdir() if path.is_dir())
-    if candidates:
-        return candidates[-1]
-    return None
+    return DaemonLogs(workspace).latest_run_all_dir()
 
 
 def prune_run_all_log_dirs(log_base: Path, keep: int = _RUN_ALL_SESSION_RETENTION) -> None:

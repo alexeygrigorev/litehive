@@ -45,7 +45,7 @@ from litehive.state.persist import load_state_for_workspace, set_pool_stop_reaso
 from litehive.state.locking import runner_status_for_workspace
 from litehive.workspace import Workspace
 
-from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir_for_workspace
+from .logs import DaemonLogs, latest_matching, latest_run_all_log_dir_for_workspace
 
 from .registry import (
     DaemonRegistryEntry,
@@ -397,15 +397,12 @@ class DaemonExecutor:
     attention_repository: AttentionRepository
     output: DaemonOutput
     command_prefix: tuple[str, ...]
+    logs: DaemonLogs
     session_dir: Path | None
 
     def run(self) -> int:
         apply_pending_migrations(self.workspace)
-        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-        log_base = self.daemon_workspace.runtime_path("logs", "run-all")
-        log_root = self.session_dir or (log_base / timestamp)
-        log_root.mkdir(parents=True, exist_ok=True)
-        prune_run_all_log_dirs(log_base)
+        log_root = self.logs.prepare_session(self.session_dir)
         register_daemon(self.workspace, pid=os.getpid(), log_dir=log_root)
         stop_requested = False
         current_child: dict[str, subprocess.Popen[str] | None] = {"process": None}
@@ -553,6 +550,7 @@ def run_daemon_loop(
         attention_repository=daemon_container.attention_repository,
         output=DaemonOutput(output_stream),
         command_prefix=(sys.executable, "-m", "litehive.main"),
+        logs=DaemonLogs(daemon_container.workspace),
         session_dir=session_dir,
     )
     return executor.run()

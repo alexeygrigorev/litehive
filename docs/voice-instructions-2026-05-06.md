@@ -2169,8 +2169,14 @@ Legend:
   dependencies. `run_daemon_loop(...)` is now a boundary wrapper that
   builds the daemon container and delegates execution to
   `DaemonExecutor.run()`.
-- [ ] DM24. Consider a `DaemonLogs` class with log-related methods.
+- [x] DM24. Consider a `DaemonLogs` class with log-related methods.
   Source: note 5, 24:47-25:10.
+  Completed 2026-05-07: introduced `DaemonLogs` in
+  `litehive.daemon.logs` with methods for run-all base path,
+  session preparation, session pruning, latest session lookup, and
+  latest matching log lookup. `DaemonExecutor` now asks `DaemonLogs`
+  to prepare its session directory instead of composing and pruning
+  run-all paths inline.
 - [x] DM25. Replace daemon metadata dictionaries with dataclasses.
   Source: note 5, 25:16-25:35.
   Completed 2026-05-07: introduced `DaemonRegistryEntry` in
