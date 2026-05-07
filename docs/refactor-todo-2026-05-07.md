@@ -63,6 +63,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Move status-update runner ownership check to workspace-native lock helper.
 - [x] Add workspace-native runner heartbeat helper and migrate lifecycle orchestration.
 - [x] Add workspace-native worktree path helpers and migrate execution-root setup.
+- [x] Migrate hook worktree setup to workspace-native recorded-path helper.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

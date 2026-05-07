@@ -17,7 +17,7 @@ from litehive.state.records import (
     get_task_worktree_path,
     set_task_commit_sha,
 )
-from litehive.worktree.paths import resolve_recorded_worktree_path
+from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace
 from litehive.worktree.service import WorktreeService
 from litehive.workspace import Workspace
 
@@ -55,14 +55,13 @@ def _task_recorded_worktree_for_workspace(workspace: Workspace, task_id: str) ->
     returning them in one call means a single db hit per resolution
     instead of two.
     """
-    root = workspace.root
     task = workspace.get_task(task_id)
     if task is None:
         return None, None
     recorded = get_task_worktree_path(task)
     if not recorded:
         return task, None
-    return task, resolve_recorded_worktree_path(root, recorded)
+    return task, resolve_recorded_worktree_path_for_workspace(workspace, recorded)
 
 
 def build_commit_node_for_workspace(workspace: Workspace) -> CommitNode:
@@ -177,8 +176,7 @@ def reconcile_terminal_commit_sha_for_workspace(
     if commit_result is None:
         return task
 
-    root = workspace.root
-    head_sha = commit_result.head_sha or current_head(root)
+    head_sha = commit_result.head_sha or current_head(workspace.root)
     if not head_sha:
         return task
 
