@@ -245,7 +245,7 @@ class SubagentSessionManager:
         )
         self.workspace.append_event(
             task,
-            SubagentPidEvent(subagent_id=ref.id, pid=pid),
+            SubagentPidEvent(subagent_id=ref.id, role=ref.role, pid=pid),
         )
 
     def subagent_inactivity_timeout_seconds(self, engine_name: str) -> float:

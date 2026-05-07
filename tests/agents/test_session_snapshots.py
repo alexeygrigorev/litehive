@@ -2,6 +2,7 @@ from heru.types import RuntimeEngineContinuation
 
 from litehive.agents.session_reports import SubagentReportPayload
 from litehive.agents.session_snapshots import (
+    InterruptedSubagentSessionRow,
     RunningSubagentSessionRow,
     RunningSubagentSessionMetadata,
     SubagentSessionMetadata,
@@ -82,6 +83,36 @@ def test_terminal_subagent_session_row_requires_exit_code() -> None:
     assert payload["pid"] == 4242
     assert payload["exit_code"] == 0
     assert payload["interruption_reason"] is None
+
+
+def test_interrupted_subagent_session_row_keeps_resume_fields_separate() -> None:
+    fields = SubagentSessionStorageFields(
+        id="SA-0001",
+        role="swe",
+        engine="codex",
+        status=SubagentStatus.INTERRUPTED,
+        sandboxed=True,
+        sandbox="workspace-write",
+        created_at="created",
+        updated_at="updated",
+        resource_control={"policy": "sandboxed"},
+    )
+    row = InterruptedSubagentSessionRow(
+        fields=fields,
+        pid=4242,
+        exit_code=None,
+        interruption_reason="received ctrl-c",
+        resume_stage="implementing",
+        continuation=None,
+    )
+
+    payload = row.as_dict()
+
+    assert payload["status"] == "interrupted"
+    assert payload["pid"] == 4242
+    assert payload["exit_code"] is None
+    assert payload["interruption_reason"] == "received ctrl-c"
+    assert payload["resume_stage"] == "implementing"
 
 
 def test_subagent_session_snapshot_groups_streams_report_and_metadata() -> None:

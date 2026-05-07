@@ -20,8 +20,8 @@ def test_subagent_session_events_serialize_expected_kind_and_data() -> None:
         engine="codex",
         sandboxed=False,
     )
-    pid = SubagentPidEvent(subagent_id="SA-0001", pid=4242)
-    progress = SubagentProgressEvent(subagent_id="SA-0001", pid=4242)
+    pid = SubagentPidEvent(subagent_id="SA-0001", role="swe", pid=4242)
+    progress = SubagentProgressEvent(subagent_id="SA-0001", role="swe", pid=4242)
     finished = SubagentFinishedEvent(
         subagent_id="SA-0001",
         role="swe",
@@ -39,9 +39,9 @@ def test_subagent_session_events_serialize_expected_kind_and_data() -> None:
         "sandboxed": False,
     }
     assert pid.kind == "subagent_pid"
-    assert pid.data() == {"subagent_id": "SA-0001", "pid": 4242}
+    assert pid.data() == {"subagent_id": "SA-0001", "role": "swe", "pid": 4242}
     assert progress.kind == "subagent_progress"
-    assert progress.data() == {"subagent_id": "SA-0001", "pid": 4242}
+    assert progress.data() == {"subagent_id": "SA-0001", "role": "swe", "pid": 4242}
     assert finished.kind == "subagent_finished"
     assert finished.data() == {
         "subagent_id": "SA-0001",
@@ -57,11 +57,24 @@ def test_append_event_persists_typed_event_object(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
     task = create_task(tmp_path, title="Typed subagent event")
-    event = SubagentPidEvent(subagent_id="SA-0001", pid=4242)
+    event = SubagentPidEvent(subagent_id="SA-0001", role="swe", pid=4242)
 
     persisted = workspace.append_event(task, event)
     loaded = read_events(workspace, task)
 
     assert persisted["kind"] == "subagent_pid"
-    assert persisted["data"] == {"subagent_id": "SA-0001", "pid": 4242}
+    assert persisted["data"] == {"subagent_id": "SA-0001", "role": "swe", "pid": 4242}
     assert loaded == [persisted]
+
+
+def test_subagent_session_events_document_reason_and_consumers() -> None:
+    event_classes = (
+        SubagentStartedEvent,
+        SubagentPidEvent,
+        SubagentProgressEvent,
+        SubagentFinishedEvent,
+    )
+
+    for event_class in event_classes:
+        assert event_class.persistence_reason
+        assert event_class.consumed_by

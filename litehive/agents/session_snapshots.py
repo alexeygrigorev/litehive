@@ -147,6 +147,39 @@ class TerminalSubagentSessionRow:
 
 
 @dataclass(frozen=True, slots=True)
+class InterruptedSubagentSessionRow:
+    """
+    Persisted session row for a paused subagent that may be resumed.
+
+    An interrupted process may not have produced an exit code, so this
+    row keeps interruption metadata separate from terminal completion.
+    """
+
+    fields: SubagentSessionStorageFields
+    pid: int | None
+    interruption_reason: str
+    resume_stage: str
+    exit_code: int | None = None
+    continuation: dict[str, object] | None = None
+
+    def as_dict(self) -> dict[str, object]:
+        """
+        Serialize an interrupted session row for SQLite JSON storage.
+        """
+        payload = self.fields.as_dict()
+        payload.update(
+            {
+                "pid": self.pid,
+                "exit_code": self.exit_code,
+                "interruption_reason": self.interruption_reason,
+                "resume_stage": self.resume_stage,
+                "continuation": self.continuation,
+            }
+        )
+        return payload
+
+
+@dataclass(frozen=True, slots=True)
 class SubagentSessionSnapshot:
     """
     Complete subagent snapshot written by ``SubagentSessionManager``.

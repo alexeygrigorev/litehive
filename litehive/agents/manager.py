@@ -800,7 +800,7 @@ class SubagentManager:
         self.sessions.append_stream_delta(base, ref, "stderr", execution.stderr)
         self.workspace.append_event(
             task,
-            SubagentProgressEvent(subagent_id=ref.id, pid=execution.pid),
+            SubagentProgressEvent(subagent_id=ref.id, role=ref.role, pid=execution.pid),
         )
         report_stage = agent_stage_for_task(task, ref.role)
         report_payload = SubagentReportPayload(

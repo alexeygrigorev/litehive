@@ -37,7 +37,7 @@ from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.container import build_subagent_manager_for_workspace
 from litehive.config.model import LitehiveConfig
 from litehive.domain.agent import EngineFailure, SubagentId
-from litehive.domain.common import OutcomeReasonCode, PipelineState, TaskStage, Verdict, cap_feedback
+from litehive.domain.common import OutcomeReasonCode, PipelineState, SubagentStatus, TaskStage, Verdict, cap_feedback
 from litehive.domain.reports import StageReport, TaskActivityStage, canonical_report_pipeline_state
 from litehive.domain.lifecycle_deltas import recovery_trigger_from_event
 from litehive.git.ops import GitError, is_git_repo, status_porcelain
@@ -718,18 +718,32 @@ class HeruEngineAdapter:
         """Shell Codex directly against litehive's own source tree, registering
         a synthetic subagent record so the journal entry the recovery agent
         submits can be attributed back to this bypass turn."""
+        from litehive.agents.session_snapshots import (  # noqa: PLC0415
+            RunningSubagentSessionRow,
+            SubagentSessionStorageFields,
+        )
         from litehive.agents.session_store import save_subagent_artifacts  # noqa: PLC0415
 
+        now = datetime.now(UTC).isoformat()
+        session_row = RunningSubagentSessionRow(
+            fields=SubagentSessionStorageFields(
+                id=str(source_subagent_id),
+                role="recovery",
+                engine="codex",
+                status=SubagentStatus.RUNNING,
+                sandboxed=False,
+                sandbox="host",
+                created_at=now,
+                updated_at=now,
+                resource_control={},
+            ),
+            pid=None,
+        )
         save_subagent_artifacts(
             self.workspace,
             task_id,
             str(source_subagent_id),
-            session={
-                "id": str(source_subagent_id),
-                "role": "recovery",
-                "engine": "codex",
-                "status": "running",
-            },
+            session=session_row,
         )
         adapter = CodexCLIAdapter()
         return adapter.run(

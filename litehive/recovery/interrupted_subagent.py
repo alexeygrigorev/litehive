@@ -6,6 +6,7 @@ from litehive.agents.session_store import (
     load_subagent_session,
     save_subagent_artifacts,
 )
+from litehive.agents.session_snapshots import InterruptedSubagentSessionRow, SubagentSessionStorageFields
 from litehive.domain.common import SubagentStatus, utcnow
 from litehive.domain.runtime import RuntimeSubagentState
 from litehive.domain.task import TaskRecord
@@ -125,27 +126,35 @@ def _write_interrupted_subagent_artifacts(
     between memory and disk would mean resume picks the wrong action.
     """
     now = utcnow()
-    session_payload = load_subagent_session(workspace, task.id, subagent.id)
+    existing_session = load_subagent_session(workspace, task.id, subagent.id)
     report_payload = load_subagent_report(workspace, task.id, subagent.id)
     if subagent.continuation is None:
         continuation_payload = None
     else:
         continuation_payload = subagent.continuation.model_dump(mode="python")
-    session_payload.update(
-        {
-            "id": subagent.id,
-            "role": subagent.role,
-            "engine": subagent.engine,
-            "status": subagent.status,
-            "sandboxed": subagent.sandboxed,
-            "sandbox": subagent.sandbox_summary or "host",
-            "updated_at": now,
-            "pid": subagent.pid,
-            "exit_code": subagent.exit_code,
-            "interruption_reason": subagent.interruption_reason or None,
-            "resume_stage": resume_stage,
-            "continuation": continuation_payload,
-        }
+    created_at = str(existing_session.get("created_at") or subagent.started_at)
+    resource_control_value = existing_session.get("resource_control")
+    if isinstance(resource_control_value, dict):
+        resource_control = resource_control_value
+    else:
+        resource_control = {}
+    session_row = InterruptedSubagentSessionRow(
+        fields=SubagentSessionStorageFields(
+            id=subagent.id,
+            role=subagent.role,
+            engine=subagent.engine,
+            status=SubagentStatus(subagent.status),
+            sandboxed=subagent.sandboxed,
+            sandbox=subagent.sandbox_summary or "host",
+            created_at=created_at,
+            updated_at=now,
+            resource_control=resource_control,
+        ),
+        pid=subagent.pid,
+        exit_code=subagent.exit_code,
+        interruption_reason=subagent.interruption_reason or "interrupted",
+        resume_stage=resume_stage,
+        continuation=continuation_payload,
     )
     report_payload["status"] = subagent.status
     report_payload["summary"] = report_payload.get("summary") or subagent.execution_trace_snippet
@@ -158,6 +167,6 @@ def _write_interrupted_subagent_artifacts(
         workspace,
         task.id,
         subagent.id,
-        session=session_payload,
+        session=session_row,
         report=report_payload,
     )

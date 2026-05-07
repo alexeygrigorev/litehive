@@ -676,26 +676,46 @@ Legend:
   the process result. Verified with `rg` that the old writer name is no
   longer present in code, and reran focused ruff plus subagent session,
   manager, event-stream, callback, and recovery tests.
-- [ ] M33. Replace session dictionaries with concrete session objects.
+- [x] M33. Replace session dictionaries with concrete session objects.
   PID and exit code should not be `None` where the process model says
   they must exist.
   Source: note 3, 27:20-27:47.
-  Progress 2026-05-07: added concrete persisted session row objects:
+  Verified 2026-05-07: added concrete persisted session row objects:
   `RunningSubagentSessionRow` for start/progress snapshots and
-  `TerminalSubagentSessionRow` for finished snapshots. The main
+  `TerminalSubagentSessionRow` for finished snapshots. Added
+  `InterruptedSubagentSessionRow` for resumable interrupted subagents
+  where an exit code may not exist yet. The main
   `SubagentSessionManager.write_running_session_metadata` and
   `SubagentSessionManager.write_session_snapshot` paths now pass
   `session=session_row` to the persistence boundary, while
   `save_subagent_artifacts` owns final `as_dict()` serialization.
-  Remaining work: convert direct recovery bypass session writes and
-  interrupted-session persistence instead of mutating loaded session
-  dictionaries. Kept nullable PID only on running/progress rows because
-  Heru progress callbacks can arrive before process-start PID
-  reporting. Verified focused row tests plus full `make typecheck` and
-  `make test`.
-- [ ] M34. Every saved event needs a concrete domain role and a
+  Converted direct recovery bypass in
+  `HeruEngineFactory._run_direct_recovery_turn` from a raw
+  `session={...}` dict to `RunningSubagentSessionRow`, and converted
+  interrupted-session persistence in
+  `_write_interrupted_subagent_artifacts` from mutating a loaded
+  session dictionary to `InterruptedSubagentSessionRow`. Kept nullable
+  PID only on running/progress/interrupted rows because Heru progress
+  callbacks can arrive before process-start PID reporting, and
+  interrupted processes may not have a terminal exit code. Verified with
+  `rg` that production `save_subagent_artifacts(..., session=...)`
+  paths now pass row objects rather than raw dictionaries, and reran
+  focused ruff, pyrefly, subagent manager/session/event-stream tests,
+  recovery tests, and direct-recovery lifecycle tests.
+- [x] M34. Every saved event needs a concrete domain role and a
   description of why it is persisted and where it is used.
   Source: note 3, 27:53-28:24.
+  Verified 2026-05-07: `SubagentPidEvent` and
+  `SubagentProgressEvent` now include the concrete subagent `role` in
+  their persisted data, matching `SubagentStartedEvent` and
+  `SubagentFinishedEvent`. Added `persistence_reason` and `consumed_by`
+  metadata to each typed subagent event class so the reason for
+  persistence and the consumer surfaces are visible next to the event
+  contract. Traced all `Workspace.append_event(...)` subagent call
+  sites: start/PID writes in `SubagentSessionManager`, progress/finish
+  writes in `SubagentManager`. Verified with event serialization tests,
+  focused subagent manager/event-stream tests, pyrefly, ruff, and
+  operator status/activity tests.
 - [ ] M35. Replace `resource_control_as_dict` and
   `sandbox_policy_summary` dictionary conversion with typed objects,
   or document why serialization requires a dict.
