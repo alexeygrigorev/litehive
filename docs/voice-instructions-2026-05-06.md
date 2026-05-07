@@ -2252,9 +2252,14 @@ Legend:
   Added the setting to the architecture guardrail and code-style docs,
   verified a temporary pyrefly project fails on `def g(x) -> int`, and
   reran focused pool/guardrail tests, `make typecheck`, and `make test`.
-- [ ] T3. Make the type checker catch daemon `runner_is_live` /
+- [x] T3. Make the type checker catch daemon `runner_is_live` /
   `has_work` object misuse.
   Source: note 5, 20:43-21:07.
+  Completed 2026-05-07: DM17 typed `_runner_is_live(...)` as
+  `RunnerStatusState` and `_has_work(...)` as `WorkspaceState`, so
+  pyrefly rejects passing loose objects or wrong state payloads. Added
+  an architecture guardrail that locks those daemon predicate
+  annotations to the domain types.
 - [ ] T4. Add a ruff/custom guardrail for `getattr`.
   Source: note 4, 40:31-40:58.
 - [ ] T5. Add or strengthen guardrails against dictionaries and

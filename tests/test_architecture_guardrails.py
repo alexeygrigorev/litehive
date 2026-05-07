@@ -49,6 +49,12 @@ def _name_of(node: ast.AST) -> str | None:
     return None
 
 
+def _annotation_source(node: ast.AST | None) -> str | None:
+    if node is None:
+        return None
+    return ast.unparse(node)
+
+
 def _string_constants(tree: ast.AST) -> list[str]:
     return [node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)]
 
@@ -209,6 +215,22 @@ def test_pyrefly_requires_return_annotations() -> None:
 
     assert pyrefly_config["errors"]["unannotated-parameter"] == "error"
     assert pyrefly_config["errors"]["unannotated-return"] == "error"
+
+
+def test_daemon_runner_liveness_helpers_remain_domain_typed() -> None:
+    """
+    Keep daemon loop predicates on domain types, not loose objects.
+    """
+    tree = _tree(PACKAGE_ROOT / "daemon" / "execution.py")
+    annotations: dict[str, list[str | None]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name in {"_runner_is_live", "_has_work"}:
+            annotations[node.name] = [_annotation_source(argument.annotation) for argument in node.args.args]
+
+    assert annotations == {
+        "_has_work": ["WorkspaceState"],
+        "_runner_is_live": ["RunnerStatusState"],
+    }
 
 
 def test_merge_warning_type_is_not_reintroduced() -> None:
