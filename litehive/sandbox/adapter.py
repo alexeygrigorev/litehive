@@ -35,7 +35,7 @@ class SandboxLauncher(Protocol):
     pass a stub that satisfies the protocol.
     """
 
-    def policy_summary(self, engine_name: str, role: str = "") -> "SandboxSummary":
+    def policy_summary(self, engine_name: str) -> "SandboxSummary":
         """Resolve the effective sandbox policy snapshot for adapter status."""
         ...
 
@@ -81,7 +81,7 @@ class SandboxedAdapter(ExternalCLIAdapter):
         self._launcher = launcher
         self._engine_name = engine_name
         self._role = role
-        self._summary = launcher.policy_summary(engine_name, role)
+        self._summary = launcher.policy_summary(engine_name)
 
     def build_command(
         self,

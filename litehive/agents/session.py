@@ -122,7 +122,7 @@ class SubagentSessionManager:
             sandbox=ref.sandbox_summary or "host",
             created_at=created_at,
             updated_at=updated_at,
-            resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
+            resource_control=self.sandbox.policy_summary(ref.engine),
         )
 
     @staticmethod
@@ -222,7 +222,7 @@ class SubagentSessionManager:
                     status=SubagentStatus(ref.status),
                     summary="",
                     tests={"added": 0, "passing": 0},
-                    resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
+                    resource_control=self.sandbox.policy_summary(ref.engine),
                 ),
                 metadata=SubagentSessionMetadata(exit_code=None, pid=None),
             ),

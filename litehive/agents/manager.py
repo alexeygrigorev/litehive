@@ -288,7 +288,7 @@ class SubagentManager:
 
         engine_adapter = self.engines.engine_for(engine_name)
         run_adapter = engine_adapter
-        sandbox_summary = self.sandbox.policy_summary(engine_name, role)
+        sandbox_summary = self.sandbox.policy_summary(engine_name)
         ref = Subagent(
             id=subagent_id,
             role=role,
@@ -688,7 +688,7 @@ class SubagentManager:
                 summary=f"{report_stage}: agent did not submit verdict via litehive agent report CLI",
                 tests={"added": 0, "passing": 0},
                 warnings=warnings,
-                resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
+                resource_control=self.sandbox.policy_summary(ref.engine),
                 interruption_reason=interruption_reason,
                 continuation=continuation_state,
             )
@@ -707,7 +707,7 @@ class SubagentManager:
                 files_changed=files_changed,
                 tests=report.tests,
                 warnings=report.warnings,
-                resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
+                resource_control=self.sandbox.policy_summary(ref.engine),
                 interruption_reason=interruption_reason,
                 continuation=continuation_state,
             )
@@ -807,7 +807,7 @@ class SubagentManager:
             status=SubagentStatus(ref.status),
             summary="",
             tests={"added": 0, "passing": 0},
-            resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
+            resource_control=self.sandbox.policy_summary(ref.engine),
         )
         if transcript.strip():
             report = self._parse_execution_report(
@@ -827,7 +827,7 @@ class SubagentManager:
                     status=SubagentStatus(ref.status),
                     summary=f"{report_stage}: agent did not submit verdict via litehive agent report CLI",
                     tests={"added": 0, "passing": 0},
-                    resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
+                    resource_control=self.sandbox.policy_summary(ref.engine),
                     continuation=continuation_state,
                 )
             else:
@@ -842,7 +842,7 @@ class SubagentManager:
                     ),
                     tests=report.tests,
                     warnings=report.warnings,
-                    resource_control=self.sandbox.policy_summary(ref.engine, ref.role),
+                    resource_control=self.sandbox.policy_summary(ref.engine),
                     continuation=continuation_state,
                 )
         self.sessions.write_session_snapshot(

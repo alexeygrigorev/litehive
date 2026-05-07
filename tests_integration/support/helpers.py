@@ -390,7 +390,7 @@ def execute_engine_prompt(
         from heru.base import CLIInvocation as _HeruCLIInvocation
 
         launcher = SandboxLauncher(cwd, config)
-        summary = launcher.policy_summary(engine_name, role)
+        summary = launcher.policy_summary(engine_name)
         if not summary.enabled:
             pytest.skip(
                 f"sandbox not enabled in config for engine {engine_name!r} — "

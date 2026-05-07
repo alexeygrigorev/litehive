@@ -1107,15 +1107,21 @@ Legend:
   Completed 2026-05-07: removed the `SandboxedAdapter` re-export from
   `litehive/sandbox/launcher.py`; callers import the adapter from
   `litehive.sandbox.adapter`.
-- [ ] S8. Avoid `as_dict` in sandbox policy/profile code unless a
+- [x] S8. Avoid `as_dict` in sandbox policy/profile code unless a
   serialization boundary demands it. Prefer dataclasses or typed
   config objects.
   Source: note 4, 03:31-03:55.
-- [ ] S9. Audio check: inspect `SandboxLauncher` around the line
+  Completed 2026-05-07: verified sandbox runtime code passes
+  `SandboxPolicySummary` directly. The remaining `as_dict` call sites
+  are report/session JSON serialization boundaries.
+- [x] S9. Audio check: inspect `SandboxLauncher` around the line
   mentioned as 124 and remove the unnecessary split/delete of role or
   similar value. The note says: if it is not needed, remove it
   directly; do not split/delete it indirectly.
   Source: note 4, 04:03-04:31.
+  Completed 2026-05-07: removed the unused `role` parameter and
+  `del role` from `SandboxLauncher.policy_summary`; role remains only
+  on invocation wrapping where Docker git-profile selection uses it.
 - [ ] S10. Simplify sandbox policy to global enabled/disabled config.
   Do not maintain separate per-engine sandbox policy unless a real
   need exists.

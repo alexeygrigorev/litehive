@@ -152,9 +152,9 @@ class SandboxLauncher:
         self.root = root.resolve()
         self.config = config
 
-    def policy_summary(self, engine_name: str, role: str = "") -> SandboxPolicySummary:
+    def policy_summary(self, engine_name: str) -> SandboxPolicySummary:
         """
-        Resolve the effective sandbox policy for an engine/role pair.
+        Resolve the effective sandbox policy for an engine.
 
         Used both by the SubagentManager (for ``resource_control``
         reporting) and internally by ``wrap_invocation``, so
@@ -162,7 +162,6 @@ class SandboxLauncher:
         be merged in one place — the two consumers always see the
         same policy shape.
         """
-        del role
         policy = self._policy_for_engine(engine_name)
         sandbox_enabled = self.config.external_engine_sandbox.enabled and policy is not None and policy.enabled
         if not sandbox_enabled:
@@ -210,7 +209,7 @@ class SandboxLauncher:
         branch on policy themselves and the disabled-sandbox path
         stays a single line.
         """
-        summary = self.policy_summary(engine_name, role)
+        summary = self.policy_summary(engine_name)
         if not summary.enabled:
             return invocation
 
