@@ -381,6 +381,152 @@ def run_logged_subprocess(
         return return_code
 
 
+@dataclass(frozen=True, slots=True)
+class DaemonExecutor:
+    """
+    Executes one daemon loop from injected workspace dependencies.
+
+    The dataclass constructor stores collaborators only. Runtime state
+    such as signal handlers, heartbeat events, and the current child
+    process is created inside ``run`` for a single invocation.
+    """
+
+    workspace: Path
+    daemon_workspace: Workspace
+    daemon_config: DaemonConfig
+    attention_repository: AttentionRepository
+    output: DaemonOutput
+    command_prefix: tuple[str, ...]
+    session_dir: Path | None
+
+    def run(self) -> int:
+        apply_pending_migrations(self.workspace)
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        log_base = self.daemon_workspace.runtime_path("logs", "run-all")
+        log_root = self.session_dir or (log_base / timestamp)
+        log_root.mkdir(parents=True, exist_ok=True)
+        prune_run_all_log_dirs(log_base)
+        register_daemon(self.workspace, pid=os.getpid(), log_dir=log_root)
+        stop_requested = False
+        current_child: dict[str, subprocess.Popen[str] | None] = {"process": None}
+        heartbeat_stop = threading.Event()
+        heartbeat_thread = threading.Thread(
+            target=_daemon_heartbeat_loop,
+            name="litehive-daemon-heartbeat",
+            args=(
+                self.workspace,
+                os.getpid(),
+                heartbeat_stop,
+                self.daemon_config.heartbeat_interval_seconds,
+            ),
+            daemon=True,
+        )
+        heartbeat_thread.start()
+
+        def _handle_signal(signum: int, _frame: object) -> None:
+            """
+            SIGTERM/SIGINT handler for the daemon loop.
+
+            Flips the local ``stop_requested`` flag so the loop exits
+            after the current iteration, and forwards the signal to the
+            live ``litehive run`` child via ``terminate_child_process``
+            so a Ctrl-C from the operator reaches the whole subtree
+            instead of leaving a zombie subagent attached to a dead
+            daemon.
+            """
+            nonlocal stop_requested
+            del signum
+            stop_requested = True
+            child = current_child["process"]
+            if child is not None:
+                terminate_child_process(child)
+
+        previous_term = signal.signal(signal.SIGTERM, _handle_signal)
+        previous_int = signal.signal(signal.SIGINT, _handle_signal)
+        try:
+            self.output.line(f"workspace: {self.workspace}")
+            self.output.line(f"logs: {log_root}")
+            iteration = 0
+            while True:
+                if stop_requested:
+                    self.output.line("Runner stop requested. Stopping.")
+                    return 0
+
+                iteration += 1
+                prefix = f"{iteration:04d}"
+                run_file = log_root / f"{prefix}-run.log"
+
+                self.output.line()
+                self.output.line(f"== iteration {iteration} ==")
+
+                live_runner = runner_status_for_workspace(self.daemon_workspace)
+                if _runner_is_live(live_runner):
+                    self.output.runner_wait(live_runner)
+                    sleep_with_stop(1.0, stop_requested_fn=lambda: stop_requested)
+                    continue
+
+                divergence_reason = _halt_for_origin_divergence(self.workspace, self.attention_repository)
+                if divergence_reason is not None:
+                    self.output.line(
+                        "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. "
+                        "Halting pool: diverged_from_origin"
+                    )
+                    self.output.line(divergence_reason)
+                    return 0
+
+                try:
+                    backup_timestamp = maybe_run_workspace_backup(self.workspace)
+                except (OSError, RuntimeError) as exc:
+                    logger.exception("scheduled workspace backup failed")
+                    self.attention_repository.append(f"scheduled backup failed: {exc}")
+                    self.output.line(f"backup_failed: {exc}")
+                else:
+                    if backup_timestamp is not None:
+                        self.output.line(f"backup_created: {backup_timestamp}")
+
+                try:
+                    pre_snapshot = _daemon_status_snapshot_for_workspace(self.daemon_workspace)
+                except (OSError, RuntimeError, ValueError) as exc:
+                    logger.exception("status snapshot raised")
+                    self.output.line(f"status raised: {exc}")
+                    return 1
+                snapshot_exit_code = _snapshot_exit_code(pre_snapshot, self.output)
+                if snapshot_exit_code is not None:
+                    return snapshot_exit_code
+
+                try:
+                    run_rc = run_logged_subprocess(
+                        [*self.command_prefix, "run", "--workspace", str(self.workspace)],
+                        cwd=self.workspace,
+                        log_path=run_file,
+                        output=self.output,
+                        current_child=current_child,
+                    )
+                except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
+                    logger.exception("run subprocess raised")
+                    self.output.line(f"run raised: {exc}")
+                    return 1
+                if run_rc != 0:
+                    self.output.line(f"litehive run failed (rc={run_rc}); see {run_file}")
+                    return run_rc
+
+                try:
+                    post_snapshot = _daemon_status_snapshot_for_workspace(self.daemon_workspace)
+                except (OSError, RuntimeError, ValueError) as exc:
+                    logger.exception("post-status snapshot raised")
+                    self.output.line(f"post-status raised: {exc}")
+                    return 1
+                snapshot_exit_code = _snapshot_exit_code(post_snapshot, self.output)
+                if snapshot_exit_code is not None:
+                    return snapshot_exit_code
+        finally:
+            signal.signal(signal.SIGTERM, previous_term)
+            signal.signal(signal.SIGINT, previous_int)
+            heartbeat_stop.set()
+            heartbeat_thread.join(timeout=max(self.daemon_config.heartbeat_interval_seconds, 0.1) * 2)
+            unregister_daemon(self.workspace, pid=os.getpid())
+
+
 def run_daemon_loop(
     workspace: Path,
     output_stream: TextIO | None = None,
@@ -400,131 +546,16 @@ def run_daemon_loop(
     workspace = workspace.resolve()
     create_workspace(workspace)
     daemon_container = build_daemon_container(workspace)
-    daemon_workspace = daemon_container.workspace
-    attention_repository = daemon_container.attention_repository
-    daemon_config = daemon_container.config.daemon
-    apply_pending_migrations(workspace)
-    command_prefix = [sys.executable, "-m", "litehive.main"]
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    log_base = daemon_workspace.runtime_path("logs", "run-all")
-    log_root = session_dir or (log_base / timestamp)
-    log_root.mkdir(parents=True, exist_ok=True)
-    prune_run_all_log_dirs(log_base)
-    register_daemon(workspace, pid=os.getpid(), log_dir=log_root)
-    stop_requested = False
-    current_child: dict[str, subprocess.Popen[str] | None] = {"process": None}
-    output = DaemonOutput(output_stream)
-    heartbeat_stop = threading.Event()
-    heartbeat_thread = threading.Thread(
-        target=_daemon_heartbeat_loop,
-        name="litehive-daemon-heartbeat",
-        args=(workspace, os.getpid(), heartbeat_stop, daemon_config.heartbeat_interval_seconds),
-        daemon=True,
+    executor = DaemonExecutor(
+        workspace=workspace,
+        daemon_workspace=daemon_container.workspace,
+        daemon_config=daemon_container.config.daemon,
+        attention_repository=daemon_container.attention_repository,
+        output=DaemonOutput(output_stream),
+        command_prefix=(sys.executable, "-m", "litehive.main"),
+        session_dir=session_dir,
     )
-    heartbeat_thread.start()
-
-    def _handle_signal(signum: int, _frame: object) -> None:
-        """
-        SIGTERM/SIGINT handler for the daemon loop.
-
-        Flips the local ``stop_requested`` flag so the loop exits
-        after the current iteration, and forwards the signal to the
-        live ``litehive run`` child via ``terminate_child_process``
-        so a Ctrl-C from the operator reaches the whole subtree
-        instead of leaving a zombie subagent attached to a dead
-        daemon.
-        """
-        nonlocal stop_requested
-        del signum
-        stop_requested = True
-        child = current_child["process"]
-        if child is not None:
-            terminate_child_process(child)
-
-    previous_term = signal.signal(signal.SIGTERM, _handle_signal)
-    previous_int = signal.signal(signal.SIGINT, _handle_signal)
-    try:
-        output.line(f"workspace: {workspace}")
-        output.line(f"logs: {log_root}")
-        iteration = 0
-        while True:
-            if stop_requested:
-                output.line("Runner stop requested. Stopping.")
-                return 0
-
-            iteration += 1
-            prefix = f"{iteration:04d}"
-            run_file = log_root / f"{prefix}-run.log"
-
-            output.line()
-            output.line(f"== iteration {iteration} ==")
-
-            live_runner = runner_status_for_workspace(daemon_workspace)
-            if _runner_is_live(live_runner):
-                output.runner_wait(live_runner)
-                sleep_with_stop(1.0, stop_requested_fn=lambda: stop_requested)
-                continue
-
-            divergence_reason = _halt_for_origin_divergence(workspace, attention_repository)
-            if divergence_reason is not None:
-                output.line(
-                    "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. "
-                    "Halting pool: diverged_from_origin"
-                )
-                output.line(divergence_reason)
-                return 0
-
-            try:
-                backup_timestamp = maybe_run_workspace_backup(workspace)
-            except (OSError, RuntimeError) as exc:
-                logger.exception("scheduled workspace backup failed")
-                attention_repository.append(f"scheduled backup failed: {exc}")
-                output.line(f"backup_failed: {exc}")
-            else:
-                if backup_timestamp is not None:
-                    output.line(f"backup_created: {backup_timestamp}")
-
-            try:
-                pre_snapshot = _daemon_status_snapshot_for_workspace(daemon_workspace)
-            except (OSError, RuntimeError, ValueError) as exc:
-                logger.exception("status snapshot raised")
-                output.line(f"status raised: {exc}")
-                return 1
-            snapshot_exit_code = _snapshot_exit_code(pre_snapshot, output)
-            if snapshot_exit_code is not None:
-                return snapshot_exit_code
-
-            try:
-                run_rc = run_logged_subprocess(
-                    [*command_prefix, "run", "--workspace", str(workspace)],
-                    cwd=workspace,
-                    log_path=run_file,
-                    output=output,
-                    current_child=current_child,
-                )
-            except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
-                logger.exception("run subprocess raised")
-                output.line(f"run raised: {exc}")
-                return 1
-            if run_rc != 0:
-                output.line(f"litehive run failed (rc={run_rc}); see {run_file}")
-                return run_rc
-
-            try:
-                post_snapshot = _daemon_status_snapshot_for_workspace(daemon_workspace)
-            except (OSError, RuntimeError, ValueError) as exc:
-                logger.exception("post-status snapshot raised")
-                output.line(f"post-status raised: {exc}")
-                return 1
-            snapshot_exit_code = _snapshot_exit_code(post_snapshot, output)
-            if snapshot_exit_code is not None:
-                return snapshot_exit_code
-    finally:
-        signal.signal(signal.SIGTERM, previous_term)
-        signal.signal(signal.SIGINT, previous_int)
-        heartbeat_stop.set()
-        heartbeat_thread.join(timeout=max(daemon_config.heartbeat_interval_seconds, 0.1) * 2)
-        unregister_daemon(workspace, pid=os.getpid())
+    return executor.run()
 
 
 def _daemon_heartbeat_loop(

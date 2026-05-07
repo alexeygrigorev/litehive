@@ -2159,10 +2159,16 @@ Legend:
   no-work check, and stop-reason decision into `_snapshot_exit_code`.
   The daemon loop now handles snapshot collection errors and child-run
   orchestration while the shared helper owns snapshot stop policy.
-- [ ] DM23. Model daemon execution as an object such as
+- [x] DM23. Model daemon execution as an object such as
   `DaemonExecutor` or `DaemonWorkspace` with methods like start/stop,
   instead of passing workspace strings and loose helpers.
   Source: note 5, 23:18-24:45.
+  Completed 2026-05-07: introduced `DaemonExecutor`, which receives
+  the daemon workspace, config, attention repository, output writer,
+  command prefix, and optional session directory as injected
+  dependencies. `run_daemon_loop(...)` is now a boundary wrapper that
+  builds the daemon container and delegates execution to
+  `DaemonExecutor.run()`.
 - [ ] DM24. Consider a `DaemonLogs` class with log-related methods.
   Source: note 5, 24:47-25:10.
 - [x] DM25. Replace daemon metadata dictionaries with dataclasses.
