@@ -43,6 +43,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Move backup restore daemon check to workspace-native registry helper.
 - [x] Add workspace-native stale daemon metadata helper.
 - [x] Migrate `config.loading.load_config(root)` callers that already hold `Workspace`.
+- [x] Add a production guardrail against raw workspace-root constructor regressions.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

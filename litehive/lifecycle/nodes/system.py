@@ -506,8 +506,8 @@ class GitCommitNode(CommitNode):
         task_resolver: TaskResolver | None = None,
     ) -> None:
         """
-        Wire the node to the main repo root, per-task worktree
-        resolver, and optional task resolver.
+        Wire the node to the workspace, per-task worktree resolver,
+        and optional task resolver.
 
         ``task_resolver`` is what lets the auto-commit messages quote
         the task title and id; without it, the helpers fall back to a
@@ -515,7 +515,6 @@ class GitCommitNode(CommitNode):
         """
         super().__init__()
         self.workspace = workspace
-        self.main_repo_root = workspace.root
         self.worktree_resolver = worktree_resolver
         self.task_resolver = task_resolver
 
@@ -557,7 +556,7 @@ class GitCommitNode(CommitNode):
             self._conclude_in_progress_merge()
             return None
 
-        merge_ok, merge_message = merge_no_edit(self.main_repo_root, branch_ref)
+        merge_ok, merge_message = merge_no_edit(self.workspace.root, branch_ref)
         if merge_ok:
             # Clean merge or "Already up to date" (which is the case when
             # the task has no dedicated worktree and branch_ref == current
@@ -606,7 +605,7 @@ class GitCommitNode(CommitNode):
 
     def main_head(self) -> str | None:
         """Return the current commit on the main repo's HEAD — overridable seam the commit-stage tests stub to control merge ordering."""
-        return current_head(self.main_repo_root)
+        return current_head(self.workspace.root)
 
     def autocommit_worktree_changes(self, worktree: Path, state: TaskState) -> None:
         """Commit any uncommitted SWE edits inside the worktree.
@@ -623,7 +622,7 @@ class GitCommitNode(CommitNode):
         changes would be overwritten" on any task that updates its own
         task metadata files (see T-0320).
         """
-        if worktree == self.main_repo_root:
+        if worktree == self.workspace.root:
             return
         entries = self.git_status_entries(worktree)
         if not entries:
@@ -656,23 +655,23 @@ class GitCommitNode(CommitNode):
         crossed the ignore line); cleaning them up in a follow-up
         commit prevents the next task from seeing a dirty main.
         """
-        entries = self.git_status_entries(self.main_repo_root)
+        entries = self.git_status_entries(self.workspace.root)
         committable = [
             (code, path)
             for code, path in entries
             if code != "!!"
             and not _is_main_checkout_cleanup_excluded(path)
-            and not _is_ignored_even_if_tracked(self.main_repo_root, path)
+            and not _is_ignored_even_if_tracked(self.workspace.root, path)
         ]
         if not committable:
             return None
         needs_add = [path for code, path in committable if _status_entry_needs_git_add(code)]
-        needs_add = self._filter_stageable_paths(self.main_repo_root, needs_add)
+        needs_add = self._filter_stageable_paths(self.workspace.root, needs_add)
 
         if needs_add:
-            add_paths(self.main_repo_root, needs_add, all_flag=True)
+            add_paths(self.workspace.root, needs_add, all_flag=True)
         message = self._generated_commit_message(state, detail="auto-commit dirty main checkout")
-        commit_with_message_stdin(self.main_repo_root, message)
+        commit_with_message_stdin(self.workspace.root, message)
         head = self.main_head()
         if head is None:
             raise GitError("main cleanup commit completed but main HEAD could not be resolved")
@@ -762,7 +761,7 @@ class GitCommitNode(CommitNode):
             source = worktree / relpath
             if not source.exists():
                 continue
-            destination = self.main_repo_root / relpath
+            destination = self.workspace.root / relpath
             destination.parent.mkdir(parents=True, exist_ok=True)
             if source.is_dir():
                 shutil.copytree(source, destination, dirs_exist_ok=True)
@@ -816,11 +815,11 @@ class GitCommitNode(CommitNode):
         resumes that merge instead of starting a fresh one so the
         already-resolved files are not redone.
         """
-        return rev_parse_verify(self.main_repo_root, "MERGE_HEAD") is not None
+        return rev_parse_verify(self.workspace.root, "MERGE_HEAD") is not None
 
     def _conclude_in_progress_merge(self) -> None:
         """Finish a leftover merge whose conflicts have already been resolved on disk — called from ``_merge_worktree`` when ``_merge_in_progress`` is true and ``_unresolved_conflicts`` is empty."""
-        commit_no_edit(self.main_repo_root)
+        commit_no_edit(self.workspace.root)
 
     def worktree_patch_already_on_main(self, worktree_head: str, main_head: str | None) -> bool:
         """
@@ -834,15 +833,15 @@ class GitCommitNode(CommitNode):
         """
         if not main_head:
             return False
-        lines = cherry_check(self.main_repo_root, main_head, worktree_head)
+        lines = cherry_check(self.workspace.root, main_head, worktree_head)
         if lines is None:
             return False
         return bool(lines) and all(line.startswith("-") for line in lines)
 
     def _unresolved_conflicts(self) -> list[str]:
         """Return the unmerged files reported by git so ``_merge_worktree`` can decide between raising ``MergeConflict`` and concluding a clean merge."""
-        return unmerged_files(self.main_repo_root)
+        return unmerged_files(self.workspace.root)
 
     def _abort_merge(self) -> None:
         """Run ``git merge --abort`` to clean up after a non-conflict failure (bad ref, missing commit) so the next commit-stage attempt is not poisoned by a half-applied merge."""
-        merge_abort(self.main_repo_root)
+        merge_abort(self.workspace.root)

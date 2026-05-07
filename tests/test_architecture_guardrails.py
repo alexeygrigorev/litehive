@@ -411,6 +411,38 @@ def test_daemon_runner_liveness_helpers_remain_domain_typed() -> None:
     }
 
 
+def test_production_constructors_do_not_take_raw_workspace_roots() -> None:
+    """
+    Keep workspace identity conversion at the boundary.
+    """
+    allowed_constructor_args = {
+        "litehive/workspace.py:Workspace.__init__:root",
+    }
+    forbidden_arg_names = {"root", "workspace_root", "main_repo_root"}
+    forbidden_self_attributes = {"workspace_root", "main_repo_root"}
+    found_constructor_args: list[str] = []
+    found_self_attributes: list[str] = []
+    for path in _python_files():
+        tree = _tree(path)
+        rel = path.relative_to(REPO_ROOT)
+        for class_node in (node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)):
+            for node in class_node.body:
+                if not isinstance(node, ast.FunctionDef) or node.name != "__init__":
+                    continue
+                for argument in node.args.args + node.args.kwonlyargs:
+                    if argument.arg in forbidden_arg_names:
+                        found_constructor_args.append(f"{rel}:{class_node.name}.{node.name}:{argument.arg}")
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Attribute) or node.attr not in forbidden_self_attributes:
+                continue
+            if isinstance(node.value, ast.Name) and node.value.id == "self":
+                owner = _enclosing_definition_name(node, _parent_map(tree))
+                found_self_attributes.append(f"{rel}:{owner}:self.{node.attr}")
+
+    assert sorted(found_constructor_args) == sorted(allowed_constructor_args)
+    assert found_self_attributes == []
+
+
 def test_production_getattr_calls_stay_explicitly_allowlisted() -> None:
     """
     Block new dynamic attribute access in production code.
