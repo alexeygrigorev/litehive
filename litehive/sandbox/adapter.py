@@ -1,7 +1,7 @@
 """External engine adapter wrapper that routes invocations through a sandbox launcher."""
 
 from pathlib import Path
-from typing import Callable, Protocol, runtime_checkable
+from typing import Callable
 
 from heru.base import CLIExecutionResult, CLIInvocation, ExternalCLIAdapter
 from heru.engine_detection import (
@@ -12,42 +12,7 @@ from heru.engine_detection import (
 )
 
 from litehive.agents.engine_callables import resolve_cli_execution_callable
-
-
-@runtime_checkable
-class SandboxSummary(Protocol):
-    """Sandbox policy snapshot the adapter advertises to operator status surfaces."""
-
-    @property
-    def enabled(self) -> bool: ...
-
-    @property
-    def summary(self) -> str: ...
-
-
-class SandboxLauncher(Protocol):
-    """
-    Sandbox-launcher contract used by ``SandboxedAdapter``.
-
-    The adapter confines engine invocations without depending on a
-    concrete launcher implementation; production passes the real
-    ``SandboxLauncher`` in ``litehive.sandbox.launcher`` and tests can
-    pass a stub that satisfies the protocol.
-    """
-
-    def policy_summary(self, engine_name: str) -> "SandboxSummary":
-        """Resolve the effective sandbox policy snapshot for adapter status."""
-        ...
-
-    def wrap_invocation(
-        self,
-        engine_name: str,
-        binary_name: str,
-        invocation: CLIInvocation,
-        role: str = "",
-    ) -> CLIInvocation:
-        """Rewrite a ``CLIInvocation`` to run inside the sandbox right before exec."""
-        ...
+from litehive.sandbox.launcher import SandboxLauncher
 
 
 class SandboxedAdapter(ExternalCLIAdapter):

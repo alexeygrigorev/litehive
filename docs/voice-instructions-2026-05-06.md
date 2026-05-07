@@ -1138,14 +1138,22 @@ Legend:
   `ExternalEngineSandboxConfig.policy_for_engine`, which returns a
   concrete resolved policy with network/workspace defaults applied.
   `SandboxLauncher` now consumes that resolved object directly.
-- [ ] S12. Create clear sandbox abstractions: generic sandbox launcher
+- [x] S12. Create clear sandbox abstractions: generic sandbox launcher
   behavior and a Docker-specific implementation such as
   `DockerSandboxLauncher`.
   Source: note 4, 06:36-07:47.
-- [ ] S13. Keep Docker-specific wrapping in Docker-specific code.
+  Completed 2026-05-07: introduced a `SandboxLauncher` protocol for
+  the generic launcher contract and renamed the concrete implementation
+  to `DockerSandboxLauncher`; the DI container now wires Docker
+  explicitly.
+- [x] S13. Keep Docker-specific wrapping in Docker-specific code.
   Shared abstractions should only contain behavior that applies to
   all sandbox backends.
   Source: note 4, 06:38-07:47.
+  Completed 2026-05-07: Docker argv construction, git wrapper mounts,
+  and Docker wrapper file handling now live under
+  `DockerSandboxLauncher`; generic callers type against the
+  `SandboxLauncher` protocol.
 - [ ] S14. Remove `object` and `unset` sentinel patterns in sandbox
   artifact/session code. Use concrete dataclasses and explicit domain
   states.

@@ -8,7 +8,7 @@ from enum import Enum
 import os
 from pathlib import Path, PurePosixPath
 import shutil
-from typing import Mapping
+from typing import Mapping, Protocol
 
 from heru.base import CLIInvocation
 from litehive.config.model import LitehiveConfig
@@ -144,7 +144,25 @@ class SandboxError(RuntimeError):
     """Raised when sandbox configuration cannot be applied."""
 
 
-class SandboxLauncher:
+class SandboxLauncher(Protocol):
+    """Generic contract for sandbox implementations."""
+
+    def policy_summary(self, engine_name: str) -> SandboxPolicySummary:
+        """Resolve the effective sandbox policy snapshot for an engine."""
+        ...
+
+    def wrap_invocation(
+        self,
+        engine_name: str,
+        binary_name: str,
+        invocation: CLIInvocation,
+        role: str = "",
+    ) -> CLIInvocation:
+        """Rewrite a ``CLIInvocation`` to run through the sandbox implementation."""
+        ...
+
+
+class DockerSandboxLauncher:
     """Builds docker-run argv that wraps every external engine invocation."""
 
     def __init__(self, root: Path, config: LitehiveConfig) -> None:

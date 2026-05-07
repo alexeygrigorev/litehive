@@ -61,7 +61,7 @@ def build_subagent_manager_for_workspace(
     ready collaborators and never builds workspace/config/sandbox itself.
     """
     from litehive.agents.manager import SubagentManager  # noqa: PLC0415
-    from litehive.sandbox.launcher import SandboxLauncher  # noqa: PLC0415
+    from litehive.sandbox.launcher import DockerSandboxLauncher  # noqa: PLC0415
     from litehive.agents.engine_manager import EngineManager  # noqa: PLC0415
     from litehive.agents.session import SubagentInactivityTimeoutPolicy, SubagentSessionManager  # noqa: PLC0415
     from litehive.agents.subagent_ids import SubagentIdRepository  # noqa: PLC0415
@@ -69,7 +69,7 @@ def build_subagent_manager_for_workspace(
     if manager_cls is not None and manager_cls is not SubagentManager:
         return manager_cls(workspace.root, execution_root=execution_root)
 
-    sandbox = SandboxLauncher(workspace.root, config)
+    sandbox = DockerSandboxLauncher(workspace.root, config)
     engines = EngineManager()
     sessions = SubagentSessionManager(
         root=workspace.root,
