@@ -43,7 +43,7 @@ from litehive.observability.venv_health import (
     daemon_broken_venv_message,
     probe_broken_venv_executables_for_workspace,
 )
-from litehive.state.backup import create_scheduled_workspace_backup
+from litehive.state.backup import create_scheduled_workspace_backup_for_workspace
 from litehive.state.persist import load_state_for_workspace, set_pool_stop_reason_for_workspace
 from litehive.state.locking import runner_status_for_workspace
 from litehive.workspace import Workspace
@@ -356,7 +356,7 @@ def maybe_run_workspace_backup(
     mutation. Returns the created backup timestamp so the loop can
     decide whether and where to render it.
     """
-    backup = create_scheduled_workspace_backup(workspace, now=now)
+    backup = create_scheduled_workspace_backup_for_workspace(build_workspace(workspace), now=now)
     if backup is None:
         return None
     return backup.timestamp

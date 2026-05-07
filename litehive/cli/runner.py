@@ -28,7 +28,11 @@ from litehive.git.ops import has_non_litehive_changes, is_git_repo
 from litehive.domain.common import PipelineState, Verdict
 from litehive.domain.reports import TaskActivityEntry
 from litehive.lifecycle.orchestration import ExecutionResult, run_task_for_workspace
-from litehive.state.backup import create_workspace_backup, list_workspace_backups, restore_workspace_backup
+from litehive.state.backup import (
+    create_workspace_backup_for_workspace,
+    list_workspace_backups_for_workspace,
+    restore_workspace_backup_for_workspace,
+)
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.state.persist import (
     CONSECUTIVE_TASK_FAILURE_STOP_REASON,
@@ -601,8 +605,9 @@ def backup_create(workspace: WorkspaceOption = Path.cwd()) -> int:
     the live database is corrupted.
     """
     create_workspace(workspace)
+    workspace_obj = build_workspace(workspace)
     try:
-        backup = create_workspace_backup(workspace)
+        backup = create_workspace_backup_for_workspace(workspace_obj)
     except Exception as exc:
         print(f"backup create failed: {exc}")
         return 1
@@ -621,7 +626,7 @@ def backup_list(workspace: WorkspaceOption = Path.cwd()) -> int:
     output is line-oriented so it can feed shell pipelines.
     """
     create_workspace(workspace)
-    backups = list_workspace_backups(workspace)
+    backups = list_workspace_backups_for_workspace(build_workspace(workspace))
     print(f"backups: {len(backups)}")
     for backup in backups:
         print(f"timestamp: {backup.timestamp}")
@@ -661,7 +666,7 @@ def backup_restore(
             print("restore cancelled")
             return 1
     try:
-        backup = restore_workspace_backup(workspace, timestamp)
+        backup = restore_workspace_backup_for_workspace(workspace_obj, timestamp)
     except ValueError as exc:
         print(f"backup restore failed: {exc}")
         return 1

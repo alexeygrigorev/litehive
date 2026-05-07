@@ -10,6 +10,7 @@ import sqlite3
 import tempfile
 
 from litehive.config.paths import workspace_path
+from litehive.workspace import Workspace
 
 _BACKUP_NAME_RE = re.compile(r"^data-(\d{4}-\d{2}-\d{2}T\d{2})\.db\.gz$")
 
@@ -77,6 +78,13 @@ def _parse_backup_path(path: Path) -> WorkspaceBackup | None:
 
 def list_workspace_backups(root: Path) -> list[WorkspaceBackup]:
     """
+    Path-based compatibility wrapper for workspace backup listing.
+    """
+    return list_workspace_backups_for_workspace(Workspace.from_path(root))
+
+
+def list_workspace_backups_for_workspace(workspace: Workspace) -> list[WorkspaceBackup]:
+    """
     Enumerate persisted DB snapshots, newest first.
 
     Consumed by the backup CLI listing, the prune routine, and the restore
@@ -84,7 +92,7 @@ def list_workspace_backups(root: Path) -> list[WorkspaceBackup]:
     "have we already taken today's backup?" without a separate timestamp
     cursor.
     """
-    backup_dir = workspace_path(root, "backups")
+    backup_dir = workspace_path(workspace.root, "backups")
     if not backup_dir.exists():
         return []
     backups = [_parse_backup_path(path) for path in backup_dir.iterdir()]
@@ -97,6 +105,13 @@ def list_workspace_backups(root: Path) -> list[WorkspaceBackup]:
 
 def prune_workspace_backups(root: Path) -> list[Path]:
     """
+    Path-based compatibility wrapper for backup retention pruning.
+    """
+    return prune_workspace_backups_for_workspace(Workspace.from_path(root))
+
+
+def prune_workspace_backups_for_workspace(workspace: Workspace) -> list[Path]:
+    """
     Apply the daily-then-weekly retention policy.
 
     Keeps one snapshot per day for the most recent week, then one per ISO
@@ -104,7 +119,7 @@ def prune_workspace_backups(root: Path) -> list[Path]:
     bound when the scheduled-backup helper runs hourly. Returns the deleted
     paths so the operator-facing CLI can report what was removed.
     """
-    backups = list_workspace_backups(root)
+    backups = list_workspace_backups_for_workspace(workspace)
     keep_paths: set[Path] = set()
     kept_days: set[date] = set()
     kept_weeks: set[tuple[int, int]] = set()
@@ -135,6 +150,16 @@ def prune_workspace_backups(root: Path) -> list[Path]:
 
 def create_workspace_backup(root: Path, when: datetime | None = None) -> WorkspaceBackup:
     """
+    Path-based compatibility wrapper for creating a workspace backup.
+    """
+    return create_workspace_backup_for_workspace(Workspace.from_path(root), when=when)
+
+
+def create_workspace_backup_for_workspace(
+    workspace: Workspace,
+    when: datetime | None = None,
+) -> WorkspaceBackup:
+    """
     Take a consistent gzip snapshot of ``data.db`` via SQLite's online backup.
 
     The temp-file dance (write to ``.tmp`` then ``os.replace`` into the
@@ -144,9 +169,9 @@ def create_workspace_backup(root: Path, when: datetime | None = None) -> Workspa
     path.
     """
     when = when or datetime.now(UTC)
-    backup_dir = workspace_path(root, "backups")
+    backup_dir = workspace_path(workspace.root, "backups")
     backup_dir.mkdir(parents=True, exist_ok=True)
-    destination = _backup_path(root, when)
+    destination = _backup_path(workspace.root, when)
 
     with tempfile.NamedTemporaryFile(
         suffix=".db",
@@ -162,7 +187,7 @@ def create_workspace_backup(root: Path, when: datetime | None = None) -> Workspa
         temp_gz_path = Path(gz_handle.name)
 
     try:
-        source = sqlite3.connect(workspace_path(root, "data.db"))
+        source = sqlite3.connect(workspace_path(workspace.root, "data.db"))
         target = sqlite3.connect(temp_db_path)
         try:
             source.backup(target)
@@ -183,7 +208,7 @@ def create_workspace_backup(root: Path, when: datetime | None = None) -> Workspa
         temp_db_path.unlink(missing_ok=True)
         temp_gz_path.unlink(missing_ok=True)
 
-    prune_workspace_backups(root)
+    prune_workspace_backups_for_workspace(workspace)
     backup = _parse_backup_path(destination)
     assert backup is not None
     return backup
@@ -194,6 +219,16 @@ def create_scheduled_workspace_backup(
     now: datetime | None = None,
 ) -> WorkspaceBackup | None:
     """
+    Path-based compatibility wrapper for scheduled workspace backups.
+    """
+    return create_scheduled_workspace_backup_for_workspace(Workspace.from_path(root), now=now)
+
+
+def create_scheduled_workspace_backup_for_workspace(
+    workspace: Workspace,
+    now: datetime | None = None,
+) -> WorkspaceBackup | None:
+    """
     Take a backup at most once per calendar day.
 
     Called from the daemon's hourly tick; returns ``None`` when today's
@@ -201,13 +236,20 @@ def create_scheduled_workspace_backup(
     near-duplicates that would defeat the daily-retention pass.
     """
     now = now or datetime.now(UTC)
-    backups = list_workspace_backups(root)
+    backups = list_workspace_backups_for_workspace(workspace)
     if backups and backups[0].created_at.date() == now.date():
         return None
-    return create_workspace_backup(root, when=now)
+    return create_workspace_backup_for_workspace(workspace, when=now)
 
 
 def restore_workspace_backup(root: Path, timestamp: str) -> WorkspaceBackup:
+    """
+    Path-based compatibility wrapper for restoring a workspace backup.
+    """
+    return restore_workspace_backup_for_workspace(Workspace.from_path(root), timestamp)
+
+
+def restore_workspace_backup_for_workspace(workspace: Workspace, timestamp: str) -> WorkspaceBackup:
     """
     Replace ``data.db`` with a previously-captured snapshot.
 
@@ -216,11 +258,11 @@ def restore_workspace_backup(root: Path, timestamp: str) -> WorkspaceBackup:
     restored DB would be silently mutated by the leftover write-ahead log
     on next open. Called by the operator-facing restore CLI.
     """
-    backup = next((item for item in list_workspace_backups(root) if item.timestamp == timestamp), None)
+    backup = next((item for item in list_workspace_backups_for_workspace(workspace) if item.timestamp == timestamp), None)
     if backup is None:
         raise ValueError(f"backup not found for timestamp {timestamp}")
 
-    database_path = workspace_path(root, "data.db")
+    database_path = workspace_path(workspace.root, "data.db")
     database_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         suffix=".db",
