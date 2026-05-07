@@ -3,8 +3,6 @@
 from pathlib import Path
 
 from litehive.domain.common import (
-    OutcomeKind,
-    OutcomeReasonCode,
     PipelineStatus,
     RuntimeStageStatus,
     TaskExecutionStatus,
@@ -12,6 +10,7 @@ from litehive.domain.common import (
     utcnow,
 )
 from litehive.domain.failure_diagnostics import FailureDiagnosticValue, FailureDiagnostics
+from litehive.domain.outcomes import OutcomeReasonCode, TaskOutcomeKind
 from litehive.domain.reports import StageReport
 from litehive.domain.runtime import (
     RuntimeEngineContinuation,
@@ -291,7 +290,7 @@ def _clear_task_outcome(task: TaskRecord) -> None:
 def mark_task_outcome(
     root: Path,
     task: TaskRecord,
-    kind: OutcomeKind | str,
+    kind: TaskOutcomeKind | str,
     stage: str,
     reason_code: OutcomeReasonCode | str,
     reason: str,
@@ -326,7 +325,7 @@ def mark_task_outcome(
 
 def apply_task_outcome(
     task: TaskRecord,
-    kind: OutcomeKind | str,
+    kind: TaskOutcomeKind | str,
     stage: str,
     reason_code: OutcomeReasonCode | str,
     reason: str,
@@ -345,7 +344,7 @@ def apply_task_outcome(
     entries the batch already covers.
     """
     now = utcnow()
-    outcome_kind = kind if isinstance(kind, OutcomeKind) else OutcomeKind(kind)
+    outcome_kind = kind if isinstance(kind, TaskOutcomeKind) else TaskOutcomeKind(kind)
     outcome_reason_code = (
         reason_code if isinstance(reason_code, OutcomeReasonCode) else OutcomeReasonCode(reason_code)
     )

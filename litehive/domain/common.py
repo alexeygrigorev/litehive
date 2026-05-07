@@ -2,9 +2,9 @@
 Domain vocabulary and timestamp helpers.
 
 The enums here (``PipelineState``, ``TaskStage``, ``PipelineStatus``,
-``PipelineMode``, ``TaskStatus``, ``OutcomeKind``, ``OutcomeReasonCode``,
-``Verdict``, ``RunnerStatus``, ``TriggerEventKind`` partner) are the
-typed alternative to passing raw strings around — code-style rule
+``PipelineMode``, ``TaskStatus``, ``Verdict``, ``RunnerStatus``,
+``TriggerEventKind`` partner) are the typed alternative to passing
+raw strings around — code-style rule
 "Domain Values" forbids string-comparing pipeline state and friends
 because renames would rot silently. Convert at the boundary using
 ``canonical_pipeline_state``, ``task_stage_for_pipeline_state``, and
@@ -61,104 +61,6 @@ def utcnow() -> str:
 
 
 # ── litehive-native task-lifecycle vocabularies ─────────────────────────────
-
-
-class OutcomeKind(StringEnum):
-    """
-    Terminal outcome categories for a finished task.
-
-    Tells the operator (and downstream filters/reports) why a task is no
-    longer running: completion vs. operator close vs. blocked vs.
-    cancelled vs. duplicate. Set by ``TaskService`` and the CLI close
-    actions; consumed by reporting, queue filtering, and the recovery
-    decision of "is there anything to do for this task?".
-    """
-
-    DONE = "done"  # Task was already or successfully completed
-    CLOSED = "closed"  # Explicitly closed with a close_reason
-    FLAGGED = "flagged"  # Requires explicit operator attention
-    BLOCKED = "blocked"  # Progress requires external input or missing dependency
-    INTERRUPTED = "interrupted"  # Execution stopped, potentially resumable
-    CANCELLED = "cancelled"  # Operator intentionally stopped this task
-    WONT_DO = "wont_do"  # Task is no longer worth doing
-    DEFERRED = "deferred"  # Task should wait for later
-    DUPLICATE = "duplicate"  # Another task already covers the same work
-
-
-class OutcomeReasonCode(StringEnum):
-    """
-    Normalized reason codes for stage outcomes and task interruptions.
-
-    ``Verdict`` answers "was this accepted?" (pass/reject/blocked);
-    ``OutcomeReasonCode`` answers "what specifically caused that
-    outcome?" so two rejections with different root causes can be
-    distinguished for routing and reporting. Read by ``PipelineRunner``
-    when deciding whether to retry, recover, or fail; surfaced to
-    operators in failure summaries and machine-filterable reports.
-    """
-
-    VERDICT_FAIL = "verdict_fail"
-    VERDICT_REJECT = "verdict_reject"
-    VERDICT_BLOCKED = "verdict_blocked"
-    BLOCKED_ON_FOLLOW_UP = "blocked_on_follow_up"
-    HALLUCINATED_COMPLETION = "hallucinated_completion"
-    MISSING_ACCEPTANCE_CRITERIA = "missing_acceptance_criteria"
-    RETRY_LIMIT_EXHAUSTED = "retry_limit_exhausted"
-    STAGE_RETRY_LIMIT_EXHAUSTED = "stage_retry_limit_exhausted"
-    EXECUTION_INTERRUPTED = "execution_interrupted"
-    EXECUTION_CANCELLED = "execution_cancelled"
-    STAGE_EXCEPTION = "stage_exception"
-    UNSUPPORTED_VERDICT = "unsupported_verdict"
-    MERGE_CONFLICT = "merge_conflict"
-    DONE = "done"
-    WONT_DO = "wont_do"
-    DEFERRED = "deferred"
-    DUPLICATE = "duplicate"
-
-    @property
-    def is_task_close_outcome(self) -> bool:
-        """
-        Whether ``litehive task close`` may use this reason directly.
-
-        Close outcomes are deliberate terminal operator choices, not
-        every reason the lifecycle can record internally. The CLI uses
-        this to reject retry/recovery-specific reason codes at the
-        boundary before mutating task state.
-        """
-        match self:
-            case (
-                OutcomeReasonCode.DONE
-                | OutcomeReasonCode.WONT_DO
-                | OutcomeReasonCode.DEFERRED
-                | OutcomeReasonCode.DUPLICATE
-                | OutcomeReasonCode.EXECUTION_CANCELLED
-            ):
-                return True
-            case _:
-                return False
-
-    @property
-    def task_close_label(self) -> str | None:
-        """
-        Default human-readable close reason for operator closures.
-
-        ``None`` means the reason code is not a direct task-close
-        outcome. Transition helpers use this as the fallback journal
-        reason when the operator did not provide a custom explanation.
-        """
-        match self:
-            case OutcomeReasonCode.DONE:
-                return "Task already satisfied."
-            case OutcomeReasonCode.WONT_DO:
-                return "Task closed as won't do."
-            case OutcomeReasonCode.DEFERRED:
-                return "Task deferred."
-            case OutcomeReasonCode.DUPLICATE:
-                return "Task closed as duplicate."
-            case OutcomeReasonCode.EXECUTION_CANCELLED:
-                return "Task abandoned via CLI."
-            case _:
-                return None
 
 
 class PipelineMode(StringEnum):
@@ -624,8 +526,6 @@ __all__ = [
     "EngineMonitoringSource",
     "LiveEventKind",
     "LiveEventRole",
-    "OutcomeKind",
-    "OutcomeReasonCode",
     "PipelineState",
     "PipelineMode",
     "PipelineStatus",

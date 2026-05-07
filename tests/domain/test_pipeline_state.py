@@ -1,7 +1,6 @@
 from typing import get_args
 
 from litehive.domain.common import (
-    OutcomeReasonCode,
     PipelineState,
     PipelineStatus,
     SubagentStatus,
@@ -11,6 +10,7 @@ from litehive.domain.common import (
     task_stage_for_pipeline_state,
 )
 from litehive.domain.failure_diagnostics import FailureDiagnostics
+from litehive.domain.outcomes import OutcomeReasonCode
 from litehive.domain.reports import ReportPipelineState, StageReport, canonical_stage_report_verdict
 from litehive.domain.runtime import RuntimeSubagentState, Subagent
 

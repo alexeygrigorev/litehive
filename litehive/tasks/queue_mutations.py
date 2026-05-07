@@ -9,7 +9,8 @@ logic lives in ``queue_selection``; pure predicates live in
 
 from pathlib import Path
 
-from litehive.domain.common import OutcomeKind, PipelineStatus, TaskExecutionStatus, TaskStatus, utcnow
+from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStatus, utcnow
+from litehive.domain.outcomes import TaskOutcomeKind
 from litehive.domain.runtime import TaskOutcomeState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.locking import (
@@ -284,7 +285,7 @@ def reset_task_for_recovery(
         task.runtime.pipeline.last_outcome = TaskOutcomeState()
     else:
         last_outcome = task.runtime.pipeline.last_outcome
-        if last_outcome.kind == OutcomeKind.INTERRUPTED:
+        if last_outcome.kind == TaskOutcomeKind.INTERRUPTED:
             task.runtime.pipeline.last_outcome = last_outcome.model_copy(
                 update={"stage": canonical_pipeline_status}
             )
@@ -364,6 +365,6 @@ def canonicalize_resumable_queue_task(task: TaskRecord, stage: str | None = None
     task.pipeline_status = PipelineStatus(target_stage)
     task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage=target_stage)
     last_outcome = task.runtime.pipeline.last_outcome
-    if last_outcome.kind == OutcomeKind.INTERRUPTED:
+    if last_outcome.kind == TaskOutcomeKind.INTERRUPTED:
         task.runtime.pipeline.last_outcome = last_outcome.model_copy(update={"stage": target_stage})
     return target_stage

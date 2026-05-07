@@ -10,7 +10,8 @@ must not reach into.
 import logging
 from pathlib import Path
 
-from litehive.domain.common import OutcomeKind, PipelineStatus, TaskExecutionStatus, TaskStage, TaskStatus, utcnow
+from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStage, TaskStatus, utcnow
+from litehive.domain.outcomes import TaskOutcomeKind
 from litehive.domain.reports import RecoveryAction
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.task import TaskRecord, WorkspaceState
@@ -88,7 +89,7 @@ def _normalize_stale_pipeline_statuses(
         task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now, stage="backlog")
         task.runtime.pipeline.updated_at = now
         last_outcome = task.runtime.pipeline.last_outcome
-        if last_outcome.kind == OutcomeKind.INTERRUPTED:
+        if last_outcome.kind == TaskOutcomeKind.INTERRUPTED:
             task.runtime.pipeline.last_outcome = last_outcome.model_copy(update={"stage": "backlog"})
         mutated.append(task)
     return mutated

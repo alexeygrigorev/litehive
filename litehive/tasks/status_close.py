@@ -7,7 +7,8 @@ in-flight or parked task), and ``park_task_for_workspace`` (set aside
 without closing so the operator can resume later).
 """
 
-from litehive.domain.common import OutcomeReasonCode, TaskStatus
+from litehive.domain.common import TaskStatus
+from litehive.domain.outcomes import OutcomeReasonCode
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import StopTaskSummary
 from litehive.workspace import Workspace

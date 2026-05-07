@@ -964,11 +964,19 @@ Legend:
   report truncation behavior. `utcnow` still lives in `domain/common.py`
   as the project-wide persisted timestamp helper and should be reviewed
   separately if timestamp ownership changes.
-- [ ] D10. Split `domain/common.py` if section comments are a sign
+- [x] D10. Split `domain/common.py` if section comments are a sign
   that too many unrelated concepts live in one file.
   Source: note 6, 02:10-02:22.
-- [ ] D11. Consider renaming `OutcomeKind` to `TaskOutcomeKind`.
+  Completed 2026-05-07: moved task outcome vocabulary out of
+  `domain/common.py` into `litehive.domain.outcomes`. The new module
+  owns `TaskOutcomeKind` and `OutcomeReasonCode`; callers now import
+  those concepts from the owning module instead of the mixed common
+  vocabulary.
+- [x] D11. Consider renaming `OutcomeKind` to `TaskOutcomeKind`.
   Source: note 6, 02:22-02:25.
+  Completed 2026-05-07: renamed `OutcomeKind` to `TaskOutcomeKind` so
+  the enum name describes task-level terminal outcomes rather than
+  agent verdicts or stage report results.
 - [ ] D12. Document the relationship between outcome kind, outcome
   reason code, and verdict.
   Source: note 6, 02:33-04:33.

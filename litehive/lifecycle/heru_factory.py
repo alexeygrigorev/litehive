@@ -37,7 +37,8 @@ from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.container import build_subagent_manager_for_workspace
 from litehive.config.model import LitehiveConfig
 from litehive.domain.agent import EngineFailure, SubagentId
-from litehive.domain.common import OutcomeReasonCode, PipelineState, SubagentStatus, TaskStage, Verdict
+from litehive.domain.common import PipelineState, SubagentStatus, TaskStage, Verdict
+from litehive.domain.outcomes import OutcomeReasonCode
 from litehive.feedback import cap_feedback
 from litehive.domain.reports import StageReport, TaskActivityStage, canonical_report_pipeline_state
 from litehive.domain.lifecycle_deltas import recovery_trigger_from_event

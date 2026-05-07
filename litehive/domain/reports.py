@@ -17,8 +17,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from litehive.feedback import FEEDBACK_CAP, TRUNCATION_MARKER, cap_feedback
 
 from .common import (
-    OutcomeKind,
-    OutcomeReasonCode,
     PipelineState,
     PipelineStatus,
     TaskStage,
@@ -27,6 +25,7 @@ from .common import (
 )
 from .agent import SubagentId
 from .failure_diagnostics import FailureDiagnosticValue, FailureDiagnostics, empty_failure_diagnostics
+from .outcomes import OutcomeReasonCode, TaskOutcomeKind
 from .recovery import TriggerEventKind
 
 
@@ -164,7 +163,7 @@ class StageReport(BaseModel):
     warnings: list[str] = Field(default_factory=list)  # Non-fatal warnings
     retry_count: int = 0  # Current retry attempt number
     retry_limit: int = 0  # Maximum retries allowed
-    outcome: OutcomeKind | None = None  # Terminal outcome if stage completed task
+    outcome: TaskOutcomeKind | None = None  # Terminal outcome if stage completed task
     outcome_reason_code: OutcomeReasonCode | None = None  # Machine-readable outcome reason
     failure_classification: str | None = None  # Type of failure if applicable
     failure_diagnostics: FailureDiagnostics = Field(default_factory=empty_failure_diagnostics)  # Report evidence

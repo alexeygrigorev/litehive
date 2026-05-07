@@ -163,11 +163,11 @@ from tests.support.helpers import make_workspace, run_cli
 ## Domain Values
 
 - Do not store, compare, or pass-around domain values (stages,
-  pipeline states, verdicts, modes, roles, statuses) as raw
-  strings. Use the enums in `litehive/domain/common.py`
-  (`PipelineState`, `TaskStage`, `PipelineStatus`, `PipelineMode`,
-  …). String comparisons against domain values rot silently when
-  enums are renamed; typed values fail loudly.
+  pipeline states, verdicts, modes, roles, statuses, outcomes) as raw
+  strings. Use the owning domain enum, such as `PipelineState` from
+  `litehive/domain/common.py` or `TaskOutcomeKind` from
+  `litehive/domain/outcomes.py`. String comparisons against domain
+  values rot silently when enums are renamed; typed values fail loudly.
 - Convert at the boundary. Strings entering the system from the
   database, JSON payloads, or CLI arguments should be converted
   immediately via `canonical_pipeline_state(...)` (or its

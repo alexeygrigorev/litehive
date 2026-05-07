@@ -9,7 +9,8 @@ persistence and outcome-shaping plumbing.
 
 from pathlib import Path
 
-from litehive.domain.common import OutcomeKind, OutcomeReasonCode, PipelineStatus, TaskExecutionStatus, TaskStatus
+from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStatus
+from litehive.domain.outcomes import OutcomeReasonCode, TaskOutcomeKind
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.state.persist import persist_task_and_state_without_runner_guard
@@ -114,7 +115,7 @@ def _apply_cancelled_task_state(task: TaskRecord, reason: str) -> None:
     task.flag_reason = None
     apply_task_outcome(
         task,
-        kind=OutcomeKind.CLOSED,
+        kind=TaskOutcomeKind.CLOSED,
         stage=task.pipeline_status,
         reason_code=OutcomeReasonCode.EXECUTION_CANCELLED,
         reason=reason,
@@ -160,7 +161,7 @@ def _apply_close_task_state(
         if isinstance(resolved_pipeline_status, PipelineStatus)
         else PipelineStatus(resolved_pipeline_status)
     )
-    outcome_kind = OutcomeKind(task.status.value)
+    outcome_kind = TaskOutcomeKind(task.status.value)
     close_label = outcome.task_close_label or outcome.value
     apply_task_outcome(
         task,

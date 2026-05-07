@@ -9,13 +9,13 @@ information. They are the leaf module of the queue split — both
 from pathlib import Path
 
 from litehive.domain.common import (
-    OutcomeKind,
     PipelineStatus,
     RuntimeStageStatus,
     TaskExecutionStatus,
     TaskStage,
     TaskStatus,
 )
+from litehive.domain.outcomes import TaskOutcomeKind
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.tasks.failed_runs import has_blocking_failed_run_history
 from litehive.tasks.normalization import implementation_entry_stage
@@ -29,10 +29,10 @@ _TERMINAL_EXECUTION_STATUSES = {
     TaskExecutionStatus.INTERRUPTED,
 }
 _TERMINAL_OUTCOME_KINDS = {
-    OutcomeKind.CLOSED,
-    OutcomeKind.DUPLICATE,
-    OutcomeKind.DEFERRED,
-    OutcomeKind.WONT_DO,
+    TaskOutcomeKind.CLOSED,
+    TaskOutcomeKind.DUPLICATE,
+    TaskOutcomeKind.DEFERRED,
+    TaskOutcomeKind.WONT_DO,
 }
 _TRUSTED_STAGE_MARKER_STATUSES = {
     RuntimeStageStatus.IDLE,

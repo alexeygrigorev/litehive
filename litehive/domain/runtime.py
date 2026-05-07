@@ -28,8 +28,6 @@ from heru.types import (
 )
 
 from .common import (
-    OutcomeKind,
-    OutcomeReasonCode,
     RunnerExecutionStatus,
     RuntimeStageStatus,
     SubagentStatus,
@@ -37,6 +35,7 @@ from .common import (
     utcnow,
 )
 from .failure_diagnostics import FailureDiagnostics, empty_failure_diagnostics
+from .outcomes import OutcomeReasonCode, TaskOutcomeKind
 
 
 def _json_enum_value(value: object) -> object:
@@ -241,7 +240,7 @@ class TaskOutcomeState(BaseModel):
 
     model_config = ConfigDict(validate_assignment=True)
 
-    kind: OutcomeKind | None = None  # Terminal outcome category (flagged, blocked, etc.)
+    kind: TaskOutcomeKind | None = None  # Terminal outcome category (flagged, blocked, etc.)
     stage: str | None = None  # Pipeline stage where outcome was determined
     reason_code: OutcomeReasonCode | None = None  # Machine-readable reason for outcome
     reason: str = ""  # Human-readable explanation
@@ -255,10 +254,10 @@ class TaskOutcomeState(BaseModel):
     @field_serializer("kind", "reason_code", when_used="json")
     def _serialize_runtime_enum_value(self, value: object) -> object:
         """
-        Flatten ``OutcomeKind`` / ``OutcomeReasonCode`` enums to their string values.
+        Flatten ``TaskOutcomeKind`` / ``OutcomeReasonCode`` enums to their string values.
 
         Without this, persisted runtime JSON would carry
-        ``OutcomeKind.DONE`` literal text and break every consumer
+        ``TaskOutcomeKind.DONE`` literal text and break every consumer
         that filters by the canonical string. Same shape as
         ``_json_enum_value`` above; declared here so pydantic wires it
         as the field serializer for these specific fields.

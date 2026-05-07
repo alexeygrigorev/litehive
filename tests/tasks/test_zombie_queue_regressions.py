@@ -8,7 +8,8 @@ from typer.testing import CliRunner
 from litehive.cli.app import app
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
-from litehive.domain.common import OutcomeKind, PipelineStatus, TaskStatus
+from litehive.domain.common import PipelineStatus, TaskStatus
+from litehive.domain.outcomes import TaskOutcomeKind
 from litehive.git.ops import has_non_litehive_changes
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, require_task, save_task
@@ -45,7 +46,7 @@ def _queue_task(
     status: str = "queued",
     pipeline_status: str = "implementing",
     execution_status: str = "idle",
-    outcome_kind: OutcomeKind | None = None,
+    outcome_kind: TaskOutcomeKind | None = None,
 ) -> None:
     task = require_task(root, task_id)
     task.status = TaskStatus(status)
@@ -129,7 +130,7 @@ def test_dequeue_selection_skips_tasks_missing_runtime_rows(tmp_path: Path) -> N
 def test_dequeue_filter_skips_terminal_last_outcome_kinds(tmp_path: Path) -> None:
     ensure_workspace(tmp_path)
     zombie_ids: list[str] = []
-    for outcome_kind in (OutcomeKind.DUPLICATE, OutcomeKind.DEFERRED, OutcomeKind.WONT_DO):
+    for outcome_kind in (TaskOutcomeKind.DUPLICATE, TaskOutcomeKind.DEFERRED, TaskOutcomeKind.WONT_DO):
         zombie = create_task(tmp_path, title=f"Zombie {outcome_kind.value}")
         zombie_ids.append(zombie.id)
         _queue_task(
@@ -201,9 +202,9 @@ def test_run_drain_skips_zombie_queue_entries_and_leaves_main_clean(
 
     _queue_task(workspace, done_task.id, pipeline_status="implementing", execution_status="done")
     _queue_task(workspace, cancelled_task.id, pipeline_status="testing", execution_status="cancelled")
-    _queue_task(workspace, duplicate_task.id, pipeline_status="accepting", outcome_kind=OutcomeKind.DUPLICATE)
-    _queue_task(workspace, deferred_task.id, pipeline_status="grooming", outcome_kind=OutcomeKind.DEFERRED)
-    _queue_task(workspace, wont_do_task.id, pipeline_status="commit_to_git", outcome_kind=OutcomeKind.WONT_DO)
+    _queue_task(workspace, duplicate_task.id, pipeline_status="accepting", outcome_kind=TaskOutcomeKind.DUPLICATE)
+    _queue_task(workspace, deferred_task.id, pipeline_status="grooming", outcome_kind=TaskOutcomeKind.DEFERRED)
+    _queue_task(workspace, wont_do_task.id, pipeline_status="commit_to_git", outcome_kind=TaskOutcomeKind.WONT_DO)
 
     state = load_state(workspace)
     state.queue = [

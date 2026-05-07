@@ -3,7 +3,7 @@ from pathlib import Path
 from heru.types import SubagentRef
 
 from litehive.config.workspace import ensure_workspace
-from litehive.domain.common import OutcomeKind, OutcomeReasonCode
+from litehive.domain.outcomes import OutcomeReasonCode, TaskOutcomeKind
 from litehive.domain.failure_diagnostics import FailureDiagnostics
 from litehive.domain.reports import StageReport
 from litehive.domain.runtime import RuntimeInterruptionState, RuntimeStageState
@@ -94,7 +94,7 @@ def test_task_outcome_failure_diagnostics_are_typed_and_persist_as_object(tmp_pa
     mark_task_outcome(
         tmp_path,
         task,
-        kind=OutcomeKind.FLAGGED,
+        kind=TaskOutcomeKind.FLAGGED,
         stage="implementing",
         reason_code=OutcomeReasonCode.STAGE_EXCEPTION,
         reason="hook failed",

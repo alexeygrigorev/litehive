@@ -6,14 +6,13 @@ which handles the subagent-side snapshot.
 """
 
 from litehive.domain.common import (
-    OutcomeKind,
-    OutcomeReasonCode,
     PipelineStatus,
     RuntimeStageStatus,
     TaskExecutionStatus,
     TaskStatus,
     utcnow,
 )
+from litehive.domain.outcomes import OutcomeReasonCode, TaskOutcomeKind
 from litehive.domain.runtime import RuntimeInterruptionState
 from litehive.domain.task import TaskRecord
 from litehive.recovery.interrupted_subagent import mark_interrupted_subagent
@@ -164,7 +163,7 @@ def _set_interruption_metadata(
     interrupted_subagent = mark_interrupted_subagent(workspace, task, reason=reason, stage=stage)
     apply_task_outcome(
         task,
-        kind=OutcomeKind.INTERRUPTED,
+        kind=TaskOutcomeKind.INTERRUPTED,
         stage=stage,
         reason_code=OutcomeReasonCode.EXECUTION_INTERRUPTED,
         reason=summary,

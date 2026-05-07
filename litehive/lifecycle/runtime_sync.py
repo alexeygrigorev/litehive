@@ -7,8 +7,6 @@ runtime/observability shape (``task.runtime.pipeline.*`` fields,
 """
 
 from litehive.domain.common import (
-    OutcomeKind,
-    OutcomeReasonCode,
     PipelineState,
     PipelineStatus,
     RuntimeStageStatus,
@@ -18,6 +16,7 @@ from litehive.domain.common import (
     task_stage_for_pipeline_state,
     utcnow,
 )
+from litehive.domain.outcomes import OutcomeReasonCode, TaskOutcomeKind
 from litehive.domain.runtime import (
     RuntimeFailedRunRecord,
     RuntimeHookRejectFingerprint,
@@ -399,7 +398,7 @@ def _sync_recovery_follow_up(workspace: Workspace, task_record: TaskRecord, stat
         diagnostics_budget_key = None
     apply_task_outcome(
         task_record,
-        kind=OutcomeKind.FLAGGED,
+        kind=TaskOutcomeKind.FLAGGED,
         stage=trigger_stage,
         reason_code=OutcomeReasonCode.STAGE_EXCEPTION,
         reason=state.failed_message or latest.message or "Recovery escalated to a follow-up task.",

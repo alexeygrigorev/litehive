@@ -8,7 +8,8 @@ from pydantic import ValidationError
 from litehive.agents.session_store import save_subagent_artifacts
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
-from litehive.domain.common import OutcomeKind, OutcomeReasonCode, PipelineStatus, TaskStatus
+from litehive.domain.common import PipelineStatus, TaskStatus
+from litehive.domain.outcomes import OutcomeReasonCode, TaskOutcomeKind
 from litehive.domain.reports import StageReport
 from litehive.domain.runtime import RuntimeInterruptionState, RuntimeSubagentState, TaskRuntime
 from litehive.domain.task import TaskRecord, TaskStateRecord
@@ -147,7 +148,7 @@ def test_task_runtime_persists_pipeline_and_execution_slices(tmp_path: Path) -> 
     task.runtime.pipeline.retry_count = 2
     task.runtime.pipeline.retry_limit = 4
     task.runtime.pipeline.current_stage.stage = "implementing"
-    task.runtime.pipeline.last_outcome.kind = OutcomeKind.INTERRUPTED
+    task.runtime.pipeline.last_outcome.kind = TaskOutcomeKind.INTERRUPTED
     task.runtime.pipeline.last_outcome.stage = "implementing"
     task.runtime.pipeline.last_outcome.reason_code = OutcomeReasonCode.EXECUTION_INTERRUPTED
     task.runtime.pipeline.last_outcome.reason = "runner stopped"
@@ -261,7 +262,7 @@ def test_task_runtime_outcome_string_mutations_persist_without_pydantic_warnings
 ) -> None:
     ensure_workspace(tmp_path)
     task = create_task(tmp_path, title=f"{reason_code} outcome")
-    # The string spellings here are valid OutcomeKind / OutcomeReasonCode enum
+    # The string spellings here are valid TaskOutcomeKind / OutcomeReasonCode enum
     # values; this test exercises that pydantic accepts the string form on
     # assignment under validate_assignment=True without emitting warnings.
     # setattr is used so pyrefly does not complain about the str→Enum
