@@ -1899,9 +1899,14 @@ Legend:
   Removed both helpers and the `ensure_workspace()` call site, then
   deleted tests that expected ordinary nested subdirectories under an
   existing workspace to be rejected.
-- [ ] W5. Remove `task_matches` / `task is none or task exists` style
+- [x] W5. Remove `task_matches` / `task is none or task exists` style
   helpers; they obscure real branches.
   Source: note 5, 09:03-09:23.
+  Completed 2026-05-07: verified `_task_matches(...)` was only used
+  inside `config/workspace.py` by search-root and env workspace
+  resolution. Removed the helper and expanded the branches so
+  unconstrained workspace resolution and task-id-constrained task
+  existence checks are explicit at each call site.
 - [ ] W6. Rewrite the complex list comprehension around the line
   called out near 134.
   Source: note 5, 09:31-09:43.

@@ -89,18 +89,6 @@ def require_existing_workspace(root: Path, source: str) -> Path:
     )
 
 
-def _task_matches(root: Path, task_id: str | None) -> bool:
-    """
-    Workspace-resolution predicate.
-
-    A candidate root is acceptable when no task id constrains the
-    search or when the workspace actually owns that task. Lets
-    :func:`resolve_workspace` skip past unrelated workspaces in
-    the registry when a task id was provided.
-    """
-    return task_id is None or _task_exists(root, task_id)
-
-
 def _reject_litehive_control_paths(path: Path, source: str) -> None:
     """
     Reject paths inside ``.litehive`` control dirs or managed worktrees.
@@ -193,16 +181,21 @@ def _resolve_workspace_from_search_root(
     that matches the optional task constraint.
     """
     resolved_search_root = normalize_workspace_root(search_root, source=f"cwd:{search_root}", registry=registry)
-    if resolved_search_root != search_root and _task_matches(resolved_search_root, effective_task_id):
-        if register:
-            _register_workspace(resolved_search_root, registry)
-        return resolved_search_root
+    if resolved_search_root != search_root:
+        if effective_task_id is None:
+            if register:
+                _register_workspace(resolved_search_root, registry)
+            return resolved_search_root
+        if _task_exists(resolved_search_root, effective_task_id):
+            if register:
+                _register_workspace(resolved_search_root, registry)
+            return resolved_search_root
 
     for candidate in (search_root, *search_root.parents):
         if not workspace_dir(candidate).is_dir():
             continue
         resolved = candidate.resolve()
-        if not _task_matches(resolved, effective_task_id):
+        if effective_task_id is not None and not _task_exists(resolved, effective_task_id):
             continue
         if register:
             _register_workspace(resolved, registry)
@@ -249,7 +242,11 @@ def resolve_workspace(
             source="LITEHIVE_WORKSPACE_ROOT",
             registry=workspace_registry,
         )
-        if _task_matches(resolved_env_workspace, effective_task_id):
+        if effective_task_id is None:
+            if register:
+                _register_workspace(resolved_env_workspace, workspace_registry)
+            return resolved_env_workspace
+        if _task_exists(resolved_env_workspace, effective_task_id):
             if register:
                 _register_workspace(resolved_env_workspace, workspace_registry)
             return resolved_env_workspace
