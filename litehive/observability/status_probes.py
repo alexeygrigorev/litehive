@@ -362,9 +362,7 @@ def _probe_task_status_damage(
     if not workspace_path(root, "data.db").exists():
         return []
     try:
-        from litehive.state.records import list_tasks  # noqa: PLC0415
-
-        tasks = list_tasks(root, strict=False)
+        tasks = workspace.list_tasks(strict=False)
     except (OSError, sqlite3.DatabaseError, ValueError) as exc:
         return [
             StatusIssue(
