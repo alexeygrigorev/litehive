@@ -97,6 +97,12 @@ from tests.support.helpers import make_workspace, run_cli
   - one owner for status snapshot construction
 - Do not implement the same transition twice, once as a dedicated function and again as a generic update branch.
 - Do not keep duplicate aliases, wrapper assignments, or second public entry points that do the same state mutation.
+- Treat free functions whose first argument is `workspace` as migration
+  candidates. When touching one, either move the behavior onto
+  `Workspace` if it is a direct workspace capability, or bind the
+  workspace once in a focused service/store that owns the narrower
+  concern. CLI handlers may still receive a workspace at the boundary,
+  but they should dispatch rather than own business logic.
 
 ## Abstractions
 

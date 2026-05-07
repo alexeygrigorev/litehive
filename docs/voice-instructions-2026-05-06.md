@@ -1188,8 +1188,8 @@ Legend:
   session-store service method invoked by the subagent object.
   Source: note 4, 08:59-09:19.
   Completed 2026-05-07: production artifact writes now go through
-  `subagent_artifacts(...).save(...)`; the legacy free function remains
-  as a compatibility wrapper for tests and older call sites.
+  `subagent_artifacts(...).save(...)`; the old free-function writer
+  was removed after tests were moved to the bound store too.
 - [x] SA4. Define these as domain rules so artifact/session behavior
   is not a pile of functions spread through the code.
   Source: note 4, 09:19-09:29.
@@ -1197,10 +1197,16 @@ Legend:
   artifacts belong to one workspace task/subagent and that
   session/report/event-stream persistence should be owned by a bound
   store/service instead of scattered direct writes.
-- [ ] SA5. Audit every function/method whose first argument is
+- [x] SA5. Audit every function/method whose first argument is
   `workspace`. Most should become a method on `Workspace` or a
   focused workspace service.
   Source: note 4, 09:33-09:49.
+  Completed 2026-05-07: audited production `workspace`-first
+  functions with `rg` and recorded the module-by-module ownership map
+  in `docs/workspace-first-argument-audit-2026-05-07.md`. Added the
+  durable style rule that touched workspace-first helpers must move
+  toward `Workspace` methods or focused bound services unless they are
+  thin CLI boundaries.
 
 ## Session Module Instructions
 

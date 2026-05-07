@@ -7,7 +7,7 @@ import pytest
 
 from heru.types import SubagentRef
 
-from litehive.agents.session_store import SubagentArtifactPayload, save_subagent_artifacts
+from litehive.agents.session_store import SubagentArtifactPayload, subagent_artifacts
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.common import PipelineState
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
@@ -47,9 +47,7 @@ def _make_task_with_subagent(tmp_path, *, engine="codex", role="swe", sa_id="SA-
 def _write_session_record(
     root: Path, task_id: str, *, sa_id="SA-implementing", role="swe", engine="codex", status="completed", exit_code=0
 ):
-    save_subagent_artifacts(Workspace.from_path(root),
-        task_id,
-        sa_id,
+    subagent_artifacts(Workspace.from_path(root), task_id, sa_id).save(
         session=SubagentArtifactPayload({
             "id": sa_id,
             "role": role,

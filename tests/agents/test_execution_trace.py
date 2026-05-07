@@ -3,7 +3,7 @@ from pathlib import Path
 from heru.types import SubagentRef
 
 from litehive.agents.execution_trace import load_subagent_execution_trace
-from litehive.agents.session_store import SubagentEventStreamPayload, save_subagent_artifacts
+from litehive.agents.session_store import SubagentEventStreamPayload, subagent_artifacts
 from litehive.config.workspace import ensure_workspace
 from litehive.state.records import create_task
 from litehive.tasks.paths import task_dir
@@ -25,10 +25,7 @@ def test_load_subagent_execution_trace_prefers_session_event_stream_over_cached_
     base = task_dir(tmp_path, task) / ref.path
     base.mkdir(parents=True)
     (base / "execution_trace.md").write_text("cached file trace", encoding="utf-8")
-    save_subagent_artifacts(
-        workspace,
-        task.id,
-        ref.id,
+    subagent_artifacts(workspace, task.id, ref.id).save(
         event_stream=SubagentEventStreamPayload({
             "events": [
                 {

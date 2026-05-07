@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from litehive.agents.session_store import SubagentArtifactPayload, load_subagent_report, save_subagent_artifacts
+from litehive.agents.session_store import SubagentArtifactPayload, load_subagent_report, subagent_artifacts
 from litehive.config.workspace import ensure_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.runtime import RuntimeStageState, RuntimeSubagentState
@@ -229,9 +229,7 @@ def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> N
     task = create_task(tmp_path, title="Interrupted run")
     subagent_path = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "subagents" / "SA-1234-swe"
     subagent_path.mkdir(parents=True)
-    save_subagent_artifacts(Workspace.from_path(tmp_path),
-        task.id,
-        "SA-1234",
+    subagent_artifacts(Workspace.from_path(tmp_path), task.id, "SA-1234").save(
         session=SubagentArtifactPayload({"status": "running"}),
         report=SubagentArtifactPayload({"summary": "finished half the change"}),
     )

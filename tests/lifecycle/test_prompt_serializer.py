@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from litehive.agents.session_store import SubagentArtifactPayload, save_subagent_artifacts
+from litehive.agents.session_store import SubagentArtifactPayload, subagent_artifacts
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import PipelineState
 from litehive.domain.recovery import FailureFingerprint, RecoveryTrigger, TriggerEventKind
@@ -253,10 +253,7 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
         encoding="utf-8",
     )
     (subagent_base / "stderr.txt").write_text("report failed: unable to resolve workspace\n", encoding="utf-8")
-    save_subagent_artifacts(
-        Workspace.from_path(workspace),
-        task.id,
-        "SA-0001",
+    subagent_artifacts(Workspace.from_path(workspace), task.id, "SA-0001").save(
         session=SubagentArtifactPayload({"id": "SA-0001", "status": "failed", "exit_code": 17}),
         report=SubagentArtifactPayload({
             "status": "failed",

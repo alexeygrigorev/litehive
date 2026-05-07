@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 from typer.testing import CliRunner
 
-from litehive.agents.session_store import SubagentArtifactPayload, load_subagent_report, save_subagent_artifacts
+from litehive.agents.session_store import SubagentArtifactPayload, load_subagent_report, subagent_artifacts
 from litehive.cli.app import app
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import ensure_workspace
@@ -366,10 +366,7 @@ def test_connect_workspace_db_rebuilds_replaced_cached_db(tmp_path: Path) -> Non
     ensure_workspace(tmp_path)
     db_path = workspace_path(tmp_path, "data.db")
 
-    save_subagent_artifacts(
-        Workspace.from_path(tmp_path),
-        "T-0001",
-        "SA-0001",
+    subagent_artifacts(Workspace.from_path(tmp_path), "T-0001", "SA-0001").save(
         session=SubagentArtifactPayload({"status": "running"}),
     )
 
@@ -377,10 +374,7 @@ def test_connect_workspace_db_rebuilds_replaced_cached_db(tmp_path: Path) -> Non
     with sqlite3.connect(db_path):
         pass
 
-    save_subagent_artifacts(
-        Workspace.from_path(tmp_path),
-        "T-0001",
-        "SA-0001",
+    subagent_artifacts(Workspace.from_path(tmp_path), "T-0001", "SA-0001").save(
         report=SubagentArtifactPayload({"summary": "recovered"}),
     )
 

@@ -5,7 +5,7 @@ from litehive.agents.session_store import (
     load_subagent_report,
     load_subagent_session,
     load_subagent_session_record,
-    save_subagent_artifacts,
+    subagent_artifacts,
 )
 from litehive.config.workspace import ensure_workspace
 from litehive.workspace import Workspace
@@ -15,10 +15,7 @@ def test_subagent_session_store_loads_named_slices_directly(tmp_path) -> None:
     ensure_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
 
-    save_subagent_artifacts(
-        workspace,
-        "T-0001",
-        "SA-0001",
+    subagent_artifacts(workspace, "T-0001", "SA-0001").save(
         session=SubagentArtifactPayload({"id": "SA-0001", "status": "running"}),
         report=SubagentArtifactPayload({"status": "running", "summary": "in progress"}),
         event_stream=SubagentEventStreamPayload({"events": [{"kind": "message"}]}),
@@ -41,16 +38,10 @@ def test_subagent_session_store_event_stream_can_be_cleared(tmp_path) -> None:
     ensure_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
 
-    save_subagent_artifacts(
-        workspace,
-        "T-0001",
-        "SA-0001",
+    subagent_artifacts(workspace, "T-0001", "SA-0001").save(
         event_stream=SubagentEventStreamPayload({"events": [{"kind": "message"}]}),
     )
-    save_subagent_artifacts(
-        workspace,
-        "T-0001",
-        "SA-0001",
+    subagent_artifacts(workspace, "T-0001", "SA-0001").save(
         clear_event_stream=True,
     )
 
@@ -61,10 +52,7 @@ def test_subagent_session_record_normalizes_created_at(tmp_path) -> None:
     ensure_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
 
-    save_subagent_artifacts(
-        workspace,
-        "T-0001",
-        "SA-0001",
+    subagent_artifacts(workspace, "T-0001", "SA-0001").save(
         session=SubagentArtifactPayload({
             "id": " SA-0001 ",
             "role": " swe ",
@@ -96,10 +84,7 @@ def test_subagent_session_record_falls_back_to_persisted_created_at(tmp_path) ->
     ensure_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
 
-    save_subagent_artifacts(
-        workspace,
-        "T-0001",
-        "SA-0001",
+    subagent_artifacts(workspace, "T-0001", "SA-0001").save(
         session=SubagentArtifactPayload({"id": "SA-0001"}),
     )
 

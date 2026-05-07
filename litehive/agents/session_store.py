@@ -222,7 +222,7 @@ def _load_subagent_payload(workspace: Workspace, task_id: str, subagent_id: str)
     """
     Read the raw payload row plus its original ``created_at``.
 
-    ``save_subagent_artifacts`` upserts this row repeatedly during a
+    ``SubagentArtifactStore.save`` upserts this row repeatedly during a
     subagent's life; preserving the original created_at on every
     update means the row keeps a stable creation timestamp even
     though the payload churns on every progress callback.
@@ -271,31 +271,6 @@ def load_subagent_session_record(workspace: Workspace, task_id: str, subagent_id
     Return the typed session metadata slice and row metadata.
     """
     return subagent_artifacts(workspace, task_id, subagent_id).load_session_record()
-
-
-def save_subagent_artifacts(
-    workspace: Workspace,
-    task_id: str,
-    subagent_id: str,
-    *,
-    session: SerializableSubagentSession | None = None,
-    report: SerializableSubagentReport | None = None,
-    event_stream: SubagentEventStreamPayload | None = None,
-    clear_event_stream: bool = False,
-) -> None:
-    """
-    Merge-write the per-subagent payload row.
-
-    Callers pass typed payload objects for the slices they want to
-    update. Omitted slices are preserved; ``clear_event_stream``
-    explicitly removes the event-stream slice.
-    """
-    subagent_artifacts(workspace, task_id, subagent_id).save(
-        session=session,
-        report=report,
-        event_stream=event_stream,
-        clear_event_stream=clear_event_stream,
-    )
 
 
 def load_subagent_session(workspace: Workspace, task_id: str, subagent_id: str) -> dict[str, Any]:

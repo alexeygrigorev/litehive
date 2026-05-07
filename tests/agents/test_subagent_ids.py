@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from litehive.agents.session_store import SubagentArtifactPayload, save_subagent_artifacts
+from litehive.agents.session_store import SubagentArtifactPayload, subagent_artifacts
 from litehive.agents.subagent_ids import SubagentIdRepository
 from litehive.config.workspace import ensure_workspace
 from litehive.domain.runtime import Subagent
@@ -44,10 +44,7 @@ def test_subagent_id_repository_seeds_from_persisted_task_refs_and_sessions(tmp_
             path="subagents/SA-0007-swe",
         )
     )
-    save_subagent_artifacts(
-        workspace,
-        task.id,
-        "SA-0012",
+    subagent_artifacts(workspace, task.id, "SA-0012").save(
         session=SubagentArtifactPayload({"status": "completed"}),
     )
     repository = SubagentIdRepository(workspace)

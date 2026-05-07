@@ -551,7 +551,7 @@ def assert_nudge_verdict_submission(
     smoke_session: SmokeSession | None = None,
 ) -> None:
     """Verify the nudge flow: run engine, then nudge to submit verdict via CLI."""
-    from litehive.agents.session_store import SubagentArtifactPayload, save_subagent_artifacts
+    from litehive.agents.session_store import SubagentArtifactPayload, subagent_artifacts
     from litehive.state.records import require_task
     from litehive.tasks.activity import load_task_activity
     from litehive.workspace import Workspace
@@ -564,10 +564,7 @@ def assert_nudge_verdict_submission(
         assert session.engine_name == engine_name, (session.engine_name, engine_name)
 
     subagent_id = "SI-nudge-swe"
-    save_subagent_artifacts(
-        Workspace.from_path(session.cwd),
-        session.task_id,
-        subagent_id,
+    subagent_artifacts(Workspace.from_path(session.cwd), session.task_id, subagent_id).save(
         session=SubagentArtifactPayload({"id": subagent_id, "role": "swe", "engine": engine_name, "status": "running"}),
     )
     report_command = (
