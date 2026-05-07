@@ -52,7 +52,6 @@ class SubagentSessionManager:
     avoids inheritance while making the session boundary explicit.
     """
 
-    root: Path
     workspace: "Workspace"
     sandbox: "SandboxLauncher"
     config: "LitehiveConfig"

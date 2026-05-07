@@ -177,7 +177,6 @@ def build_subagent_manager_for_workspace(
     sandbox = DockerSandboxLauncher(workspace, config)
     engines = EngineManager()
     sessions = SubagentSessionManager(
-        root=workspace.root,
         workspace=workspace,
         sandbox=sandbox,
         config=config,
