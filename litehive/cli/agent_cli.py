@@ -155,21 +155,20 @@ def _resolve_report_identity(workspace: Workspace, task) -> AgentReportIdentity:
         print("report failed: LITEHIVE_SUBAGENT_ID not set")
         raise SystemExit(1)
 
-    session = workspace.load_subagent_session(task.id, subagent_id)
+    session = workspace.load_subagent_session_record(task.id, subagent_id)
     if not session:
         print(f"report failed: subagent session {subagent_id} not found for task {task.id}")
         raise SystemExit(1)
 
-    payload_id = session.get("id")
-    if isinstance(payload_id, str) and payload_id and payload_id != subagent_id:
+    payload_id = session.subagent_id
+    if payload_id is not None and payload_id != subagent_id:
         print(f"report failed: subagent session id mismatch for {subagent_id}")
         raise SystemExit(1)
 
-    role = session.get("role")
-    if not isinstance(role, str) or not role.strip():
+    role = session.role
+    if role is None:
         print(f"report failed: subagent session {subagent_id} has no role")
         raise SystemExit(1)
-    role = role.strip()
 
     env_role = _current_role()
     if env_role and env_role != role:

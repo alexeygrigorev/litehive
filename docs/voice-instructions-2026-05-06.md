@@ -784,6 +784,10 @@ Legend:
   object-owned API and moved interrupted-subagent persistence to use
   the typed `created_at` field instead of reading it from the session
   dictionary.
+  Progress 2026-05-07: moved `litehive agent report` identity
+  resolution to `Workspace.load_subagent_session_record(...)` and
+  typed `LoadedSubagentSession.subagent_id` / `.role` accessors,
+  removing raw dictionary `isinstance` checks from that path.
   Remaining work: replace the broader session dictionary with a typed
   loaded-session object.
 - [ ] M39. Review continuation handling. If continuation is always

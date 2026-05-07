@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Protocol, runtime_checkable
 
+from litehive.domain.agent import SubagentId
 from litehive.domain.common import utcnow
 from litehive.workspace import Workspace
 
@@ -49,6 +50,29 @@ class LoadedSubagentSession:
         else:
             created_at = persisted_created_at
         return cls(values=values, created_at=created_at)
+
+    def __bool__(self) -> bool:
+        return bool(self.values)
+
+    @property
+    def subagent_id(self) -> SubagentId | None:
+        value = self._non_empty_string("id")
+        if value is None:
+            return None
+        return SubagentId(value)
+
+    @property
+    def role(self) -> str | None:
+        return self._non_empty_string("role")
+
+    def _non_empty_string(self, key: str) -> str | None:
+        value = self.values.get(key)
+        if not isinstance(value, str):
+            return None
+        value = value.strip()
+        if value:
+            return value
+        return None
 
 
 @runtime_checkable
