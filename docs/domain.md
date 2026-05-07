@@ -93,6 +93,26 @@ stable across refactors.
 - Merge failures are represented as flagged tasks with
   `flag_reason = "merge_failed"`.
 
+### Outcome Reason Code Ownership
+
+| Code | Setter | Circumstance |
+| --- | --- | --- |
+| `verdict_fail` | No current production setter | Reserved historical bucket for a generic failed stage verdict. Current submitted activity rejects unsupported `fail` verdicts. |
+| `verdict_reject` | No current production setter | Reserved bucket for a stage report that rejects without a more specific reason. Current routing usually records a failure classification instead. |
+| `verdict_blocked` | No current production setter | Reserved bucket for a stage report that blocks without a more specific reason. |
+| `blocked_on_follow_up` | No current production setter | Reserved bucket for a parent task waiting on a blocking follow-up. The active implementation stores the child id in the `blocked_on_follow_up:<task_id>` reason string. |
+| `hallucinated_completion` | `HeruEngineAdapter` implementing-pass guard | A SWE reports pass with changed files, but the execution checkout is clean. The pass is rewritten to a reject. |
+| `missing_acceptance_criteria` | No current production setter | Reserved bucket for the grooming gate that keeps under-specified full-pipeline tasks from entering implementation. Current code emits operator warning text instead. |
+| `retry_limit_exhausted` | No current production setter | Reserved bucket for a task-level retry budget failure. |
+| `stage_retry_limit_exhausted` | No current production setter | Reserved bucket for a stage-local retry budget failure. |
+| `execution_interrupted` | Recovery interruption preparation | Runner or recovery code pauses a task in a resumable state and stores interruption context. |
+| `execution_cancelled` | Task abandon transition | An operator abandons an active, interrupted, parked, flagged, or closed task. |
+| `stage_exception` | Lifecycle runtime sync | Recovery escalates a stage failure to a follow-up task or records a stage-level exception outcome. |
+| `unsupported_verdict` | No current production setter | Reserved bucket for an invalid report verdict. Current CLI and activity models reject unsupported verdicts before persistence. |
+| `merge_conflict` | No current production setter | Reserved bucket for merge-conflict outcomes. Current merge conflicts are represented as flagged tasks with `flag_reason = "merge_failed"`. |
+| `task_done` | Task close and workspace repair | A task is closed as already satisfied or repaired into a completed runtime shape. |
+| `task_closed` | Task close transition | A task is deliberately closed as won't-do, deferred, or duplicate; the specific operator choice remains on `TaskRecord.close_reason`. |
+
 ## Recovery Vocabulary
 
 - `FailureFingerprint` is the recovery identity and budget key.

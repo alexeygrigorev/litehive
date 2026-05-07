@@ -1031,9 +1031,14 @@ Legend:
   interruption context for recovery/resume; `execution_cancelled` is
   the deliberate operator abandon/kill path and closes the task instead
   of queueing automatic resume. Added an enum guardrail test.
-- [ ] D18. For every outcome reason code, document who can set it and
+- [x] D18. For every outcome reason code, document who can set it and
   under what circumstances.
   Source: note 6, 05:13-05:34.
+  Completed 2026-05-07: added `docs/domain.md` "Outcome Reason Code
+  Ownership" with a row for every `OutcomeReasonCode`, naming the
+  current setter and circumstance. Rows with no current production
+  setter are explicitly marked that way so D19 can remove or clarify
+  them without guesswork.
 - [ ] D19. Explain or delete unclear reason codes such as
   `hallucinated_completion` and `blocked_on_follow_up`.
   Source: note 6, 05:34-05:51.
