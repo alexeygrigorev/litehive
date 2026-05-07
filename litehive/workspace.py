@@ -196,36 +196,36 @@ class Workspace:
         """
         # inline: state.records imports several modules that eventually
         # refer back to Workspace during partial startup.
-        from litehive.state.records import list_tasks as _list_tasks  # noqa: PLC0415
+        from litehive.state.records import list_tasks_for_workspace as _list_tasks_for_workspace  # noqa: PLC0415
 
-        return _list_tasks(self.root, include_runtime=include_runtime, strict=strict)
+        return _list_tasks_for_workspace(self, include_runtime=include_runtime, strict=strict)
 
     def get_task(self, task_id: str) -> "TaskRecord | None":
         """
         Return one task record from this workspace, or ``None`` when missing.
         """
         # inline: see list_tasks import note above.
-        from litehive.state.records import get_task as _get_task  # noqa: PLC0415
+        from litehive.state.records import get_task_for_workspace as _get_task_for_workspace  # noqa: PLC0415
 
-        return _get_task(self.root, task_id)
+        return _get_task_for_workspace(self, task_id)
 
     def get_task_record(self, task_id: str) -> "TaskRecord | None":
         """
         Return one task record, tolerating a missing runtime row.
         """
         # inline: see list_tasks import note above.
-        from litehive.state.records import get_task_record as _get_task_record  # noqa: PLC0415
+        from litehive.state.records import get_task_record_for_workspace as _get_task_record_for_workspace  # noqa: PLC0415
 
-        return _get_task_record(self.root, task_id)
+        return _get_task_record_for_workspace(self, task_id)
 
     def require_task(self, task_id: str) -> "TaskRecord":
         """
         Return one task record or raise the standard missing-task error.
         """
         # inline: see list_tasks import note above.
-        from litehive.state.records import require_task as _require_task  # noqa: PLC0415
+        from litehive.state.records import require_task_for_workspace as _require_task_for_workspace  # noqa: PLC0415
 
-        return _require_task(self.root, task_id)
+        return _require_task_for_workspace(self, task_id)
 
     def save_task(self, task: "TaskRecord") -> None:
         """

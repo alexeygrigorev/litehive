@@ -444,6 +444,13 @@ def save_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> N
 
 def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
     """
+    Path-based compatibility wrapper for task runtime hydration.
+    """
+    return _load_task_runtime_for_workspace(Workspace.from_path(root), task)
+
+
+def _load_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> TaskRecord:
+    """
     Hydrate a task's runtime row from SQLite and run the normalisers.
 
     ``get_task`` invokes this on the strict path that requires a runtime
@@ -451,7 +458,7 @@ def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
     the ``TaskStateMissingError`` so diagnostics can still report on a
     half-deleted task.
     """
-    store = runtime_store(root)
+    store = runtime_store_for_workspace(workspace)
     task_state = store.load_task_state(task.id)
     if task_state is None:
         raise TaskStateMissingError(f"Task {task.id} is missing its SQLite runtime state row")
@@ -767,6 +774,21 @@ def _load_tasks_from_store(
     strict: bool,
 ) -> list[TaskRecord]:
     """
+    Path-based compatibility wrapper for task listing.
+    """
+    return _load_tasks_from_store_for_workspace(
+        Workspace.from_path(root),
+        include_runtime=include_runtime,
+        strict=strict,
+    )
+
+
+def _load_tasks_from_store_for_workspace(
+    workspace: Workspace,
+    include_runtime: bool,
+    strict: bool,
+) -> list[TaskRecord]:
+    """
     Iterate every stored task intent and pair it with its runtime row.
 
     The two listing entry points (``list_tasks`` and
@@ -775,7 +797,7 @@ def _load_tasks_from_store(
     malformed; without the shared core, the two would drift in their
     handling of half-deleted tasks.
     """
-    store = runtime_store(root)
+    store = runtime_store_for_workspace(workspace)
     records: list[TaskRecord] = []
     for intent in store.list_task_intents():
         try:
@@ -801,6 +823,21 @@ def list_tasks(
     strict: bool = True,
 ) -> list[TaskRecord]:
     """
+    Path-based compatibility wrapper for task listing.
+    """
+    return list_tasks_for_workspace(
+        Workspace.from_path(root),
+        include_runtime=include_runtime,
+        strict=strict,
+    )
+
+
+def list_tasks_for_workspace(
+    workspace: Workspace,
+    include_runtime: bool = True,
+    strict: bool = True,
+) -> list[TaskRecord]:
+    """
     Return every task in id order with its runtime row attached.
 
     Used by the queue selector, status snapshot builder, recovery
@@ -808,8 +845,8 @@ def list_tasks(
     population; ``strict=False`` lets recovery still see tasks whose
     runtime row was deleted out from under them.
     """
-    return _load_tasks_from_store(
-        root,
+    return _load_tasks_from_store_for_workspace(
+        workspace,
         include_runtime=include_runtime,
         strict=strict,
     )
@@ -861,6 +898,13 @@ def list_tasks_state_first(
 
 def get_task(root: Path, task_id: str) -> TaskRecord | None:
     """
+    Path-based compatibility wrapper for task lookup.
+    """
+    return get_task_for_workspace(Workspace.from_path(root), task_id)
+
+
+def get_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord | None:
+    """
     Look up a task by id and require its runtime row to exist.
 
     The orchestration loop, queue selector, and audit emitters use
@@ -868,14 +912,21 @@ def get_task(root: Path, task_id: str) -> TaskRecord | None:
     would rather raise on a half-deleted row than guess at runtime
     state from intent-only data.
     """
-    intent = runtime_store(root).load_task_intent(task_id)
+    intent = runtime_store_for_workspace(workspace).load_task_intent(task_id)
     if intent is None:
         return None
-    task = _load_task_runtime(root, TaskRecord.from_intent_and_state(intent))
+    task = _load_task_runtime_for_workspace(workspace, TaskRecord.from_intent_and_state(intent))
     return task
 
 
 def task_exists(root: Path, task_id: str) -> bool:
+    """
+    Path-based compatibility wrapper for task-existence checks.
+    """
+    return task_exists_for_workspace(Workspace.from_path(root), task_id)
+
+
+def task_exists_for_workspace(workspace: Workspace, task_id: str) -> bool:
     """
     Return whether the SQLite task-intent table owns ``task_id``.
 
@@ -883,10 +934,17 @@ def task_exists(root: Path, task_id: str) -> bool:
     registered workspaces. Directory names under ``.litehive/tasks``
     are legacy artifacts and must not decide task ownership.
     """
-    return runtime_store(root).load_task_intent(task_id) is not None
+    return runtime_store_for_workspace(workspace).load_task_intent(task_id) is not None
 
 
 def get_task_record(root: Path, task_id: str) -> TaskRecord | None:
+    """
+    Path-based compatibility wrapper for lenient task lookup.
+    """
+    return get_task_record_for_workspace(Workspace.from_path(root), task_id)
+
+
+def get_task_record_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord | None:
     """
     Return the task record, tolerating a missing runtime row.
 
@@ -895,18 +953,25 @@ def get_task_record(root: Path, task_id: str) -> TaskRecord | None:
     task's intent is recoverable, but forcing a runtime row to exist
     would mask exactly the corruption these flows want to surface.
     """
-    intent = runtime_store(root).load_task_intent(task_id)
+    intent = runtime_store_for_workspace(workspace).load_task_intent(task_id)
     if intent is None:
         return None
     task = TaskRecord.from_intent_and_state(intent)
     try:
-        task = _load_task_runtime(root, task)
+        task = _load_task_runtime_for_workspace(workspace, task)
     except TaskStateMissingError:
         pass
     return task
 
 
 def require_task(root: Path, task_id: str) -> TaskRecord:
+    """
+    Path-based compatibility wrapper for required task lookup.
+    """
+    return require_task_for_workspace(Workspace.from_path(root), task_id)
+
+
+def require_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord:
     """
     Look up a task by id and raise if it does not exist.
 
@@ -915,7 +980,7 @@ def require_task(root: Path, task_id: str) -> TaskRecord:
     raise stops them from silently continuing on a ``None`` they would
     have to dereference downstream anyway.
     """
-    task = get_task(root, task_id)
+    task = get_task_for_workspace(workspace, task_id)
     if task is None:
         raise ValueError(f"Task {task_id} not found")
     return task
