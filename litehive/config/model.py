@@ -112,6 +112,18 @@ class ExternalEngineSandboxPolicy:
     setenv: dict[str, str] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class ResolvedExternalEngineSandboxPolicy:
+    enabled: bool
+    network_mode: str
+    workspace_mode: str
+    environment: tuple[str, ...] = ()
+    credential_inputs: tuple[SandboxCredentialInput, ...] = ()
+    extra_ro_binds: tuple[str, ...] = ()
+    extra_rw_binds: tuple[str, ...] = ()
+    setenv: Mapping[str, str] = field(default_factory=dict)
+
+
 @dataclass(slots=True)
 class ExternalEngineSandboxConfig:
     enabled: bool = False
@@ -128,6 +140,33 @@ class ExternalEngineSandboxConfig:
     no_new_privileges: bool = True
     tmpfs: list[str] = field(default_factory=lambda: ["/tmp"])
     engine_policies: dict[str, ExternalEngineSandboxPolicy] = field(default_factory=dict)
+
+    def policy_for_engine(self, engine_name: str) -> ResolvedExternalEngineSandboxPolicy:
+        """
+        Resolve the effective sandbox policy for one engine.
+
+        Sandbox enablement is global: when ``enabled`` is true every
+        engine gets sandboxed. Per-engine entries only customize the
+        environment, credentials, mounts, and optional network or
+        workspace mode.
+        """
+        override = self.engine_policies.get(engine_name)
+        if override is None:
+            return ResolvedExternalEngineSandboxPolicy(
+                enabled=self.enabled,
+                network_mode=self.default_network_mode,
+                workspace_mode=self.default_workspace_mode,
+            )
+        return ResolvedExternalEngineSandboxPolicy(
+            enabled=self.enabled,
+            network_mode=override.network_mode or self.default_network_mode,
+            workspace_mode=override.workspace_mode or self.default_workspace_mode,
+            environment=tuple(override.environment),
+            credential_inputs=tuple(override.credential_inputs),
+            extra_ro_binds=tuple(override.extra_ro_binds),
+            extra_rw_binds=tuple(override.extra_rw_binds),
+            setenv=dict(override.setenv),
+        )
 
 
 # --- primary config ---

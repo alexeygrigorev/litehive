@@ -1122,14 +1122,22 @@ Legend:
   Completed 2026-05-07: removed the unused `role` parameter and
   `del role` from `SandboxLauncher.policy_summary`; role remains only
   on invocation wrapping where Docker git-profile selection uses it.
-- [ ] S10. Simplify sandbox policy to global enabled/disabled config.
+- [x] S10. Simplify sandbox policy to global enabled/disabled config.
   Do not maintain separate per-engine sandbox policy unless a real
   need exists.
   Source: note 4, 04:39-05:25.
-- [ ] S11. Move default policy handling into config loading. The
+  Completed 2026-05-07: `external_engine_sandbox.enabled` now controls
+  sandbox enablement globally. Per-engine entries only customize
+  environment, credentials, mounts, and optional network/workspace
+  modes for engines that need them.
+- [x] S11. Move default policy handling into config loading. The
   launcher should receive an already resolved policy and should not
   contain fallback/default branches.
   Source: note 4, 05:37-06:23.
+  Completed 2026-05-07: added
+  `ExternalEngineSandboxConfig.policy_for_engine`, which returns a
+  concrete resolved policy with network/workspace defaults applied.
+  `SandboxLauncher` now consumes that resolved object directly.
 - [ ] S12. Create clear sandbox abstractions: generic sandbox launcher
   behavior and a Docker-specific implementation such as
   `DockerSandboxLauncher`.

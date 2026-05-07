@@ -394,7 +394,7 @@ def execute_engine_prompt(
         if not summary.enabled:
             pytest.skip(
                 f"sandbox not enabled in config for engine {engine_name!r} — "
-                "set external_engine_sandbox.enabled=true and engine_policies.<engine>.enabled=true"
+                "set external_engine_sandbox.enabled=true"
             )
         heru_invocation = _HeruCLIInvocation(
             argv=tuple(argv),

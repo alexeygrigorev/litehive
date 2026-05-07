@@ -12,7 +12,7 @@ from typing import Mapping
 
 from heru.base import CLIInvocation
 from litehive.config.model import LitehiveConfig
-from litehive.config.model import ExternalEngineSandboxPolicy
+from litehive.config.model import ResolvedExternalEngineSandboxPolicy
 from litehive.sandbox.support import forced_engine_rw_state_dirs
 
 
@@ -163,32 +163,17 @@ class SandboxLauncher:
         same policy shape.
         """
         policy = self._policy_for_engine(engine_name)
-        sandbox_enabled = self.config.external_engine_sandbox.enabled and policy is not None and policy.enabled
-        if not sandbox_enabled:
+        if not policy.enabled:
             return SandboxPolicySummary(enabled=False)
-        if policy is None or policy.network_mode is None:
-            network_mode = self.config.external_engine_sandbox.default_network_mode
-        else:
-            network_mode = policy.network_mode
-        if policy is None or policy.workspace_mode is None:
-            workspace_mode = self.config.external_engine_sandbox.default_workspace_mode
-        else:
-            workspace_mode = policy.workspace_mode
-        if policy is None:
-            environment_tuple: tuple = ()
-            credential_inputs_tuple: tuple = ()
-        else:
-            environment_tuple = tuple(policy.environment)
-            credential_inputs_tuple = tuple(item.env_var for item in policy.credential_inputs)
         return SandboxPolicySummary(
             enabled=True,
             backend=self.config.external_engine_sandbox.backend,
             runtime=self.config.external_engine_sandbox.runtime_binary,
             image=self.config.external_engine_sandbox.image,
-            network_mode=network_mode,
-            workspace_mode=workspace_mode,
-            environment=environment_tuple,
-            credential_inputs=credential_inputs_tuple,
+            network_mode=policy.network_mode,
+            workspace_mode=policy.workspace_mode,
+            environment=tuple(policy.environment),
+            credential_inputs=tuple(item.env_var for item in policy.credential_inputs),
             propagated_mounts=(),
         )
 
@@ -231,7 +216,6 @@ class SandboxLauncher:
             role,
             binary_path,
             invocation,
-            summary,
         )
 
     def _wrap_docker(
@@ -240,7 +224,6 @@ class SandboxLauncher:
         role: str,
         binary_path: str,
         invocation: CLIInvocation,
-        summary: SandboxPolicySummary,
     ) -> CLIInvocation:
         """
         Assemble the docker-run argv: mounts, env allowlist, git
@@ -255,10 +238,7 @@ class SandboxLauncher:
         runtime_config = self.config.external_engine_sandbox
         policy = self._policy_for_engine(engine_name)
         workspace_mount = PurePosixPath(runtime_config.workspace_mount_path)
-        if policy is None or policy.workspace_mode is None:
-            workspace_mode = runtime_config.default_workspace_mode
-        else:
-            workspace_mode = policy.workspace_mode
+        workspace_mode = policy.workspace_mode
         container_argv = self._translate_container_argv(
             invocation.argv,
             host_root=self.root,
@@ -273,7 +253,7 @@ class SandboxLauncher:
         argv: list[str] = [runtime_config.runtime_binary, "run", "--rm", "--init"]
         argv.extend(runtime_config.runtime_args)
         argv.extend(["--workdir", str(workspace_mount)])
-        argv.extend(["--network", summary.network_mode or runtime_config.default_network_mode])
+        argv.extend(["--network", policy.network_mode])
         if runtime_config.read_only_rootfs:
             argv.append("--read-only")
         if runtime_config.drop_capabilities:
@@ -299,16 +279,12 @@ class SandboxLauncher:
         # Set up git wrapper for role-based git protection
         profile = SandboxProfile.for_role(role)
         allowed_env: dict[str, str] = {}
-        if policy is None:
-            env_names: list = []
-        else:
-            env_names = list(policy.environment)
+        env_names = list(policy.environment)
         for env_name in env_names:
             value = invocation.env.get(env_name)
             if value is not None:
                 allowed_env[env_name] = value
-        if policy is not None:
-            allowed_env.update(policy.setenv)
+        allowed_env.update(policy.setenv)
         extra_ro_binds = self._resolved_extra_ro_binds(engine_name, policy, invocation.env)
         for host_path in extra_ro_binds:
             argv.extend(
@@ -325,10 +301,7 @@ class SandboxLauncher:
                     self._bind_mount_spec(host_path, PurePosixPath(str(host_path)), read_only=False),
                 ]
             )
-        if policy is None:
-            credential_inputs: list = []
-        else:
-            credential_inputs = list(policy.credential_inputs)
+        credential_inputs = list(policy.credential_inputs)
         for credential in credential_inputs:
             raw_path = invocation.env.get(credential.env_var)
             if not raw_path:
@@ -410,14 +383,14 @@ class SandboxLauncher:
             "no_git": no_git,
         }
 
-    def _policy_for_engine(self, engine_name: str) -> ExternalEngineSandboxPolicy | None:
-        """Return the per-engine sandbox policy from workspace config, or ``None`` when the engine has no override and the workspace defaults apply."""
-        return self.config.external_engine_sandbox.engine_policies.get(engine_name)
+    def _policy_for_engine(self, engine_name: str) -> ResolvedExternalEngineSandboxPolicy:
+        """Return the config-resolved sandbox policy for an engine."""
+        return self.config.external_engine_sandbox.policy_for_engine(engine_name)
 
     @staticmethod
     def _resolved_extra_ro_binds(
         engine_name: str,
-        policy: ExternalEngineSandboxPolicy | None,
+        policy: ResolvedExternalEngineSandboxPolicy,
         env: Mapping[str, str] | None = None,
     ) -> tuple[Path, ...]:
         """
@@ -432,10 +405,7 @@ class SandboxLauncher:
         """
         forced_rw = forced_engine_rw_state_dirs(engine_name, policy, env)
         resolved_paths: list[Path] = []
-        if policy is None:
-            ro_binds: list = []
-        else:
-            ro_binds = list(policy.extra_ro_binds)
+        ro_binds = list(policy.extra_ro_binds)
         for raw_path in ro_binds:
             host_path = Path(raw_path).expanduser()
             if not host_path.exists():
@@ -456,7 +426,7 @@ class SandboxLauncher:
     @staticmethod
     def _resolved_extra_rw_binds(
         engine_name: str,
-        policy: ExternalEngineSandboxPolicy | None,
+        policy: ResolvedExternalEngineSandboxPolicy,
         env: Mapping[str, str] | None = None,
     ) -> tuple[Path, ...]:
         """
@@ -472,10 +442,7 @@ class SandboxLauncher:
         forced_rw = forced_engine_rw_state_dirs(engine_name, policy, env)
         resolved_paths: list[Path] = []
         seen: set[Path] = set()
-        if policy is None:
-            rw_binds: list = []
-        else:
-            rw_binds = list(policy.extra_rw_binds)
+        rw_binds = list(policy.extra_rw_binds)
         for raw_path in rw_binds:
             host_path = Path(raw_path).expanduser()
             if not host_path.exists():

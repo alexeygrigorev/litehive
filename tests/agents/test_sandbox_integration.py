@@ -70,6 +70,27 @@ def test_sandbox_launcher_policy_summary_enabled(temp_workspace, docker_sandbox_
     assert summary.workspace_mode == "rw"
 
 
+def test_sandbox_launcher_uses_global_enabled_policy_without_engine_override(temp_workspace):
+    """Test global sandbox enablement applies even without a per-engine policy."""
+    config = LitehiveConfig(
+        external_engine_sandbox=ExternalEngineSandboxConfig(
+            enabled=True,
+            backend="docker",
+            runtime_binary="docker",
+            image="litehive-external-engine:latest",
+        )
+    )
+    launcher = SandboxLauncher(temp_workspace, config)
+
+    summary = launcher.policy_summary("codex")
+
+    assert summary.enabled
+    assert summary.network_mode == "none"
+    assert summary.workspace_mode == "rw"
+    assert summary.environment == ()
+    assert summary.credential_inputs == ()
+
+
 def test_sandbox_policy_summary_rehydrates_resource_control_payload():
     """Test resource-control JSON is narrowed back into a typed policy summary."""
     summary = SandboxPolicySummary.from_mapping(
