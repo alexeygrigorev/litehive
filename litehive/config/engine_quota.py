@@ -1,6 +1,7 @@
 """Engine quota probes and quota-block translation."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Protocol
 
@@ -30,6 +31,16 @@ class QuotaStatus(Protocol):
 
 
 type QuotaChecker = Callable[[], QuotaStatus]
+
+
+@dataclass(frozen=True, slots=True)
+class EngineQuotaBlock:
+    """
+    Present quota block returned by vendor quota probes.
+    """
+
+    reason: str
+    freeze_until: datetime | None
 
 
 def _parse_datetime_utc(value: str | None) -> datetime | None:
@@ -83,37 +94,39 @@ def _preferred_quota_reset_at(status: QuotaStatus) -> str | None:
     return status.short_term.reset_at
 
 
-def _quota_block_reason(engine_name: str, status: QuotaStatus) -> tuple[str | None, str | None]:
+def _quota_block_reason(engine_name: str, status: QuotaStatus) -> EngineQuotaBlock | None:
     """
-    Translate a heru quota status into a skip reason and reset-at pair.
+    Translate a heru quota status into a skip reason and freeze window.
     """
     if status.error is not None:
-        return None, None
+        return None
     if not status.limit_reached:
-        return None, None
+        return None
     reset_at = _preferred_quota_reset_at(status)
     if reset_at:
         reset_suffix = f", resets {reset_at}"
     else:
         reset_suffix = ""
-    return f"{engine_name} usage limit reached{reset_suffix}", reset_at
+    return EngineQuotaBlock(
+        reason=f"{engine_name} usage limit reached{reset_suffix}",
+        freeze_until=_parse_datetime_utc(reset_at),
+    )
 
 
 def engine_quota_block(
     engine_name: str,
-) -> tuple[str | None, datetime | None]:
+) -> EngineQuotaBlock | None:
     """
     Probe the engine's vendor quota and report whether to skip it.
 
-    Returns ``(skip_reason, freeze_until)`` when the engine is currently
-    rate-limited; ``(None, None)`` when it is fine or has no probe.
-    Called by the engine-selection loop so quota-blocked engines are
-    skipped and auto-frozen until the reset time, without having to
-    re-probe on the next stage.
+    Returns a present block when the engine is currently rate-limited,
+    or ``None`` when it is fine or has no probe. Called by the
+    engine-selection loop so quota-blocked engines are skipped and
+    auto-frozen until the reset time, without having to re-probe on the
+    next stage.
     """
     checker = _quota_checker(engine_name)
     if checker is None:
-        return None, None
+        return None
     status = checker()
-    reason, reset_at = _quota_block_reason(engine_name, status)
-    return reason, _parse_datetime_utc(reset_at)
+    return _quota_block_reason(engine_name, status)

@@ -14,6 +14,7 @@ from heru.quota import UsageStatus, UsageWindow
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
+from litehive.config.engine_quota import EngineQuotaBlock
 from litehive.config.engine_models import (
     EngineSelection,
     clear_persisted_engine_freeze_for_workspace,
@@ -508,8 +509,11 @@ def test_select_engine_records_quota_freeze_and_falls_back(
 
     def fake_quota_block(engine_name: str):
         if engine_name == "codex":
-            return f"codex quota exhausted (used 100%, resets at {freeze_iso})", freeze_until
-        return None, None
+            return EngineQuotaBlock(
+                reason=f"codex quota exhausted (used 100%, resets at {freeze_iso})",
+                freeze_until=freeze_until,
+            )
+        return None
 
     monkeypatch.setattr("litehive.config.engine_models.engine_quota_block", fake_quota_block)
 
@@ -535,8 +539,11 @@ def test_select_engine_for_workspace_records_quota_freeze_and_falls_back(
 
     def fake_quota_block(engine_name: str):
         if engine_name == "codex":
-            return f"codex quota exhausted (used 100%, resets at {freeze_iso})", freeze_until
-        return None, None
+            return EngineQuotaBlock(
+                reason=f"codex quota exhausted (used 100%, resets at {freeze_iso})",
+                freeze_until=freeze_until,
+            )
+        return None
 
     monkeypatch.setattr("litehive.config.engine_models.engine_quota_block", fake_quota_block)
 
@@ -562,10 +569,11 @@ def test_engine_quota_block_consumes_current_heru_normalized_windows(
     )
     monkeypatch.setattr(engine_quota, "check_codex_quota", lambda: status)
 
-    reason, freeze_until = engine_quota.engine_quota_block("codex")
+    block = engine_quota.engine_quota_block("codex")
 
-    assert reason == "codex usage limit reached, resets 2026-04-27T00:00:00Z"
-    assert freeze_until == datetime(2026, 4, 27, tzinfo=timezone.utc)
+    assert block is not None
+    assert block.reason == "codex usage limit reached, resets 2026-04-27T00:00:00Z"
+    assert block.freeze_until == datetime(2026, 4, 27, tzinfo=timezone.utc)
 
 
 def test_select_engine_skips_current_heru_quota_status_shape(
@@ -628,7 +636,7 @@ def test_select_engine_skips_active_freeze_without_quota_call(
 
     def fake_quota_block(engine_name: str):
         quota_calls.append(engine_name)
-        return None, None
+        return None
 
     monkeypatch.setattr("litehive.config.engine_models.engine_quota_block", fake_quota_block)
 
@@ -662,8 +670,11 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
     def fake_quota_block(engine_name: str):
         quota_calls.append(engine_name)
         if engine_name == "codex":
-            return f"codex quota exhausted (used 100%, resets at {refreshed_iso})", refreshed
-        return None, None
+            return EngineQuotaBlock(
+                reason=f"codex quota exhausted (used 100%, resets at {refreshed_iso})",
+                freeze_until=refreshed,
+            )
+        return None
 
     monkeypatch.setattr("litehive.config.engine_models.engine_quota_block", fake_quota_block)
 
@@ -695,7 +706,7 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
 
     def fake_quota_block(engine_name: str):
         quota_calls.append(engine_name)
-        return None, None
+        return None
 
     monkeypatch.setattr("litehive.config.engine_models.engine_quota_block", fake_quota_block)
 

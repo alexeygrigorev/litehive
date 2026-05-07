@@ -328,15 +328,20 @@ def select_engine_for_workspace(
             engine_name not in frozen_engines and _parse_datetime_utc(config.engine_freeze.get(engine_name)) is not None
         )
         if check_quota:
-            quota_reason, freeze_until = engine_quota_block(engine_name)
+            quota_block = engine_quota_block(engine_name)
         else:
-            quota_reason, freeze_until = (None, None)
-        if quota_reason is not None:
-            if freeze_until is not None:
-                _persist_engine_freeze(workspace, config, engine_name=engine_name, freeze_until=freeze_until)
+            quota_block = None
+        if quota_block is not None:
+            if quota_block.freeze_until is not None:
+                _persist_engine_freeze(
+                    workspace,
+                    config,
+                    engine_name=engine_name,
+                    freeze_until=quota_block.freeze_until,
+                )
             elif expired_freeze:
                 _clear_engine_freeze(workspace, config, engine_name=engine_name)
-            skipped.append(EngineSkip(engine_name=engine_name, reason=quota_reason))
+            skipped.append(EngineSkip(engine_name=engine_name, reason=quota_block.reason))
             continue
         if expired_freeze:
             _clear_engine_freeze(workspace, config, engine_name=engine_name)

@@ -87,7 +87,7 @@ def _noop_check_quota(**kw):
 
 
 def _noop_engine_quota_block(*args, **kwargs):
-    return None, None
+    return None
 
 
 @pytest.fixture(autouse=True)

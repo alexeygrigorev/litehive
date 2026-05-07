@@ -1089,10 +1089,14 @@ Legend:
   `uv run pyrefly check litehive/config/engine_quota.py
   litehive/config/engine_models.py tests/config/test_engine_freeze.py`
   and `uv run pytest tests/config/test_engine_freeze.py -q`.
-- [ ] R16. Replace `engine_quota_block` tuple returns with a dataclass
+- [x] R16. Replace `engine_quota_block` tuple returns with a dataclass
   containing reason string and datetime. Optional absence can still be
   modeled, but the present value should not be a tuple.
   Source: note 4, 41:17-41:40.
+  Completed 2026-05-07: `engine_quota_block` now returns
+  `EngineQuotaBlock | None`; selection reads `reason` and
+  `freeze_until` fields instead of tuple-unpacking. Verified with
+  focused pyrefly and `uv run pytest tests/config/test_engine_freeze.py -q`.
 - [ ] R17. Simplify `select_engine`; it has too many parameters and
   too much branching.
   Source: note 4, 41:58-42:28.
