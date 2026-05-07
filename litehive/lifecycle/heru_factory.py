@@ -522,10 +522,10 @@ class HeruEngineAdapter:
         """Drive ``SubagentManager.run`` with a single crash-resume retry: if
         the engine exits non-zero but left a continuation handle, we resume
         that session once with the crash-resume preamble before giving up.
-        Keeps ``session.engine_session_id`` updated so same-engine nudges and
+        Keeps the session continuation handle updated so same-engine nudges and
         retries continue the same conversation."""
         current_prompt = prompt_text
-        resume_session_id = session.engine_session_id
+        resume_session_id = session.resume_session_id()
         crash_resume_attempted = False
 
         while True:
@@ -546,9 +546,9 @@ class HeruEngineAdapter:
 
             # Persist the latest continuation handle even if the attempt failed;
             # same-engine retries and nudges reuse the in-memory session object.
-            new_session_id = self.extract_continuation_id(result, session.engine_session_id)
+            new_session_id = self.extract_continuation_id(result, session.resume_session_id())
             if new_session_id:
-                session.engine_session_id = new_session_id
+                session.capture_engine_session_id(new_session_id)
 
             if result.failure is not None or result.exit_code == 0 or crash_resume_attempted:
                 return result

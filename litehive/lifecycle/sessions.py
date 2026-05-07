@@ -5,6 +5,33 @@ from litehive.domain.common import PipelineState, utcnow
 from litehive.workspace import Workspace
 
 
+@dataclass(frozen=True, slots=True)
+class FreshEngineSession:
+    """
+    Lifecycle state for an engine turn without a continuation handle.
+    """
+
+    resume_session_id: None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ResumableEngineSession:
+    """
+    Lifecycle state for an engine turn with a continuation handle.
+    """
+
+    resume_session_id: str
+
+
+class EngineSessionContinuation(Protocol):
+    """
+    Start-vs-continue state exposed by ``Session``.
+    """
+
+    @property
+    def resume_session_id(self) -> str | None: ...
+
+
 @dataclass
 class Session:
     """One agent conversation with one engine for one task.
@@ -21,6 +48,28 @@ class Session:
     engine_session_id: str | None = None
     conversation_id: str | None = None
 
+    def continuation_state(self) -> EngineSessionContinuation:
+        """
+        Return whether the next engine turn should start fresh or resume.
+        """
+        if self.engine_session_id is not None:
+            return ResumableEngineSession(self.engine_session_id)
+        if self.conversation_id is not None:
+            return ResumableEngineSession(self.conversation_id)
+        return FreshEngineSession()
+
+    def resume_session_id(self) -> str | None:
+        """
+        Return the engine resume id for the next turn, when available.
+        """
+        return self.continuation_state().resume_session_id
+
+    def capture_engine_session_id(self, resume_id: str) -> None:
+        """
+        Store the latest engine continuation handle on this session.
+        """
+        self.engine_session_id = resume_id
+
     def resumable(self) -> bool:
         """
         Report whether the session has a continuation handle.
@@ -30,7 +79,7 @@ class Session:
         ``--continue``/``--resume`` so the engine resumes the prior
         conversation instead of starting a fresh one.
         """
-        return self.engine_session_id is not None or self.conversation_id is not None
+        return isinstance(self.continuation_state(), ResumableEngineSession)
 
 
 class SessionStore(Protocol):

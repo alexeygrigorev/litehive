@@ -818,6 +818,11 @@ Legend:
   Remaining work: review lifecycle continuation flows outside
   subagent artifact persistence and decide which optional states are
   true start-vs-continue domain states.
+  Progress 2026-05-07: added lifecycle `FreshEngineSession` and
+  `ResumableEngineSession` continuation states behind `Session`,
+  plus object methods for reading and capturing the engine resume id.
+  The crash-resume adapter now uses those methods instead of reading
+  and writing `Session.engine_session_id` directly.
 - [ ] M40. Revisit `subagent_inactivity_timeout_seconds`,
   `open code inactivity timeout`, and `compiled inactivity pattern`;
   make each previous small note into a separate task.

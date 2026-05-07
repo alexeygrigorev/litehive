@@ -309,6 +309,8 @@ def test_sessions_empty_get_or_create_returns_fresh(workspace: Path) -> None:
     session = sessions.get_or_create("T-0001", PipelineState.IMPLEMENTING, "codex")
     assert session.engine_session_id is None
     assert session.conversation_id is None
+    assert session.resume_session_id() is None
+    assert session.resumable() is False
 
 
 def test_pipeline_sessions_schema_omits_retained_turn_metric(workspace: Path) -> None:
@@ -331,7 +333,19 @@ def test_sessions_persist_roundtrip(workspace: Path) -> None:
     loaded = sessions.get_or_create("T-0001", PipelineState.IMPLEMENTING, "codex")
     assert loaded.engine_session_id == "cdx-abc-123"
     assert loaded.conversation_id == "conv-xyz"
+    assert loaded.resume_session_id() == "cdx-abc-123"
     assert loaded.resumable() is True
+
+
+def test_session_continuation_state_can_capture_engine_resume_id() -> None:
+    session = Session()
+
+    assert session.resume_session_id() is None
+
+    session.capture_engine_session_id("codex-thread-123")
+
+    assert session.resume_session_id() == "codex-thread-123"
+    assert session.resumable() is True
 
 
 def test_sessions_keyed_by_task_node_engine_triple(workspace: Path) -> None:
