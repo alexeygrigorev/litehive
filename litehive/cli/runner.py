@@ -22,7 +22,7 @@ from litehive.daemon.execution import (
     start_background_daemon,
     stop_workspace_daemon,
 )
-from litehive.daemon.registry import get_workspace_daemon
+from litehive.daemon.registry import get_workspace_daemon_for_workspace
 from litehive.db.schema import MigrationApplyError, apply_pending_migrations, migration_status
 from litehive.git.ops import has_non_litehive_changes, is_git_repo
 from litehive.domain.common import PipelineState, Verdict
@@ -645,11 +645,12 @@ def backup_restore(
     cannot accidentally wipe their workspace.
     """
     create_workspace(workspace)
-    daemon = get_workspace_daemon(workspace)
+    workspace_obj = build_workspace(workspace)
+    daemon = get_workspace_daemon_for_workspace(workspace_obj)
     if daemon is not None:
         print("backup restore failed: workspace daemon is running")
         return 1
-    runner = runner_status_for_workspace(build_workspace(workspace))
+    runner = runner_status_for_workspace(workspace_obj)
     if runner.status in {"running", "late"}:
         print("backup restore failed: workspace runner is active")
         return 1

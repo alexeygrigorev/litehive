@@ -52,7 +52,7 @@ def test_restore_command_refuses_when_daemon_running(
 ) -> None:
     create_workspace(tmp_path)
 
-    monkeypatch.setattr("litehive.cli.runner.get_workspace_daemon", lambda root: {"pid": 123})
+    monkeypatch.setattr("litehive.cli.runner.get_workspace_daemon_for_workspace", lambda workspace: {"pid": 123})
 
     result = CliRunner().invoke(
         app,
@@ -70,7 +70,7 @@ def test_restore_command_refuses_when_runner_active(
 ) -> None:
     create_workspace(tmp_path)
 
-    monkeypatch.setattr("litehive.cli.runner.get_workspace_daemon", lambda root: None)
+    monkeypatch.setattr("litehive.cli.runner.get_workspace_daemon_for_workspace", lambda workspace: None)
     monkeypatch.setattr(
         "litehive.cli.runner.runner_status_for_workspace",
         lambda workspace: RunnerStatusState(status="running", pid=321),
