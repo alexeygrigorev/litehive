@@ -2053,9 +2053,13 @@ Legend:
   object instead of a tuple containing a dict, and `run_daemon_loop`
   reads `active_task_id`, `queue`, and `pool_stop_reason` directly
   from the typed state.
-- [ ] DM10. Fix daemon docstrings to say where each helper is used
+- [x] DM10. Fix daemon docstrings to say where each helper is used
   and why.
   Source: note 5, 17:43-17:48.
+  Completed 2026-05-07: updated daemon helper docstrings for status
+  snapshot wrappers, heartbeat age checks, daemon registration cleanup,
+  venv readiness, and status-line rendering so each names its caller or
+  boundary and explains why the helper exists.
 - [ ] DM11. Review `pick_default_command_prefix`; the note questions
   whether it is really needed.
   Source: note 5, 17:50-18:01.

@@ -31,6 +31,7 @@ from litehive.config.model import DaemonConfig
 from litehive.config.workspace import create_workspace
 from litehive.attention import AttentionRepository
 from litehive.domain.pool import PoolStopReason
+from litehive.domain.task import WorkspaceState
 from litehive.db.schema import apply_pending_migrations
 from litehive.git.ops import check_origin_divergence
 from litehive.observability.status import (
@@ -42,7 +43,6 @@ from litehive.observability.venv_health import daemon_broken_venv_message, probe
 from litehive.state.backup import create_scheduled_workspace_backup
 from litehive.state.persist import load_state_for_workspace, set_pool_stop_reason
 from litehive.state.locking import runner_pid_is_alive, runner_status_for_workspace
-from litehive.domain.task import WorkspaceState
 from litehive.workspace import Workspace
 
 from .logs import latest_matching, prune_run_all_log_dirs, latest_run_all_log_dir_for_workspace
@@ -122,7 +122,11 @@ def sleep_with_stop(seconds: float, stop_requested_fn: Callable[[], bool]) -> No
 
 def _daemon_status_snapshot(workspace: Path) -> DaemonStatusSnapshot:
     """
-    Path-based compatibility wrapper for daemon status tests and helpers.
+    Build a daemon-loop status snapshot from a root path.
+
+    Unit tests and older path-based helper code call this thin wrapper;
+    the daemon loop itself uses `_daemon_status_snapshot_for_workspace`
+    after it has already built a `Workspace`.
     """
     return _daemon_status_snapshot_for_workspace(build_workspace(workspace))
 
@@ -192,6 +196,10 @@ def _heartbeat_age_seconds(heartbeat_at: object) -> float | None:
     """
     Compute how stale a recorded daemon heartbeat is, tolerating bad input.
 
+    Called by `_daemon_healthcheck_failed` while starting a background
+    daemon. It converts registry metadata into an age check without
+    letting corrupt timestamps crash daemon startup.
+
     Returns ``None`` for missing/non-string/unparseable timestamps so
     the healthcheck treats them as "no recent heartbeat" rather than
     crashing the start-background path on a corrupt registry row.
@@ -248,6 +256,8 @@ def _clear_recorded_daemon(workspace: Path, pid: int) -> None:
     """
     Drop the daemon registration row once the pid has confirmed exit.
 
+    Used by the SIGTERM/SIGKILL stop sequence after liveness checks
+    prove the old process is gone.
     Pinning ``unregister_daemon`` by ``pid`` prevents the stop
     sequence from racing a newer daemon: if a fresh daemon registered
     for the same workspace while we were waiting for the previous one
@@ -409,6 +419,7 @@ def create_workspace_venvs_ready(
     """
     Refuse to start the daemon when the workspace has a broken Python venv.
 
+    Called by `start_background_daemon` before forking the worker.
     A broken venv would surface inside subagents as cryptic
     ``ModuleNotFoundError``s on every task, with the operator chasing
     a different agent each time. Failing here produces exactly one
@@ -747,7 +758,11 @@ def stop_workspace_daemon(workspace: Path) -> dict[str, object] | None:
 
 def daemon_status_lines(workspace: Path) -> list[str]:
     """
-    Path-based compatibility wrapper for daemon status rendering.
+    Render daemon status lines from a root path.
+
+    The CLI status command still passes a path at this boundary; this
+    wrapper builds the `Workspace` once and delegates to
+    `daemon_status_lines_for_workspace`.
     """
     return daemon_status_lines_for_workspace(build_workspace(workspace))
 
