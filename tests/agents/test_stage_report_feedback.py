@@ -151,13 +151,14 @@ def test_stage_report_rejects_comment_verdicts_and_legacy_files_changed() -> Non
         )
 
 
-def test_task_activity_entry_rejects_removed_fail_verdict_alias() -> None:
+@pytest.mark.parametrize("verdict", ["accept", "fail"])
+def test_task_activity_entry_rejects_unsupported_submitted_verdicts(verdict: str) -> None:
     with pytest.raises(ValidationError, match="verdict"):
         TaskActivityEntry.model_validate(
             {
                 "role": "swe",
                 "stage": "implementing",
-                "verdict": "fail",
+                "verdict": verdict,
                 "message": "legacy failure wording",
             }
         )

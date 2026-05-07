@@ -997,9 +997,14 @@ Legend:
   vocabulary, `REJECT` is the explicit agent/reviewer decision that a
   stage result is unacceptable, both project to stage-report `reject`,
   and neither is a task outcome.
-- [ ] D15. Prevent unsupported verdicts from being committed or
+- [x] D15. Prevent unsupported verdicts from being committed or
   serialized. Add tests or validation that catches them.
   Source: note 6, 04:46-04:55.
+  Verified 2026-05-07: `TaskActivityEntry` validates submitted
+  verdicts against `TASK_ACTIVITY_VERDICT_KINDS`, so unsupported
+  `Verdict` members cannot be persisted through activity serialization.
+  Strengthened the characterization test to cover both unsupported
+  submitted verdicts, `accept` and `fail`.
 - [ ] D16. Remove duplicate values between verdict enums and outcome
   reason codes, such as done/won't-do/defer/duplicate appearing in
   multiple places without clear distinction.
