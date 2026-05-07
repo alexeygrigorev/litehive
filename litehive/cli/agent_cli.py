@@ -25,27 +25,11 @@ from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
 from litehive.workspace import Workspace
 
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
-from litehive.domain.reports import TaskActivityEntry, TaskActivityVerdict, classify_task_activity_verdict
+from litehive.domain.reports import TaskActivityEntry, classify_task_activity_verdict
+from litehive.domain.roles import agent_activity_verdicts_for_role, agent_verdict_requires_target_stage
 from litehive.tasks.status import close_task_for_workspace, update_task_for_workspace
 from litehive.state.persist import load_state
 
-
-VERDICT_ALLOWLIST: dict[str, frozenset[TaskActivityVerdict]] = {
-    "planner": frozenset({Verdict.PASS, Verdict.REJECT}),
-    "swe": frozenset({Verdict.PASS, Verdict.REJECT}),
-    "qa": frozenset({Verdict.PASS, Verdict.REJECT}),
-    "reviewer": frozenset({Verdict.PASS, Verdict.REJECT}),
-    "recovery": frozenset(
-        {
-            Verdict.RESUME,
-            Verdict.ADVANCE,
-            Verdict.DONE,
-            Verdict.BUDGET_HIT,
-            Verdict.REJECT,
-        }
-    ),
-    "merge-resolver": frozenset({Verdict.PASS, Verdict.REJECT}),
-}
 
 agent_app = typer.Typer(
     add_completion=False,
@@ -128,18 +112,6 @@ def _resolve_report_stage(explicit_stage: str | None, task, pipeline_stage: str 
     if runtime_stage:
         return runtime_stage
     return task.pipeline_status
-
-
-def _allowed_verdicts_for_role(role: str) -> frozenset[TaskActivityVerdict]:
-    """
-    Source of the per-role verdict gate enforced by ``agent report``.
-
-    Falls back to the conservative ``{pass, reject}`` for any role
-    not in :data:`VERDICT_ALLOWLIST`; only recovery widens that set.
-    Centralized here so a new role's verdict surface is one
-    dictionary edit, not a sprawl of inline ``if role == ...`` gates.
-    """
-    return VERDICT_ALLOWLIST.get(role, frozenset({Verdict.PASS, Verdict.REJECT}))
 
 
 @dataclass(frozen=True)
@@ -283,7 +255,7 @@ def agent_report_command(
     identity = _resolve_report_identity(workspace_obj, task)
     agent_role = identity.role
 
-    allowed = _allowed_verdicts_for_role(agent_role)
+    allowed = agent_activity_verdicts_for_role(agent_role)
     if normalized_verdict not in allowed:
         print("You are not authorized to perform this command.")
         raise SystemExit(1)
@@ -291,7 +263,7 @@ def agent_report_command(
         normalized_target_stage = target_stage.strip()
     else:
         normalized_target_stage = None
-    if agent_role == "recovery" and normalized_verdict in {Verdict.RESUME, Verdict.ADVANCE}:
+    if agent_verdict_requires_target_stage(agent_role, normalized_verdict):
         if not normalized_target_stage:
             print(f"report failed: recovery verdict '{normalized_verdict}' requires --target-stage")
             raise SystemExit(1)

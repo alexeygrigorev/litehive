@@ -1305,10 +1305,15 @@ Legend:
 
 ## CLI And Command Instructions
 
-- [ ] C1. Remove domain strings from `agent_cli` / agency alignment
+- [x] C1. Remove domain strings from `agent_cli` / agency alignment
   code. Values submitted by agents must be domain enums, not raw
   strings hard-coded in CLI.
   Source: note 4, 12:53-14:07.
+  Completed 2026-05-07: moved the agent report verdict allow-list and
+  recovery target-stage rule into `litehive.domain.roles`. The agent
+  CLI now asks the domain role policy for accepted `Verdict` enum
+  members instead of carrying raw role-string maps or inline
+  `role == "recovery"` gates.
 - [ ] C2. Keep CLI thin: parse user input, create/load the right
   domain object, and dispatch. Do not keep business logic in CLI.
   Source: note 4, 14:00-14:07; note 4, 16:57-19:09.

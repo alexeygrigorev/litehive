@@ -1,5 +1,11 @@
-from litehive.domain.common import PipelineState, PipelineStatus, TaskStage
-from litehive.domain.roles import AgentRole, agent_stage_for_task, known_agent_role
+from litehive.domain.common import PipelineState, PipelineStatus, TaskStage, Verdict
+from litehive.domain.roles import (
+    AgentRole,
+    agent_activity_verdicts_for_role,
+    agent_stage_for_task,
+    agent_verdict_requires_target_stage,
+    known_agent_role,
+)
 from litehive.domain.task import TaskRecord
 
 
@@ -20,6 +26,27 @@ def test_known_agent_role_keeps_unknown_boundary_values_out_of_domain() -> None:
     assert known_agent_role("swe") is AgentRole.SWE
     assert known_agent_role("unknown-specialist") is None
     assert known_agent_role(None) is None
+
+
+def test_agent_activity_verdicts_keep_role_policy_in_domain() -> None:
+    assert agent_activity_verdicts_for_role("swe") == frozenset({Verdict.PASS, Verdict.REJECT})
+    assert agent_activity_verdicts_for_role("unknown-specialist") == frozenset({Verdict.PASS, Verdict.REJECT})
+    assert agent_activity_verdicts_for_role("recovery") == frozenset(
+        {
+            Verdict.RESUME,
+            Verdict.ADVANCE,
+            Verdict.DONE,
+            Verdict.BUDGET_HIT,
+            Verdict.REJECT,
+        }
+    )
+
+
+def test_recovery_routing_verdicts_require_target_stage() -> None:
+    assert agent_verdict_requires_target_stage("recovery", Verdict.RESUME)
+    assert agent_verdict_requires_target_stage("recovery", Verdict.ADVANCE)
+    assert not agent_verdict_requires_target_stage("recovery", Verdict.DONE)
+    assert not agent_verdict_requires_target_stage("swe", Verdict.RESUME)
 
 
 def test_agent_stage_for_task_prefers_runtime_stage_over_role_default() -> None:

@@ -12,10 +12,24 @@ from litehive.domain.common import (
     PipelineState,
     StringEnum,
     TaskStage,
+    Verdict,
     task_stage_for_pipeline_state,
 )
-from litehive.domain.reports import ReportPipelineState
+from litehive.domain.reports import ReportPipelineState, TaskActivityVerdict
 from litehive.domain.task import TaskRecord
+
+
+_DEFAULT_AGENT_ACTIVITY_VERDICTS: frozenset[TaskActivityVerdict] = frozenset({Verdict.PASS, Verdict.REJECT})
+_RECOVERY_AGENT_ACTIVITY_VERDICTS: frozenset[TaskActivityVerdict] = frozenset(
+    {
+        Verdict.RESUME,
+        Verdict.ADVANCE,
+        Verdict.DONE,
+        Verdict.BUDGET_HIT,
+        Verdict.REJECT,
+    }
+)
+_RECOVERY_TARGET_STAGE_VERDICTS: frozenset[TaskActivityVerdict] = frozenset({Verdict.RESUME, Verdict.ADVANCE})
 
 
 class AgentRole(StringEnum):
@@ -59,6 +73,15 @@ class AgentRole(StringEnum):
             case AgentRole.RECOVERY:
                 return PipelineState.RECOVERING
 
+    @property
+    def allowed_activity_verdicts(self) -> frozenset[TaskActivityVerdict]:
+        """
+        Verdicts this role may submit through the agent report channel.
+        """
+        if self is AgentRole.RECOVERY:
+            return _RECOVERY_AGENT_ACTIVITY_VERDICTS
+        return _DEFAULT_AGENT_ACTIVITY_VERDICTS
+
 
 def known_agent_role(value: str | None) -> AgentRole | None:
     """
@@ -74,6 +97,27 @@ def known_agent_role(value: str | None) -> AgentRole | None:
         return AgentRole(value)
     except ValueError:
         return None
+
+
+def agent_activity_verdicts_for_role(role: str | None) -> frozenset[TaskActivityVerdict]:
+    """
+    Return the agent-report verdict gate for a persisted role label.
+
+    Unknown roles get the conservative pass/reject surface; only the
+    recovery role may submit resume/advance/done/budget-hit routing
+    verdicts.
+    """
+    agent_role = known_agent_role(role)
+    if agent_role is None:
+        return _DEFAULT_AGENT_ACTIVITY_VERDICTS
+    return agent_role.allowed_activity_verdicts
+
+
+def agent_verdict_requires_target_stage(role: str | None, verdict: TaskActivityVerdict) -> bool:
+    """
+    Return whether an agent verdict must name a recovery destination.
+    """
+    return known_agent_role(role) is AgentRole.RECOVERY and verdict in _RECOVERY_TARGET_STAGE_VERDICTS
 
 
 def agent_stage_for_task(task: TaskRecord, role: str | None = None) -> ReportPipelineState:
