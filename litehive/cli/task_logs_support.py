@@ -116,10 +116,12 @@ def list_task_subagents_for_workspace(workspace: Workspace, task: TaskRecord) ->
 
     for ref in reversed(task.subagents):
         runtime_state = runtime_by_id.get(ref.id)
-        session = workspace.load_subagent_session(task.id, ref.id)
-        exit_code = _pick_value(runtime_state, session, "exit_code")
-        started_at = _pick_value(runtime_state, session, "started_at", "created_at")
-        completed_at = _pick_value(runtime_state, session, "completed_at", "updated_at")
+        session = workspace.load_subagent_session_record(task.id, ref.id)
+        exit_code = _pick_runtime_value(runtime_state, "exit_code")
+        if exit_code is None:
+            exit_code = session.exit_code
+        started_at = _pick_runtime_value(runtime_state, "started_at") or session.created_at
+        completed_at = _pick_runtime_value(runtime_state, "completed_at") or session.updated_at
         duration = _format_duration(started_at, completed_at)
         if exit_code is not None:
             exit_str = str(exit_code)
@@ -333,25 +335,19 @@ def _artifact_for_kind(base: Path, kind: str, active: bool) -> Path | None:
     raise ValueError(f"Unsupported artifact kind: {kind}")
 
 
-def _pick_value(runtime_state: object, session: dict[str, object], *keys: str) -> object:
+def _pick_runtime_value(runtime_state: object, *keys: str) -> object:
     """
-    Read a field preferring runtime state over the persisted session.
+    Read a field from a live runtime state.
 
     Live in-memory values (e.g. exit code on a just-finished run)
-    win over stale on-disk snapshots so the listing reflects the
-    truth at the moment of the call. The variadic ``keys`` lets a
-    caller pass aliases for the same logical value across the two
-    sources (``started_at`` vs ``created_at``).
+    win over stale on-disk snapshots in ``list_task_subagents`` so
+    the listing reflects the truth at the moment of the call.
     """
     if runtime_state is not None:
         for key in keys:
             value = getattr(runtime_state, key, None)
             if value is not None:
                 return value
-    for key in keys:
-        value = session.get(key)
-        if value is not None:
-            return value
     return None
 
 
