@@ -68,7 +68,7 @@ class _StubLifecycleEngine:
 
 def _assert_engine_selection_request(actual: object, expected: EngineSelectionRequest) -> None:
     assert getattr(actual, "engine_override") == expected.engine_override
-    assert getattr(actual, "model_override") == expected.model_override
+    assert getattr(actual, "requested_model_name") == expected.requested_model_name
     assert getattr(actual, "engine_names") == expected.engine_names
     assert getattr(actual, "excluded_engine_names") == expected.excluded_engine_names
     assert getattr(actual, "require_available") == expected.require_available

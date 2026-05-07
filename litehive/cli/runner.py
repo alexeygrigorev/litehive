@@ -375,7 +375,7 @@ def _preview_single(
         workspace,
         selection.task,
         container.config,
-        EngineSelectionRequest(engine_override=engine, model_override=model),
+        EngineSelectionRequest(engine_override=engine, requested_model_name=model),
     )
     print(f"task: {selection.task.id} {selection.task.title}")
     if engine_selection.engine_name is None:

@@ -65,7 +65,7 @@ class EngineSelectionRequest:
     Attributes:
         engine_override: Operator-selected engine that replaces the
             task/config default engine for this pass.
-        model_override: Operator-selected model passed to engines that
+        requested_model_name: Operator-selected model passed to engines that
             support model overrides.
         engine_names: Explicit candidate engine list, used by recovery
             and tests that need to bypass task/config planning.
@@ -78,7 +78,7 @@ class EngineSelectionRequest:
     """
 
     engine_override: str | None = None
-    model_override: str | None = None
+    requested_model_name: str | None = None
     engine_names: list[str] | None = None
     excluded_engine_names: Collection[str] = ()
     require_available: bool = False
@@ -317,7 +317,7 @@ def select_engine_for_workspace(
                 task,
                 config,
                 engine_name=engine_name,
-                model_override=selection_request.model_override,
+                requested_model_name=selection_request.requested_model_name,
             ),
             engine_attempts=attempts,
             skipped=skipped,
@@ -339,7 +339,7 @@ def resolve_model(
     task: TaskRecord,
     config: LitehiveConfig,
     engine_name: str,
-    model_override: str | None = None,
+    requested_model_name: str | None,
 ) -> str | None:
     """
     Pick the model name for a chosen engine.
@@ -353,8 +353,8 @@ def resolve_model(
     """
     if not get_engine(engine_name).capabilities.supports_model_override:
         return None
-    if model_override is not None:
-        return model_override
+    if requested_model_name is not None:
+        return requested_model_name
     if task.model is not None:
         return task.model
     return config.model_for_engine(engine_name)

@@ -72,7 +72,7 @@ class ConfigBackedEngineSelector:
         self.engine_factory = engine_factory
         self.workspace = workspace
         self.engine_override = engine_override
-        self.model_override = model_override
+        self.requested_model_name = model_override
         self.check_quota = check_quota
 
     def _selection_task(self, state: TaskState, node_name: PipelineState) -> TaskRecord | None:
@@ -119,7 +119,7 @@ class ConfigBackedEngineSelector:
 
         request = EngineSelectionRequest(
             engine_override=self.engine_override,
-            model_override=self.model_override,
+            requested_model_name=self.requested_model_name,
             excluded_engine_names=excluded,
             check_quota=self.check_quota,
         )

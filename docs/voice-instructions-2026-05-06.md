@@ -1762,9 +1762,16 @@ Legend:
   production path from `_candidate_engine_order(...)` and
   `resolve_engine_attempt_order(...)` into the config object, with a
   regression test for the config-owned ordering rule.
-- [ ] R19. Clarify `model_override`; if a model should always be set,
+- [x] R19. Clarify `model_override`; if a model should always be set,
   make it always explicit.
   Source: note 4, 43:05-43:36.
+  Completed 2026-05-07: renamed the internal engine-selection request
+  field to `requested_model_name` so it describes the operator's
+  requested model value rather than implying the selected model is
+  always an override. Made `resolve_model(...)` require
+  `requested_model_name` explicitly at every call site, including
+  `None`, so absence of an operator model request is visible in the
+  exact model-resolution path.
 - [ ] R20. Simplify `resolve_engine_name`,
   `resolve_engine_attempt_order`, and `resolve_engine_plan`. The flow
   should load engine names, choose the first unfrozen engine,

@@ -38,11 +38,11 @@ def test_resolve_model_prefers_run_override_then_task_then_workspace_default(
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Pending task", model="custom-task-model")
 
-    assert resolve_model(task, config, engine_name="opencode", model_override="run-model") == "run-model"
-    assert resolve_model(task, config, engine_name="opencode") == "custom-task-model"
+    assert resolve_model(task, config, engine_name="opencode", requested_model_name="run-model") == "run-model"
+    assert resolve_model(task, config, engine_name="opencode", requested_model_name=None) == "custom-task-model"
 
     task.model = None
-    assert resolve_model(task, config, engine_name="opencode") == "zai-coding-plan/glm-5-turbo"
+    assert resolve_model(task, config, engine_name="opencode", requested_model_name=None) == "zai-coding-plan/glm-5-turbo"
 
 
 def test_resolve_model_skips_unsupported_engine_override(tmp_path: Path) -> None:
@@ -50,7 +50,7 @@ def test_resolve_model_skips_unsupported_engine_override(tmp_path: Path) -> None
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Pending task", model="custom-task-model")
 
-    assert resolve_model(task, config, engine_name="codex", model_override="run-model") is None
+    assert resolve_model(task, config, engine_name="codex", requested_model_name="run-model") is None
 
 
 def test_resolve_model_honors_goz_run_task_and_workspace_overrides(tmp_path: Path) -> None:
@@ -64,11 +64,11 @@ def test_resolve_model_honors_goz_run_task_and_workspace_overrides(tmp_path: Pat
     config = load_config(tmp_path)
     task = create_task(tmp_path, title="Pending task", model="custom-task-model")
 
-    assert resolve_model(task, config, engine_name="goz", model_override="run-model") == "run-model"
-    assert resolve_model(task, config, engine_name="goz") == "custom-task-model"
+    assert resolve_model(task, config, engine_name="goz", requested_model_name="run-model") == "run-model"
+    assert resolve_model(task, config, engine_name="goz", requested_model_name=None) == "custom-task-model"
 
     task.model = None
-    assert resolve_model(task, config, engine_name="goz") == "glm-5-turbo"
+    assert resolve_model(task, config, engine_name="goz", requested_model_name=None) == "glm-5-turbo"
 
 
 def test_resolve_engine_name_ignores_title_keywords_uses_default(
