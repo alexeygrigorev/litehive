@@ -63,7 +63,7 @@ class AgentTaskMutationAuthorizer:
         if task_id is None:
             raise AgentTaskMutationError("LITEHIVE_TASK_ID is not set")
 
-        workspace = Workspace.from_path(self._resolve_root(task_id))
+        workspace = self._resolve_workspace(task_id)
         state = load_state_for_workspace(workspace)
         if (
             env_task_id is not None
@@ -82,12 +82,14 @@ class AgentTaskMutationAuthorizer:
             raise AgentTaskMutationError("agent role is not authorized", unauthorized=True)
         return self.role
 
-    def _resolve_root(self, task_id: str) -> Path:
+    def _resolve_workspace(self, task_id: str) -> Workspace:
         env_workspace_root = _normalized_optional(self.env_workspace_root)
         try:
             if env_workspace_root is not None:
-                return normalize_workspace_root(Path(env_workspace_root), source="LITEHIVE_WORKSPACE_ROOT")
-            return resolve_workspace(task_id)
+                root = normalize_workspace_root(Path(env_workspace_root), source="LITEHIVE_WORKSPACE_ROOT")
+            else:
+                root = resolve_workspace(task_id)
+            return Workspace.from_path(root)
         except ValueError as exc:
             raise AgentTaskMutationError(str(exc)) from exc
 
