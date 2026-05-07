@@ -44,7 +44,7 @@ from litehive.git.ops import GitError, is_git_repo, status_porcelain
 from litehive.roles.base import PromptContext
 from litehive.roles.recovery import RecoveryAgent
 from litehive.workspace import Workspace
-from litehive.state.records import get_task, get_task_worktree_path
+from litehive.state.records import get_task_worktree_path
 from litehive.tasks.activity import latest_task_activity_entry, load_task_activity, save_task_activity
 from litehive.tasks.journal import append_journal
 from litehive.tasks.activity_rendering import normalized_files_changed
@@ -344,7 +344,7 @@ def latest_verdict_after(
     Returns ``None`` when nothing newer landed — caller raises ``NudgeRequired``.
     """
     workspace_root = workspace.root
-    task = get_task(workspace_root, task_id)
+    task = workspace.get_task(task_id)
     if task is None:
         return None
     latest = latest_task_activity_entry(
@@ -450,7 +450,7 @@ class HeruEngineAdapter:
                 f"HeruEngineAdapter expects an AgentPrompt from RoleAgent.build_prompt, got {type(prompt).__name__}"
             )
 
-        task = get_task(self.workspace_root, state.task_id)
+        task = self.workspace.get_task(state.task_id)
         if task is None:
             raise UnrecoverableError(f"task {state.task_id} not found in workspace")
 
