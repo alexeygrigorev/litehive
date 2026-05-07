@@ -31,7 +31,7 @@ from litehive.git.ops import (
 from litehive.state.records import get_task_worktree_path
 from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.workspace import Workspace
-from litehive.worktree.paths import resolve_recorded_worktree_path
+from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace
 
 
 def inspect_dirty_worktree_gate(workspace: Workspace) -> DirtyWorktreeGateReport:
@@ -45,13 +45,12 @@ def inspect_dirty_worktree_gate(workspace: Workspace) -> DirtyWorktreeGateReport
     interrupted-task resumption — three call sites means one helper
     instead of three.
     """
-    root = workspace.root
-    if not is_git_repo(root):
+    if not is_git_repo(workspace.root):
         return DirtyWorktreeGateReport()
 
     findings: list[DirtyWorktreeFinding] = []
     try:
-        dirty_entries = status_porcelain(root)
+        dirty_entries = status_porcelain(workspace.root)
     except GitError:
         return DirtyWorktreeGateReport()
 
@@ -73,7 +72,7 @@ def inspect_dirty_worktree_gate(workspace: Workspace) -> DirtyWorktreeGateReport
         findings.append(finding)
 
     for task in tasks:
-        worktree_path = resolve_recorded_worktree_path(root, get_task_worktree_path(task))
+        worktree_path = resolve_recorded_worktree_path_for_workspace(workspace, get_task_worktree_path(task))
         if worktree_path is None:
             continue
         recorded_path = get_task_worktree_path(task)
