@@ -270,6 +270,17 @@ class LitehiveConfig:
             return self.claude_model
         return None
 
+    def engine_attempt_order(self, initial_engine_names: list[str]) -> list[str]:
+        """
+        Build the canonical engine fallback chain for this workspace.
+
+        Concatenates the task's initial engine list with the
+        workspace preference. Selection and CLI preview call through
+        the config so the same workspace-owned ordering rule is used
+        everywhere.
+        """
+        return list(initial_engine_names) + self.engine_preference
+
 
 _VALID_CONFIG_KEYS = frozenset(field.name for field in fields(LitehiveConfig))
 

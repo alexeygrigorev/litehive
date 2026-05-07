@@ -1747,7 +1747,7 @@ Legend:
   direct tests through it. `select_engine_for_workspace(...)` now takes
   the task/config plus one request object instead of six optional
   control parameters.
-- [ ] R18. Move engine lookup/order logic into config/domain object
+- [x] R18. Move engine lookup/order logic into config/domain object
   methods where appropriate, for example `config.get_engine(...)`.
   Source: note 4, 42:28-43:05.
   Progress 2026-05-07: moved workspace model lookup from
@@ -1756,6 +1756,12 @@ Legend:
   lives on the config object that owns those fields. Remaining work:
   move engine ordering/plan lookup into a domain/config object where it
   reduces `engine_models` branching.
+  Completed 2026-05-07: moved the shared fallback ordering rule onto
+  `LitehiveConfig.engine_attempt_order(...)` and routed both selection
+  and preview ordering through that config method. Verified the exact
+  production path from `_candidate_engine_order(...)` and
+  `resolve_engine_attempt_order(...)` into the config object, with a
+  regression test for the config-owned ordering rule.
 - [ ] R19. Clarify `model_override`; if a model should always be set,
   make it always explicit.
   Source: note 4, 43:05-43:36.

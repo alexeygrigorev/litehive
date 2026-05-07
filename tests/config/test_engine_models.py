@@ -82,6 +82,12 @@ def test_resolve_engine_name_ignores_title_keywords_uses_default(
     assert resolve_engine_plan(task, config) == ["codex"]
 
 
+def test_config_builds_workspace_engine_attempt_order() -> None:
+    config = LitehiveConfig(engine_preference=["gemini", "copilot"])
+
+    assert config.engine_attempt_order(["codex"]) == ["codex", "gemini", "copilot"]
+
+
 def test_resolve_engine_name_uses_default_engine_without_task_override(
     tmp_path: Path,
 ) -> None:

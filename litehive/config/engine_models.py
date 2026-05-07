@@ -22,20 +22,6 @@ from litehive.domain.task import TaskRecord
 from litehive.workspace import Workspace
 
 
-def _engine_attempt_order(initial_engine_names: list[str], engine_preference: list[str]) -> list[str]:
-    """
-    Build the canonical engine fallback chain.
-
-    Concatenates the task's initial engine list with the workspace
-    preference. Reused by :func:`select_engine_for_workspace` and
-    :func:`resolve_engine_attempt_order` so the CLI preview and the
-    actual execution path see the
-    same chain — divergence here would let the operator preview
-    one chain and watch a different one run.
-    """
-    return list(initial_engine_names) + engine_preference
-
-
 @dataclass(frozen=True)
 class EngineSkip:
     """
@@ -115,11 +101,7 @@ def _candidate_engine_order(
         config,
         engine_override=request.engine_override,
     )
-    return [
-        engine_name
-        for engine_name in _engine_attempt_order(plan, config.engine_preference)
-        if engine_name not in excluded
-    ]
+    return [engine_name for engine_name in config.engine_attempt_order(plan) if engine_name not in excluded]
 
 
 def is_engine_frozen(config: LitehiveConfig, engine_name: str) -> bool:
@@ -408,10 +390,7 @@ def resolve_engine_attempt_order(
     chain without executing a stage; freezes are filtered up
     front so the preview reflects current state.
     """
-    order = _engine_attempt_order(
-        resolve_engine_plan(task, config, engine_override=engine_override),
-        config.engine_preference,
-    )
+    order = config.engine_attempt_order(resolve_engine_plan(task, config, engine_override=engine_override))
     if config.engine_freeze:
         order = [e for e in order if not is_engine_frozen(config, e)]
     return order
