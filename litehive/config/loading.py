@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Mapping
 import yaml
 from litehive.config.model import LitehiveConfig, parse_litehive_config_data
 from litehive.config.paths import litehive_root
-from litehive.config.workspace import ensure_workspace
+from litehive.config.workspace import require_existing_workspace
 from litehive.config.workspace_files import config_path, context_path
 
 if TYPE_CHECKING:
@@ -92,14 +92,12 @@ def load_config_for_workspace(workspace: "Workspace") -> LitehiveConfig:
     """
     Load config for an injected workspace.
 
-    Bootstraps the workspace if needed, layers in runtime-setting
-    overrides on top of the file-based config, and returns a
-    validated :class:`LitehiveConfig`. Called by every CLI command
-    and the daemon at startup so config evolution stays in one
-    place.
+    Requires an existing workspace, layers in runtime-setting overrides
+    on top of the file-based config, and returns a validated
+    :class:`LitehiveConfig`. Workspace creation stays explicit through
+    ``ensure_workspace``.
     """
-    root = workspace.root
-    ensure_workspace(root)
+    root = require_existing_workspace(workspace.root, source="load_config")
     # inline: runtime_settings transitively pulls db.schema which loads
     # config.* back through litehive/config/__init__.py during partial init.
     from litehive.config.runtime_settings import apply_runtime_settings_to_config_data  # noqa: PLC0415
@@ -114,9 +112,8 @@ def load_context(root: Path) -> str:
 
     The context document is the stable workspace-level prose
     every agent prompt opens with (project background, conventions).
-    Bootstraps the workspace first so the file is guaranteed to
-    exist; without bootstrap, a fresh workspace would error here
-    instead of seeing the seeded context.
+    Requires an existing workspace so reads cannot silently bootstrap a
+    new project.
     """
-    ensure_workspace(root)
-    return context_path(root).read_text(encoding="utf-8")
+    workspace_root = require_existing_workspace(root, source="load_context")
+    return context_path(workspace_root).read_text(encoding="utf-8")

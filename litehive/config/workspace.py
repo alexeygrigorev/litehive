@@ -90,6 +90,23 @@ def _workspace_parent_root(path: Path) -> Path | None:
     return None
 
 
+def require_existing_workspace(root: Path, source: str) -> Path:
+    """
+    Return ``root`` when it is already a Litehive workspace.
+
+    Loading paths call this instead of ``ensure_workspace`` so a read
+    operation cannot silently bootstrap a new project. Workspace
+    creation remains explicit through ``ensure_workspace``.
+    """
+    resolved_root = normalize_workspace_root(root, source=source)
+    if workspace_dir(resolved_root).is_dir():
+        return resolved_root
+    raise ValueError(
+        f"unable to load workspace from {source}: {resolved_root} is not an existing Litehive project; "
+        "run `litehive init` first"
+    )
+
+
 def _task_matches(root: Path, task_id: str | None) -> bool:
     """
     Workspace-resolution predicate.

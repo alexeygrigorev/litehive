@@ -1883,9 +1883,14 @@ Legend:
   tests, and updated `Workspace.from_path` documentation so workspace
   normalization now only documents current Litehive-internal path
   rejection and managed-worktree remapping.
-- [ ] W3. Loading a workspace should not create a workspace. If a path
+- [x] W3. Loading a workspace should not create a workspace. If a path
   is not an existing LiteHive project, raise an error.
   Source: note 5, 07:33-08:59.
+  Completed 2026-05-07: added `require_existing_workspace(...)` for
+  read paths and routed `load_config(...)` and `load_context(...)`
+  through it. Non-workspace paths now raise without creating
+  `.litehive`; workspace creation remains explicit via
+  `ensure_workspace(...)`.
 - [ ] W4. Remove `workspace_parent_root` / upward parent search.
   Source: note 5, 08:16-08:51.
 - [ ] W5. Remove `task_matches` / `task is none or task exists` style
