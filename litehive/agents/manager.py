@@ -200,7 +200,6 @@ class SubagentManager:
 
     def __init__(
         self,
-        root: Path,
         execution_root: Path,
         *,
         workspace: Workspace,
@@ -219,7 +218,7 @@ class SubagentManager:
         that owns persistence for snapshots, streams, PID metadata, and
         inactivity checks.
         """
-        self.root = root.resolve()
+        self.root = workspace.root.resolve()
         self.execution_root = execution_root.resolve()
         self.workspace = workspace
         self.config = config

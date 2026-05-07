@@ -42,7 +42,7 @@ def test_subagent_manager_receives_session_manager_from_container(tmp_path: Path
 
 
 def test_subagent_manager_constructor_stores_injected_collaborators(tmp_path: Path) -> None:
-    workspace: Any = object()
+    workspace = Workspace.from_path(tmp_path)
     config: Any = object()
     sandbox: Any = object()
     sessions: Any = object()
@@ -50,7 +50,6 @@ def test_subagent_manager_constructor_stores_injected_collaborators(tmp_path: Pa
     subagent_ids: Any = object()
 
     manager = SubagentManager(
-        tmp_path,
         tmp_path / "execution-root",
         workspace=workspace,
         config=config,

@@ -187,7 +187,6 @@ def build_subagent_manager_for_workspace(
     subagent_ids = SubagentIdRepository(workspace)
     manager_type = manager_cls or SubagentManager
     return manager_type(
-        workspace.root,
         execution_root=execution_root,
         workspace=workspace,
         config=config,
