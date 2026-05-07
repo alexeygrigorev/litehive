@@ -16,7 +16,7 @@ from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.lock_manager import WorkspaceLockManager
 from litehive.state.process_lock import ProcessLockManager
-from litehive.state.store import runtime_store, runtime_store_for_workspace
+from litehive.state.store import runtime_store_for_workspace
 from litehive.workspace import Workspace
 
 from litehive.tasks.constants import (
@@ -56,6 +56,16 @@ def _runner_lock_manager(
     held_in_process: Callable[[], bool] | None = None,
 ) -> ProcessLockManager:
     """
+    Path-based compatibility wrapper for runner lock manager construction.
+    """
+    return _runner_lock_manager_for_workspace(Workspace.from_path(root), held_in_process=held_in_process)
+
+
+def _runner_lock_manager_for_workspace(
+    workspace: Workspace,
+    held_in_process: Callable[[], bool] | None = None,
+) -> ProcessLockManager:
+    """
     Build the ``ProcessLockManager`` for the workspace runner lock.
 
     Every site that touches the lockfile reaches it through this helper so
@@ -63,6 +73,7 @@ def _runner_lock_manager(
     settings) lives in one place rather than being re-derived in every
     caller.
     """
+    root = workspace.root
     return ProcessLockManager(
         process_name="runner",
         lock_manager=WorkspaceLockManager(
@@ -70,7 +81,7 @@ def _runner_lock_manager(
             pid_is_alive=runner_pid_is_alive,
             held_in_process=held_in_process,
         ),
-        runtime_store=runtime_store(root),
+        runtime_store=runtime_store_for_workspace(workspace),
     )
 
 
@@ -117,13 +128,20 @@ def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> Non
 
 def _save_runner_process_state(root: Path, status: RunnerStatusState) -> None:
     """
+    Path-based compatibility wrapper for runner status mirroring.
+    """
+    _save_runner_process_state_for_workspace(Workspace.from_path(root), status)
+
+
+def _save_runner_process_state_for_workspace(workspace: Workspace, status: RunnerStatusState) -> None:
+    """
     Mirror runner status into the SQLite runtime store.
 
     Lets dashboards and read-only consumers see runner identity without
     taking the flock; the lockfile remains the source of truth, but the
     SQLite mirror is what the web dashboard polls.
     """
-    runtime_store(root).save_process_state(
+    runtime_store_for_workspace(workspace).save_process_state(
         "runner",
         status=status.status or RunnerStatus.RUNNING,
         payload=status.model_dump(mode="json"),
@@ -132,16 +150,30 @@ def _save_runner_process_state(root: Path, status: RunnerStatusState) -> None:
 
 def _clear_runner_process_state(root: Path) -> None:
     """
+    Path-based compatibility wrapper for clearing runner status mirrors.
+    """
+    _clear_runner_process_state_for_workspace(Workspace.from_path(root))
+
+
+def _clear_runner_process_state_for_workspace(workspace: Workspace) -> None:
+    """
     Drop the SQLite runner-status mirror after the lockfile is released.
 
     Without the explicit clear, dashboards would keep reporting a phantom
     runner identity after the real process has gone; the lockfile-side
     metadata is gone but the SQLite mirror would survive across restarts.
     """
-    runtime_store(root).clear_process_state("runner")
+    runtime_store_for_workspace(workspace).clear_process_state("runner")
 
 
 def read_runner_lock_metadata(root: Path) -> RunnerStatusState:
+    """
+    Path-based compatibility wrapper for runner lock metadata reads.
+    """
+    return read_runner_lock_metadata_for_workspace(Workspace.from_path(root))
+
+
+def read_runner_lock_metadata_for_workspace(workspace: Workspace) -> RunnerStatusState:
     """
     Read recorded runner identity without taking the flock.
 
@@ -149,7 +181,7 @@ def read_runner_lock_metadata(root: Path) -> RunnerStatusState:
     non-blocking read is what lets status surfaces probe ownership without
     contending with a live runner that holds the lock.
     """
-    data = _runner_lock_manager(root.resolve()).read_metadata(strict=True)
+    data = _runner_lock_manager_for_workspace(workspace).read_metadata(strict=True)
     if data is None:
         return RunnerStatusState()
     return RunnerStatusState.model_validate(data)
@@ -191,7 +223,8 @@ def runner_lock_is_active_for_workspace(workspace: Workspace) -> bool:
     """
     Probe whether this workspace's runner lock is currently held.
     """
-    return runner_lock_is_active(workspace.root)
+    root = workspace.root.resolve()
+    return _runner_lock_manager_for_workspace(workspace, held_in_process=lambda: root in RUNNER_LOCKS).is_active()
 
 
 def runner_status_needs_reconciliation_for_workspace(workspace: Workspace) -> bool:
@@ -217,16 +250,23 @@ def runner_status_needs_reconciliation_for_workspace(workspace: Workspace) -> bo
 
 def clear_runner_lock_metadata(root: Path) -> None:
     """
+    Path-based compatibility wrapper for clearing stale runner lock metadata.
+    """
+    clear_runner_lock_metadata_for_workspace(Workspace.from_path(root))
+
+
+def clear_runner_lock_metadata_for_workspace(workspace: Workspace) -> None:
+    """
     Wipe stale lockfile metadata when no runner is alive.
 
     Called by the status reporter once it has confirmed the recorded PID
     is gone; without the cleanup the next status query would still see
     the dead runner's identity and spend cycles re-reconciling nothing.
     """
-    root = root.resolve()
-    manager = _runner_lock_manager(root, held_in_process=lambda: root in RUNNER_LOCKS)
+    root = workspace.root.resolve()
+    manager = _runner_lock_manager_for_workspace(workspace, held_in_process=lambda: root in RUNNER_LOCKS)
     if manager.clear_metadata_if_unlocked():
-        _clear_runner_process_state(root)
+        _clear_runner_process_state_for_workspace(workspace)
 
 
 def heartbeat_is_late(heartbeat_at: str | None) -> bool:
@@ -258,8 +298,7 @@ def runner_status_for_workspace(workspace: Workspace) -> RunnerStatusState:
     already clean. The canonical entry point used by the CLI status
     command and the runner guard before it tries to acquire.
     """
-    root = workspace.root.resolve()
-    status = read_runner_lock_metadata(root)
+    status = read_runner_lock_metadata_for_workspace(workspace)
     if runner_lock_is_active_for_workspace(workspace):
         if heartbeat_is_late(status.heartbeat_at):
             return status.model_copy(update={"status": RunnerStatus.LATE})
@@ -268,7 +307,7 @@ def runner_status_for_workspace(workspace: Workspace) -> RunnerStatusState:
         return RunnerStatusState()
     if runner_status_needs_reconciliation_for_workspace(workspace):
         return status.model_copy(update={"status": RunnerStatus.STALE})
-    clear_runner_lock_metadata(root)
+    clear_runner_lock_metadata_for_workspace(workspace)
     return RunnerStatusState()
 
 
@@ -511,7 +550,7 @@ def workspace_runner_guard(workspace: Workspace):
     """
     root = workspace.root
     owner_thread_id = threading.get_ident()
-    manager = _runner_lock_manager(root, held_in_process=lambda: root in RUNNER_LOCKS)
+    manager = _runner_lock_manager_for_workspace(workspace, held_in_process=lambda: root in RUNNER_LOCKS)
     with RUNNER_LOCKS_MUTEX:
         existing = RUNNER_LOCKS.get(root)
         if existing is not None:
@@ -532,7 +571,7 @@ def workspace_runner_guard(workspace: Workspace):
                     should_close = False
             if should_close:
                 manager.lock_manager.release(lock_state.handle, clear_metadata=True)
-                _clear_runner_process_state(root)
+                _clear_runner_process_state_for_workspace(workspace)
         return
 
     handle: TextIO | None = None
@@ -555,7 +594,7 @@ def workspace_runner_guard(workspace: Workspace):
             heartbeat_at=now,
         )
         write_runner_lock_metadata(handle, status)
-        _save_runner_process_state(root, status)
+        _save_runner_process_state_for_workspace(workspace, status)
         with RUNNER_LOCKS_MUTEX:
             RUNNER_LOCKS[root] = RunnerLockState(handle=handle, depth=1, status=status, owner_thread_id=owner_thread_id)
     except (OSError, RuntimeError, ValueError):
@@ -569,7 +608,7 @@ def workspace_runner_guard(workspace: Workspace):
         with RUNNER_LOCKS_MUTEX:
             RUNNER_LOCKS.pop(root, None)
         manager.lock_manager.release(handle, clear_metadata=True)
-        _clear_runner_process_state(root)
+        _clear_runner_process_state_for_workspace(workspace)
 
 
 @contextmanager

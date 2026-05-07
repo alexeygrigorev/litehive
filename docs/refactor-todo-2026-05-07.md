@@ -11,8 +11,8 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
   - [ ] Keep path wrappers only where external/path-based callers still require them.
 - [ ] Reduce remaining `runtime_store(root)` production calls:
   - [x] `state.records.py`
-  - [ ] `state.locking.py`
-  - [ ] `config/workspace.py`
+  - [x] `state.locking.py`
+  - [x] `config/workspace.py`
 - [ ] Revisit `runtime_store(root)` factory once production callers are gone.
 
 ## Next Queues
