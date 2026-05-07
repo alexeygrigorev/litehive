@@ -828,20 +828,34 @@ Legend:
   ruff, pyrefly, subagent report/session/manager/event-stream/recovery
   tests, lifecycle SQLite session tests, engine-adapter tests, and
   agent retry continuation tests.
-- [ ] M40. Revisit `subagent_inactivity_timeout_seconds`,
+- [x] M40. Revisit `subagent_inactivity_timeout_seconds`,
   `open code inactivity timeout`, and `compiled inactivity pattern`;
   make each previous small note into a separate task.
   Source: note 3, 31:00-31:24; note 4, 10:15-10:43.
-  Progress 2026-05-07: extracted
+  Verified 2026-05-07: extracted
   `SubagentInactivityTimeoutPolicy` and inject it through the
   container into `SubagentSessionManager`. The policy now owns the
   opencode live-timeout exception and completed-process stderr marker
   parsing, while the manager delegates instead of hard-coding those
-  rules inline. Remaining work: split the remaining stale-PID and
-  inactivity notes into separate plan items before deeper cleanup.
-- [ ] M41. Decide why `merge_resolver` is in the current package and
+  rules inline. Split the remaining session-module timeout/stale-PID
+  notes into separate follow-up items under SE2 and SE7 so each rule
+  can be verified independently before the broader session split.
+  Traced `SubagentInactivityTimeoutPolicy.live_timeout_seconds`,
+  `SubagentInactivityTimeoutPolicy.completed_timeout`,
+  `SubagentSessionManager.check_stdout_inactivity`, and
+  `SubagentSessionManager.terminate_stale_pid`; reran focused
+  inactivity-policy and subagent-manager tests.
+- [x] M41. Decide why `merge_resolver` is in the current package and
   move it if its package ownership is wrong.
   Source: note 3, 31:24-31:36.
+  Verified 2026-05-07: `run_worktree_merge_agent(...)` already lives
+  in `litehive.agents.merge_resolver`, which matches the ownership
+  rule from the older feedback: worktree code detects the conflict
+  and calls into the agent package, while the agent package owns
+  subagent invocation. Confirmed `litehive/worktree/execution_root.py`
+  is only a caller and does not inline the merge-resolver agent.
+  Replaced the local raw role string with `AgentRole.MERGE_RESOLVER`
+  so the remaining role value comes from the domain role vocabulary.
 - [ ] M42. Rename `agents/parsing.py`; the note says this is not
   really parsing because structured output already exists. Use a name
   that reflects verdict/report extraction or repository loading.
@@ -997,6 +1011,17 @@ Legend:
   `compiled inactivity pattern`; the same notes were already given
   before, so extract each small item into its own task.
   Source: note 4, 10:15-10:43.
+- [ ] SE2a. Decide whether the opencode 300s live stdout timeout
+  exception should remain hard-coded policy, become engine config, or
+  move to engine capability metadata.
+  Source: note 4, 10:15-10:43; extracted from M40.
+- [ ] SE2b. Decide whether completed-process inactivity detection
+  should keep parsing Heru's stderr marker or receive a typed timeout
+  result from the engine adapter.
+  Source: note 4, 10:15-10:43; extracted from M40.
+- [ ] SE2c. Verify live adapter timeout propagation for every engine
+  path, including engines without live execution support.
+  Source: note 4, 10:15-10:43; extracted from M40.
 - [ ] SE3. Remove `SessionMixin` and use a delegated session manager
   dependency.
   Source: note 4, 10:48-11:13.
@@ -1012,6 +1037,14 @@ Legend:
 - [ ] SE7. Review `terminate_stale_pid` and inactivity behavior while
   splitting session responsibilities.
   Source: note 4, 12:27-12:31.
+- [ ] SE7a. Decide whether live stdout inactivity detection belongs in
+  the session manager, the engine-process runner, or a dedicated
+  watchdog collaborator.
+  Source: note 4, 12:27-12:31; extracted from M40.
+- [ ] SE7b. Decide whether `terminate_stale_pid` should stay as a
+  best-effort session helper or move to the shared process-signal
+  owner used by task close/stop flows.
+  Source: note 4, 12:27-12:31; extracted from M40.
 - [ ] SE8. Split `write_session_snapshot`; it is too large.
   Source: note 4, 12:47-12:53.
 

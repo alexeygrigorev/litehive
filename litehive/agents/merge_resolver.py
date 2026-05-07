@@ -10,14 +10,13 @@ from pathlib import Path
 
 from litehive.config.model import LitehiveConfig
 from litehive.container import build_subagent_manager
+from litehive.domain.roles import AgentRole
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import GitError, merge_abort, merge_no_edit, unmerged_files
 from litehive.tasks.journal import append_journal
 from litehive.tasks.recovery_engine import resolve_recovery_engine
 from litehive.workspace import Workspace
 
-
-_MERGE_RESOLVER_ROLE = "merge-resolver"
 
 _MERGE_PROMPT_TEMPLATE = (
     "Git merge conflict while updating task {task_id} worktree to latest main.\n"
@@ -77,7 +76,7 @@ def run_worktree_merge_agent(
     subagents = build_subagent_manager(root, execution_root=worktree_path)
     subagents.run(
         task,
-        role=_MERGE_RESOLVER_ROLE,
+        role=AgentRole.MERGE_RESOLVER.value,
         engine_name=engine_name,
         model=model,
         prompt=_MERGE_PROMPT_TEMPLATE.format(task_id=task.id, conflicts=", ".join(conflicts)),
