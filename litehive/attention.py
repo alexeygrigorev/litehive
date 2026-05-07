@@ -82,23 +82,30 @@ class AttentionLogEntry:
     message: str
 
 
-def append_attention_log(workspace: Workspace, message: str) -> None:
+class AttentionRepository:
     """
-    Persist a best-effort operator diagnostic to the attention-log table.
+    SQLite repository for free-form operator-attention diagnostics.
 
-    Used by the merge-resolver git wrapper, the daemon's
-    origin-divergence guard, and any other code path that needs
-    to record a one-off operator-facing event that doesn't fit
-    the structured task/runner records. Schema lives at migration
-    0009; entries are append-only so the timeline stays
-    chronological.
+    Used by the merge-resolver git wrapper, worktree cleanup, and the
+    daemon when they need to record a one-off operator-facing event
+    that does not fit structured task or runner records. Binding the
+    workspace once keeps SQLite ownership explicit instead of passing
+    a global append helper around unrelated modules.
     """
-    with workspace.connect() as connection:
-        connection.execute(
-            "INSERT INTO attention_log (created_at, message) VALUES (?, ?)",
-            (utcnow(), message),
-        )
-        connection.commit()
+
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
+
+    def append(self, message: str) -> None:
+        """
+        Persist one append-only attention-log row.
+        """
+        with self.workspace.connect() as connection:
+            connection.execute(
+                "INSERT INTO attention_log (created_at, message) VALUES (?, ?)",
+                (utcnow(), message),
+            )
+            connection.commit()
 
 
 def read_attention_log(workspace: Workspace, limit: int | None = None) -> list[AttentionLogEntry]:

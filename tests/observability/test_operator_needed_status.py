@@ -2,7 +2,7 @@ import io
 from pathlib import Path
 
 from litehive.attention import (
-    append_attention_log,
+    AttentionRepository,
     collect_operator_needed_state,
     read_attention_log,
     waiting_for_you_lines,
@@ -10,13 +10,13 @@ from litehive.attention import (
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import create_workspace
 from litehive.daemon.execution import run_daemon_loop
+from litehive.domain.common import PipelineStatus, TaskStatus
+from litehive.domain.task import WorkspaceState
 from litehive.main import dispatch_status
 from litehive.sandbox.git_wrapper import main as git_wrapper_main
 from litehive.state.persist import load_state, save_state, set_pool_stop_reason
 from litehive.state.records import create_task, save_task
-from litehive.domain.task import WorkspaceState
 from litehive.workspace import Workspace
-from litehive.domain.common import PipelineStatus, TaskStatus
 
 
 def test_status_surfaces_flagged_task_as_operator_needed(tmp_path: Path, capsys) -> None:
@@ -67,7 +67,7 @@ def test_operator_log_is_runtime_diagnostic_not_queue_item(tmp_path: Path) -> No
     create_workspace(tmp_path)
 
     workspace = Workspace.from_path(tmp_path)
-    append_attention_log(workspace, "manual diagnostic")
+    AttentionRepository(workspace).append("manual diagnostic")
 
     entries = read_attention_log(workspace)
     assert any(entry.message == "manual diagnostic" for entry in entries)

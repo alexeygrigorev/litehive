@@ -13,7 +13,7 @@ to import the full ``WorktreeService`` graph.
 from pathlib import Path
 from typing import TypedDict
 
-from litehive.attention import append_attention_log
+from litehive.attention import AttentionRepository
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.domain.worktree import ManagedWorktree
@@ -151,6 +151,7 @@ def remove_cleanable_worktrees_for_workspace(workspace: Workspace, dry_run: bool
     failures = []
     removed = []
     deferred = []
+    attention_repository = AttentionRepository(workspace)
 
     for item in candidates:
         try:
@@ -161,9 +162,8 @@ def remove_cleanable_worktrees_for_workspace(workspace: Workspace, dry_run: bool
                 try:
                     workspace.save_task(task)
                 except WorkspaceConflictError:
-                    append_attention_log(
-                        workspace,
-                        (f"deferred worktree metadata clearing for {item.task_id}: workspace locked by active runner"),
+                    attention_repository.append(
+                        f"deferred worktree metadata clearing for {item.task_id}: workspace locked by active runner"
                     )
                     deferred.append(item)
                     continue

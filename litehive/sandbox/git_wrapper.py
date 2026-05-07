@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 import sys
 
-from litehive.attention import append_attention_log
+from litehive.attention import AttentionRepository
 from litehive.container import build_workspace
 
 _PROTECTED_REFS = {"main", "master", "origin/main", "origin/master"}
@@ -34,10 +34,8 @@ def main(argv: list[str], real_git_path: str, workspace_root: str) -> int:
     if reason is None:
         os.execv(real_git_path, [real_git_path, *argv])
         return 1
-    append_attention_log(
-        build_workspace(Path(workspace_root)),
-        f"merge-resolver git wrapper rejected `{_format_cmd(argv)}`: {reason}",
-    )
+    attention_repository = AttentionRepository(build_workspace(Path(workspace_root)))
+    attention_repository.append(f"merge-resolver git wrapper rejected `{_format_cmd(argv)}`: {reason}")
     print(f"litehive git wrapper: blocked destructive git command: {reason}", file=sys.stderr)
     return 2
 

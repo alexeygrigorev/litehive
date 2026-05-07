@@ -28,7 +28,7 @@ from typing import TextIO, cast
 from litehive.container import build_workspace
 from litehive.config.model import DaemonConfig
 from litehive.config.workspace import create_workspace
-from litehive.attention import append_attention_log
+from litehive.attention import AttentionRepository
 from litehive.domain.pool import PoolStopReason
 from litehive.db.schema import apply_pending_migrations
 from litehive.git.ops import check_origin_divergence
@@ -65,7 +65,7 @@ _DAEMON_TRANSIENT_STOP_REASONS = frozenset(
 
 def _halt_for_origin_divergence(
     workspace: Path,
-    attention_workspace: Workspace,
+    attention_repository: AttentionRepository,
 ) -> str | None:
     """
     Stop the pool and flag attention when ``main`` has diverged from ``origin/main``.
@@ -80,7 +80,7 @@ def _halt_for_origin_divergence(
     if divergence_reason is None:
         return None
     set_pool_stop_reason(workspace, "diverged_from_origin")
-    _append_attention_log(attention_workspace, divergence_reason)
+    attention_repository.append(divergence_reason)
     return divergence_reason
 
 
@@ -100,20 +100,6 @@ def sleep_with_stop(seconds: float, stop_requested_fn: Callable[[], bool]) -> No
         if remaining <= 0 or stop_requested_fn():
             return
         time.sleep(min(remaining, 1.0))
-
-
-def _append_attention_log(workspace: Workspace, message: str) -> None:
-    """
-    Persist a daemon-side attention entry through the canonical store.
-
-    Earlier versions kept a file-based daemon attention log; the
-    project-wide rule is "everything in SQLite" (see ``litehive.attention``)
-    so this thin wrapper delegates to ``append_attention_log`` while
-    keeping the daemon's call sites local. Tests monkey-patch this
-    name when they want to assert the daemon raised a specific
-    attention message without standing up the full SQLite path.
-    """
-    append_attention_log(workspace, message)
 
 
 def _daemon_status_snapshot(workspace: Path) -> tuple[dict[str, object], str]:
@@ -508,6 +494,7 @@ def run_daemon_loop(
     workspace = workspace.resolve()
     create_workspace(workspace)
     daemon_workspace = build_workspace(workspace)
+    attention_repository = AttentionRepository(daemon_workspace)
     daemon_config = daemon_workspace.load_config().daemon
     apply_pending_migrations(workspace)
     command_prefix = default_command_prefix()
@@ -570,7 +557,7 @@ def run_daemon_loop(
                 sleep_with_stop(1.0, stop_requested_fn=lambda: stop_requested)
                 continue
 
-            divergence_reason = _halt_for_origin_divergence(workspace, daemon_workspace)
+            divergence_reason = _halt_for_origin_divergence(workspace, attention_repository)
             if divergence_reason is not None:
                 _emit(
                     "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. "
@@ -584,7 +571,7 @@ def run_daemon_loop(
                 backup_timestamp = maybe_run_workspace_backup(workspace)
             except (OSError, RuntimeError) as exc:
                 logger.exception("scheduled workspace backup failed")
-                _append_attention_log(daemon_workspace, f"scheduled backup failed: {exc}")
+                attention_repository.append(f"scheduled backup failed: {exc}")
                 _emit(f"backup_failed: {exc}", stream=output_stream)
             else:
                 if backup_timestamp is not None:

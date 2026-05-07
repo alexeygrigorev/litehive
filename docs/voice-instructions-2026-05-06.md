@@ -2035,9 +2035,14 @@ Legend:
   Completed 2026-05-07: typed `sleep_with_stop(...)`'s
   `stop_requested_fn` parameter as `Callable[[], bool]` and verified
   with `make typecheck` that pyrefly reports zero unsuppressed errors.
-- [ ] DM8. Replace `append_attention_log` free/global behavior with
+- [x] DM8. Replace `append_attention_log` free/global behavior with
   an `AttentionRepository` that writes to the database.
   Source: note 5, 16:34-16:56.
+  Completed 2026-05-07: introduced `AttentionRepository` in
+  `litehive.attention` with an `append(...)` method bound to a
+  `Workspace`. Removed the `append_attention_log(...)` free helper
+  and updated daemon execution, the merge-resolver git wrapper,
+  worktree cleanup, and tests to append through the repository.
 - [ ] DM9. Replace daemon status snapshot tuple/dict return with a
   normal object. If `collect_task_pipeline_status` already returns a
   good object, return that instead of converting to dict.
