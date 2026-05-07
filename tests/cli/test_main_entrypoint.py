@@ -307,7 +307,7 @@ def test_dispatch_status_prefers_runner_active_task_id(
 
     monkeypatch.setattr("litehive.main.resolve_workspace", lambda _arg, **_kwargs: Path("/tmp/ws"))
     monkeypatch.setattr(
-        "litehive.observability.status.collect_task_pipeline_status",
+        "litehive.observability.status.collect_task_pipeline_status_for_workspace",
         lambda workspace, **_kwargs: status,
     )
     monkeypatch.setattr("litehive.observability.status_diagnostics.status_has_problems", lambda issues: False)

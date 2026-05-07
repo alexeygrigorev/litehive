@@ -14,7 +14,7 @@ from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport
 from litehive.domain.runtime import RunnerStatusState, RuntimeSubagentState
 from litehive.domain.task import WorkspaceState
 from litehive.observability.status import (
-    collect_task_pipeline_status,
+    collect_task_pipeline_status_for_workspace,
     render_active_task_detail_lines,
     render_detailed_status_header_lines,
     render_health_active_task_lines,
@@ -125,7 +125,7 @@ def test_collect_task_pipeline_status_prefers_runner_active_task_id(tmp_path: Pa
     )
     active_task = SimpleNamespace(id="T-0381", title="Move stage and recovery reports off YAML storage")
 
-    # ``collect_task_pipeline_status`` imports its callees at module scope, so
+    # ``collect_task_pipeline_status_for_workspace`` imports its callees at module scope, so
     # patching the callees at their original locations no longer hits the
     # bindings the function uses — patch the local re-imports here.
     monkeypatch.setattr(
@@ -141,7 +141,8 @@ def test_collect_task_pipeline_status_prefers_runner_active_task_id(tmp_path: Pa
         lambda self, task_id: active_task if task_id else None,
     )
 
-    status = collect_task_pipeline_status(tmp_path)
+    create_workspace(tmp_path)
+    status = collect_task_pipeline_status_for_workspace(Workspace.from_path(tmp_path))
 
     assert status.active_task_id == "T-0381"
     assert status.active_task is active_task

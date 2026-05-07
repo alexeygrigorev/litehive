@@ -8,7 +8,8 @@ formatting logic lives in sibling modules:
 * ``status_dashboard`` — dashboard-style sections used by ``litehive workspace status``.
 * ``status_health`` — health-mode renderers used by ``litehive workspace health``.
 
-This module owns the pipeline-status orchestration (``collect_task_pipeline_status`` /
+This module owns the pipeline-status orchestration
+(``collect_task_pipeline_status_for_workspace`` /
 ``render_task_pipeline_status_lines``) and re-exports the rest so existing
 ``from litehive.observability.status import ...`` imports keep working.
 """
@@ -22,7 +23,6 @@ from typing import Literal
 from litehive.attention import waiting_for_you_lines_for_workspace
 from litehive.config.engine_freezes import active_engine_freezes
 from litehive.config.model import LitehiveConfig
-from litehive.container import build_workspace
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskIntentRecord, TaskRecord, TaskStateRecord, WorkspaceState
@@ -76,7 +76,6 @@ __all__ = [
     "StatusRenderMode",
     "TaskPipelineStatusData",
     "collect_recent_activity",
-    "collect_task_pipeline_status",
     "collect_task_pipeline_status_for_workspace",
     "estimate_task_execution",
     "find_last_completed_task",
@@ -118,21 +117,6 @@ class TaskPipelineStatusData:
     queue_head: str | None
     waiting_lines: list[str]
     runner_state_label: str
-
-
-def collect_task_pipeline_status(
-    root: Path,
-    read_only: bool = False,
-    diagnostics: bool = False,
-) -> TaskPipelineStatusData:
-    """
-    Path-based compatibility wrapper for callers not yet on ``Workspace``.
-    """
-    return collect_task_pipeline_status_for_workspace(
-        build_workspace(root.resolve()),
-        read_only=read_only,
-        diagnostics=diagnostics,
-    )
 
 
 def collect_task_pipeline_status_for_workspace(
