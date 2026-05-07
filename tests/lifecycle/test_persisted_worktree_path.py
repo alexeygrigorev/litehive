@@ -16,7 +16,7 @@ from litehive.lifecycle.sessions import Session
 from litehive.lifecycle.types import PipelineMode
 from litehive.lifecycle.events import Pass
 from litehive.state.records import create_task, get_task_worktree_path, require_task
-from litehive.state.store import runtime_store
+from litehive.state.store import runtime_store_for_workspace
 from litehive.workspace import Workspace
 from litehive.worktree.paths import resolve_recorded_worktree_path, task_worktree_branch, task_worktree_path
 
@@ -103,7 +103,7 @@ def test_worktree_sync_persists_runtime_worktree_path(tmp_path: Path) -> None:
 
     changed = node.sync(_state(task.id, PipelineState.WORKTREE_SYNC))
 
-    stored = runtime_store(workspace).load_task_runtime(task.id)
+    stored = runtime_store_for_workspace(Workspace.from_path(workspace)).load_task_runtime(task.id)
     assert changed is True
     assert stored is not None
     assert stored.pipeline.git.worktree_path is not None

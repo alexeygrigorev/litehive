@@ -22,7 +22,8 @@ from litehive.config.paths import workspace_path
 from litehive.state.lock_manager import WorkspaceLockManager
 from litehive.state.locking import runner_pid_is_alive
 from litehive.state.process_lock import ProcessLockManager
-from litehive.state.store import runtime_store
+from litehive.state.store import runtime_store_for_workspace
+from litehive.workspace import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +121,7 @@ def _daemon_lock_manager(workspace: Path) -> ProcessLockManager:
             held_in_process=lambda: _daemon_lock_is_held_in_process(workspace),
             fsync_writes=True,
         ),
-        runtime_store=runtime_store(workspace),
+        runtime_store=runtime_store_for_workspace(Workspace.from_path(workspace)),
     )
 
 

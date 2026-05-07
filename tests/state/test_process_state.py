@@ -4,7 +4,7 @@ from pathlib import Path
 from litehive.config.workspace import create_workspace
 from litehive.daemon.registry import register_daemon, unregister_daemon
 from litehive.state.locking import touch_runner_status, workspace_runner_guard
-from litehive.state.store import runtime_store
+from litehive.state.store import runtime_store_for_workspace
 from litehive.workspace import Workspace
 
 
@@ -12,9 +12,10 @@ def test_runner_process_state_is_persisted_in_sqlite(tmp_path: Path, monkeypatch
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
     workspace = tmp_path / "workspace"
     create_workspace(workspace)
-    store = runtime_store(workspace)
+    workspace_obj = Workspace.from_path(workspace)
+    store = runtime_store_for_workspace(workspace_obj)
 
-    with workspace_runner_guard(Workspace.from_path(workspace)):
+    with workspace_runner_guard(workspace_obj):
         payload = store.load_process_state("runner")
         assert payload is not None
         assert payload["pid"] == os.getpid()
@@ -34,7 +35,7 @@ def test_daemon_process_state_is_persisted_in_sqlite(tmp_path: Path, monkeypatch
     create_workspace(workspace)
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
-    store = runtime_store(workspace)
+    store = runtime_store_for_workspace(Workspace.from_path(workspace))
 
     try:
         register_daemon(workspace, pid=os.getpid(), log_dir=log_dir)
