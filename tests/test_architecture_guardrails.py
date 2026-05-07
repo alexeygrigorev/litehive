@@ -370,6 +370,14 @@ def test_code_style_keeps_generalized_voice_feedback_rules() -> None:
     assert missing == []
 
 
+def test_code_style_keeps_refactoring_discipline_rule() -> None:
+    style = (REPO_ROOT / "docs" / "code-style.md").read_text(encoding="utf-8")
+
+    assert "## Refactoring Discipline" in style
+    assert "covered by tests **first**" in style
+    assert "suite green at each step" in style
+
+
 def test_voice_instruction_items_are_atomic_and_source_attributed() -> None:
     blocks = _voice_instruction_item_blocks()
     item_ids = [item_id for item_id, _block in blocks]

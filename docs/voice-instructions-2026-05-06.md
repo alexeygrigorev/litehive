@@ -2320,8 +2320,14 @@ Legend:
   `test_code_style_keeps_generalized_voice_feedback_rules` to keep
   those generalized rule anchors from disappearing while the codebase
   continues applying them through focused guardrails and migrations.
-- [ ] X4. Do not batch all of this into one broad refactor. Add
+- [x] X4. Do not batch all of this into one broad refactor. Add
   characterization tests before structural moves, and keep tests green
   between slices.
   Source: repo AGENTS instructions and repeated voice-note process
   feedback.
+  Completed 2026-05-07: verified `docs/code-style.md` contains the
+  `Refactoring Discipline` rule requiring tests before non-trivial
+  refactors, characterization-test commits when coverage is missing,
+  and a green suite at each step. Added
+  `test_code_style_keeps_refactoring_discipline_rule` so the small-slice
+  rule remains pinned in architecture tests.
