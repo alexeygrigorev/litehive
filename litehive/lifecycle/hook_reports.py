@@ -154,7 +154,7 @@ def _record_hook_warnings(
         },
     )
     report_path = record_stage_report(workspace, task, report)
-    message = f"{summary}\n\n{feedback}\n\nreport: {report_path.relative_to(workspace.root)}"
+    message = f"{summary}\n\n{feedback}\n\nreport: {report_path.display()}"
     workspace.task_activity(task).append(
         TaskActivityEntry(
             source="system",
@@ -167,7 +167,7 @@ def _record_hook_warnings(
     append_journal(
         workspace,
         task,
-        (f"Runner hooks at `{phase}` reported warnings.\nreport: `{report_path.relative_to(workspace.root)}`"),
+        (f"Runner hooks at `{phase}` reported warnings.\nreport: `{report_path.display()}`"),
     )
 
 
@@ -217,7 +217,7 @@ def _record_hook_reject(
         failure_diagnostics=failure_diagnostics,
     )
     report_path = record_stage_report(workspace, task, report)
-    message = f"{summary}\n\n{feedback}\n\nreport: {report_path.relative_to(workspace.root)}"
+    message = f"{summary}\n\n{feedback}\n\nreport: {report_path.display()}"
     workspace.task_activity(task).append(
         TaskActivityEntry(
             source="system",
@@ -230,5 +230,5 @@ def _record_hook_reject(
     append_journal(
         workspace,
         task,
-        (f"Runner hook at `{phase}` rejected the stage.\nreport: `{report_path.relative_to(workspace.root)}`"),
+        (f"Runner hook at `{phase}` rejected the stage.\nreport: `{report_path.display()}`"),
     )

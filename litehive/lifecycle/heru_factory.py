@@ -277,7 +277,7 @@ def _rewrite_hallucinated_implementing_pass(
             "Rejected implementing pass as hallucinated completion.\n"
             f"reason_code: `{reason_code}`\n"
             f"`git status --porcelain` in `{checkout_display}` returned no changes, but the SWE claimed: {claimed}\n"
-            f"report: `{report_path.relative_to(workspace.root)}`"
+            f"report: `{report_path.display()}`"
         ),
     )
     return AgentVerdict(

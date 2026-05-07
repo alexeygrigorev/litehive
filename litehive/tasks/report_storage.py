@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 import json
-from pathlib import Path
 
 from pydantic import ValidationError
 
@@ -34,17 +33,6 @@ class ReportReference:
         without any further parsing.
         """
         return f"sqlite:{self.table}/{self.row_id}"
-
-    def relative_to(self, root: Path) -> str:
-        """
-        Return the canonical display token, ignoring ``root``.
-
-        Preserves the old file-based API shape so legacy callers that still
-        pass a workspace root keep working without raising; the parameter is
-        accepted but not used.
-        """
-        del root
-        return self.display()
 
     def __str__(self) -> str:
         """
