@@ -2135,10 +2135,14 @@ Legend:
   loop now receives its `Workspace`, loaded config, and
   `AttentionRepository` from that container instead of wiring those
   collaborators inline.
-- [ ] DM20. Document `maybe_run_workspace_backup`: where it is called
+- [x] DM20. Document `maybe_run_workspace_backup`: where it is called
   and whether it runs before any operation that mutates LiteHive
   state.
   Source: note 5, 22:17-22:40.
+  Completed 2026-05-07: expanded the helper docstring to state that
+  `run_daemon_loop` calls it once per iteration after live-runner and
+  origin-divergence checks, but before the pre-run status snapshot and
+  before spawning the child `litehive run` process that mutates state.
 - [ ] DM21. Consider moving workspace backup out of daemon if it is a
   general pre-operation concern.
   Source: note 5, 22:40-22:50.

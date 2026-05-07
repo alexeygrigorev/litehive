@@ -312,9 +312,13 @@ def maybe_run_workspace_backup(
     Trigger the scheduled workspace backup if one is due.
 
     The backup cadence policy lives in ``state.backup``; this hook is
-    the only place in the daemon loop that calls it. Returns the
-    created backup timestamp so the loop can decide whether and where
-    to render it.
+    called by ``run_daemon_loop`` once per iteration after the daemon
+    has confirmed there is no live runner and the workspace has not
+    diverged from ``origin/main``. It runs before the pre-run status
+    snapshot and before spawning the child ``litehive run`` process,
+    so the scheduled backup captures state before the next daemon-run
+    mutation. Returns the created backup timestamp so the loop can
+    decide whether and where to render it.
     """
     backup = create_scheduled_workspace_backup(workspace, now=now)
     if backup is None:
