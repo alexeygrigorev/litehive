@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 
 from litehive.lifecycle.nodes.agent import AgentVerdict, EngineBlockedError
-from litehive.lifecycle.orchestration import run_task
+from litehive.lifecycle.orchestration import run_task_for_workspace
 from litehive.state.records import create_task_for_workspace, save_task_for_workspace
 from litehive.workspace import Workspace
 
@@ -98,8 +98,9 @@ def test_run_task_happy_path_against_real_workspace(live_workspace: Path) -> Non
     save_task_for_workspace(workspace, task)
 
     calls: list = []
-    result = run_task(
-        live_workspace,
+    result = run_task_for_workspace(
+        workspace,
+        workspace.load_config(),
         task,
         engine_factory=_stub_factory(_auto_pass_behavior(calls)),
     )
@@ -124,8 +125,9 @@ def test_run_task_full_mode_walks_every_stage(live_workspace: Path) -> None:
     )
 
     calls: list = []
-    result = run_task(
-        live_workspace,
+    result = run_task_for_workspace(
+        workspace,
+        workspace.load_config(),
         task,
         engine_factory=_stub_factory(_auto_pass_behavior(calls)),
     )
@@ -147,8 +149,9 @@ def test_run_task_all_engines_blocked_lands_in_failed(live_workspace: Path) -> N
         pipeline_mode="single",
     )
 
-    result = run_task(
-        live_workspace,
+    result = run_task_for_workspace(
+        workspace,
+        workspace.load_config(),
         task,
         engine_factory=_stub_factory(_always_block_behavior),
     )

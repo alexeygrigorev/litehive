@@ -262,7 +262,7 @@ def test_task_with_hook_rejection_and_recovery_has_terminal_execution_status(tmp
     from litehive.config.model import LitehiveConfig
     from litehive.config.workspace_files import config_path
     from litehive.lifecycle.nodes.agent import AgentVerdict
-    from litehive.lifecycle.orchestration import run_task as run_pipeline_task
+    from litehive.lifecycle.orchestration import run_task_for_workspace
     import yaml
 
     workspace_root = tmp_path / "workspace"
@@ -326,8 +326,9 @@ def test_task_with_hook_rejection_and_recovery_has_terminal_execution_status(tmp
                 return AgentVerdict(outcome="pass")
 
     # Run the task through the pipeline
-    result = run_pipeline_task(
-        workspace_root,
+    result = run_task_for_workspace(
+        workspace,
+        workspace.load_config(),
         task,
         engine_factory=lambda engine_name: MockEngine(engine_name),
     )

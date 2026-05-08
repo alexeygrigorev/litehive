@@ -6,6 +6,7 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -18,7 +19,11 @@ from litehive.lifecycle.events import HookOk, MergeConflictDetected, Pass, Rejec
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.hook import HookNode, HookRunner, HookSpec, SubprocessHookRunner
 from litehive.lifecycle.nodes.system import GitCommitNode, StubCommitNode
-from litehive.lifecycle.orchestration import reconcile_terminal_commit_sha_for_workspace, run_task
+from litehive.lifecycle.orchestration import (
+    ExecutionResult,
+    reconcile_terminal_commit_sha_for_workspace,
+    run_task_for_workspace,
+)
 from litehive.lifecycle.persistence import CommitResult, SqlitePersistence, TaskState
 from litehive.workspace import Workspace
 from litehive.lifecycle.types import PipelineMode
@@ -36,6 +41,10 @@ from litehive.worktree.paths import serialize_worktree_path, task_worktree_branc
 from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
 
 pytestmark = pytest.mark.integration
+
+
+def _run_task(workspace: Workspace, task: TaskRecord, **kwargs: Any) -> ExecutionResult:
+    return run_task_for_workspace(workspace, workspace.load_config(), task, **kwargs)
 
 
 def _raw_task_state_payload(root: Path, task_id: str) -> dict:
@@ -732,8 +741,8 @@ def test_run_task_single_mode_executes_only_implementing_then_finishes(tmp_path:
     assert task is not None
 
     calls: list[dict[str, str]] = []
-    result = run_task(
-        tmp_path,
+    result = _run_task(
+        workspace,
         task,
         engine_factory=lambda engine_name: _RecordingPassEngine(engine_name, calls),
     )
@@ -766,8 +775,8 @@ def test_run_task_flags_time_budget_exceeded_and_preserves_worktree(tmp_path: Pa
     worktree = task_worktree_path_for_workspace(workspace, task)
     branch = task_worktree_branch(task)
 
-    result = run_task(
-        tmp_path,
+    result = _run_task(
+        workspace,
         task,
         engine_factory=lambda engine_name: _SlowPassEngine(engine_name, sleep_seconds=0.02),
     )
@@ -821,8 +830,8 @@ def test_run_task_runs_after_implementing_hook_in_task_worktree(tmp_path: Path) 
     assert task is not None
     expected_worktree = task_worktree_path_for_workspace(workspace, task)
 
-    result = run_task(
-        tmp_path,
+    result = _run_task(
+        workspace,
         task,
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )
@@ -855,8 +864,8 @@ def test_run_task_runs_after_commit_hook_on_main_and_finishes(tmp_path: Path) ->
     assert task is not None
     worktree = _prepare_committed_task_worktree(workspace, task)
 
-    result = run_task(
-        tmp_path,
+    result = _run_task(
+        workspace,
         task,
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )
@@ -910,8 +919,8 @@ def test_run_task_reconciles_noop_commit_stage_and_records_main_head(tmp_path: P
         check=True,
     ).stdout.strip()
 
-    result = run_task(
-        tmp_path,
+    result = _run_task(
+        workspace,
         task,
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )
@@ -998,8 +1007,8 @@ def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path
     assert task is not None
     worktree = _prepare_committed_task_worktree(workspace, task)
 
-    result = run_task(
-        tmp_path,
+    result = _run_task(
+        workspace,
         task,
         engine_factory=lambda engine_name: _RejectRecoveryEngine(engine_name),
     )
@@ -1054,8 +1063,8 @@ def test_run_task_merge_conflict_failure_journal_stays_distinct_from_noop_reconc
     (tmp_path / "seed.txt").write_text("main\n", encoding="utf-8")
     subprocess.run(["git", "commit", "-qam", "main"], cwd=tmp_path, check=True)
 
-    result = run_task(
-        tmp_path,
+    result = _run_task(
+        workspace,
         task,
         engine_factory=lambda engine_name: _RejectMergeResolverEngine(engine_name),
     )
@@ -1104,8 +1113,8 @@ def test_run_task_before_accepting_hook_retries_and_continues(
     task = dequeue_next_task(workspace)
     assert task is not None
 
-    result = run_task(
-        tmp_path,
+    result = _run_task(
+        workspace,
         task,
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )
@@ -1172,8 +1181,8 @@ def test_run_task_retries_sequential_hooks_one_failure_at_a_time(tmp_path: Path)
     task = dequeue_next_task(workspace)
     assert task is not None
 
-    result = run_task(
-        tmp_path,
+    result = _run_task(
+        workspace,
         task,
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )
@@ -1212,8 +1221,8 @@ def test_run_task_skips_after_commit_when_hook_not_configured(tmp_path: Path) ->
     assert task is not None
     worktree = _prepare_committed_task_worktree(workspace, task)
 
-    result = run_task(
-        tmp_path,
+    result = _run_task(
+        workspace,
         task,
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )
@@ -1261,8 +1270,8 @@ def test_run_task_auto_commit_cleanup_excludes_db_and_gitignored_files(tmp_path:
     assert task is not None
     worktree = _prepare_committed_task_worktree(workspace, task)
 
-    result = run_task(
-        tmp_path,
+    result = _run_task(
+        workspace,
         task,
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )

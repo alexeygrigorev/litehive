@@ -7,7 +7,7 @@ from litehive.config.workspace import create_workspace
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.lifecycle.nodes.agent import AgentVerdict, UnrecoverableError
-from litehive.lifecycle.orchestration import ExecutionResult, run_task as run_pipeline_task
+from litehive.lifecycle.orchestration import ExecutionResult, run_task_for_workspace
 from litehive.state.records import create_task_for_workspace, get_task_for_workspace
 from litehive.tasks.status import requeue_task_for_workspace
 from litehive.workspace import Workspace
@@ -67,11 +67,10 @@ def _init_workspace_git_repo(root: Path) -> None:
     subprocess.run(["git", "commit", "-qm", "seed"], cwd=root, check=True)
 
 
-def _run_with_repeat_engine(
-    tmp_path: Path, workspace: Workspace, task: TaskRecord, follow_up_ids: list[str]
-) -> ExecutionResult:
-    return run_pipeline_task(
-        tmp_path,
+def _run_with_repeat_engine(workspace: Workspace, task: TaskRecord, follow_up_ids: list[str]) -> ExecutionResult:
+    return run_task_for_workspace(
+        workspace,
+        workspace.load_config(),
         task,
         engine_factory=lambda name: _RepeatRecoveryEscalationEngine(
             name, workspace=workspace, follow_up_ids=follow_up_ids
@@ -85,7 +84,7 @@ def test_recovery_repeat_fingerprint_escalates_after_requeue(tmp_path: Path) -> 
     task = create_task_for_workspace(workspace, title="Repeated recovery fingerprint", pipeline_mode="single")
     follow_up_ids: list[str] = []
 
-    first = _run_with_repeat_engine(tmp_path, workspace, task, follow_up_ids)
+    first = _run_with_repeat_engine(workspace, task, follow_up_ids)
     first_refreshed = get_task_for_workspace(workspace, task.id)
     assert first.final_stage == "failed"
     assert first_refreshed is not None
@@ -94,7 +93,6 @@ def test_recovery_repeat_fingerprint_escalates_after_requeue(tmp_path: Path) -> 
     assert follow_up_ids == []
 
     second = _run_with_repeat_engine(
-        tmp_path,
         workspace,
         requeue_task_for_workspace(workspace, task.id),
         follow_up_ids,

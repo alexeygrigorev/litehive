@@ -13,7 +13,7 @@ from litehive.lifecycle.journal import SqliteJournal
 from litehive.workspace import Workspace
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.system import StubCommitNode
-from litehive.lifecycle.orchestration import run_task
+from litehive.lifecycle.orchestration import run_task_for_workspace
 from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
 from litehive.state.records import (
     create_task_for_workspace,
@@ -244,8 +244,9 @@ def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkey
     queued = dequeue_next_task(workspace)
     assert queued is not None
 
-    result = run_task(
-        tmp_path,
+    result = run_task_for_workspace(
+        workspace,
+        workspace.load_config(),
         queued,
         engine_factory=lambda name: _PassEngine(name),
     )

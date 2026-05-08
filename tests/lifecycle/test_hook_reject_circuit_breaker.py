@@ -12,7 +12,7 @@ from litehive.config.workspace import create_workspace
 from litehive.config.workspace_files import config_path
 from litehive.domain.recovery import TriggerEventKind
 from litehive.lifecycle.nodes.agent import AgentVerdict, UnrecoverableError
-from litehive.lifecycle.orchestration import run_task as run_pipeline_task
+from litehive.lifecycle.orchestration import run_task_for_workspace
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.workspace import Workspace
 from litehive.state.persist import load_state_for_workspace
@@ -154,8 +154,9 @@ def test_crash_routes_to_recovery_and_resumes(tmp_path: Path) -> None:
 
     crashed_tasks: set[str] = set()
     recovery_calls: list[str] = []
-    result = run_pipeline_task(
-        tmp_path,
+    result = run_task_for_workspace(
+        workspace,
+        workspace.load_config(),
         task,
         engine_factory=lambda engine_name: _CrashThenRecoveryEngine(
             engine_name,
@@ -187,8 +188,9 @@ def test_recovery_fix_retries_failed_stage_automatically(tmp_path: Path) -> None
 
     recovery_calls: list[str] = []
     implementing_attempts: list[str] = []
-    result = run_pipeline_task(
-        workspace,
+    result = run_task_for_workspace(
+        workspace_obj,
+        workspace_obj.load_config(),
         task,
         engine_factory=lambda engine_name: _CrashUntilLitehiveFixEngine(
             engine_name,
@@ -232,8 +234,9 @@ def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_p
     recovery_calls: list[str] = []
     monkeypatch.setattr(
         "litehive.cli.runner.run_task",
-        lambda container, task, **kwargs: run_pipeline_task(
-            container.workspace.root,
+        lambda container, task, **kwargs: run_task_for_workspace(
+            container.workspace,
+            container.config,
             task,
             engine_factory=lambda engine_name: _RecoveryScenarioEngine(
                 engine_name,
@@ -298,15 +301,16 @@ def test_successful_stage_progress_resets_same_hook_reject_tracking(tmp_path: Pa
         ),
     )
 
-    result = run_pipeline_task(
-        tmp_path,
-            task,
-            engine_factory=lambda engine_name: _RecoveryScenarioEngine(
-                engine_name,
-                workspace=workspace,
-                recovery_mode="fix",
-                recovery_calls=[],
-            ),
+    result = run_task_for_workspace(
+        workspace,
+        workspace.load_config(),
+        task,
+        engine_factory=lambda engine_name: _RecoveryScenarioEngine(
+            engine_name,
+            workspace=workspace,
+            recovery_mode="fix",
+            recovery_calls=[],
+        ),
     )
     refreshed = get_task_for_workspace(workspace, task.id)
     pipeline_state = SqlitePersistence(workspace).load(task.id)

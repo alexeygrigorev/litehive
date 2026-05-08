@@ -42,7 +42,7 @@ from tests.support.lifecycle_fakes import InMemorySessionStore
 
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import create_workspace
-from litehive.lifecycle.orchestration import run_task
+from litehive.lifecycle.orchestration import run_task_for_workspace
 from litehive.state.records import create_task_for_workspace
 from litehive.tasks.journal import render_task_journal
 
@@ -266,7 +266,7 @@ def test_run_task_uses_workspace_retry_on_for_live_execution_retries(tmp_path: P
     task = create_task_for_workspace(workspace, title="Retry once on timeout", pipeline_mode="single")
     engine = _FlakyEngine("timeout")
 
-    result = run_task(tmp_path, task, engine_factory=lambda _engine_name: engine)
+    result = run_task_for_workspace(workspace, workspace.load_config(), task, engine_factory=lambda _engine_name: engine)
 
     assert result.final_stage == "done"
     assert engine.calls == 2
@@ -340,7 +340,7 @@ def test_run_task_creates_worktree_and_merges_back_into_main(tmp_path: Path) -> 
     task = create_task_for_workspace(workspace, title="Worktree merge")
     engine = _WorktreeCommitEngine(tmp_path)
 
-    result = run_task(tmp_path, task, engine_factory=lambda _engine_name: engine)
+    result = run_task_for_workspace(workspace, workspace.load_config(), task, engine_factory=lambda _engine_name: engine)
     refreshed = get_task_for_workspace(workspace, task.id)
 
     assert result.final_stage == "done"
@@ -362,7 +362,7 @@ def test_run_task_cleans_up_worktree_after_failed_terminal_state(tmp_path: Path)
     task = create_task_for_workspace(workspace, title="Worktree failure")
     engine = _WorktreeCommitEngine(tmp_path, fail_stage="implementing")
 
-    result = run_task(tmp_path, task, engine_factory=lambda _engine_name: engine)
+    result = run_task_for_workspace(workspace, workspace.load_config(), task, engine_factory=lambda _engine_name: engine)
     refreshed = get_task_for_workspace(workspace, task.id)
 
     assert result.final_stage == "failed"
@@ -398,7 +398,7 @@ def test_run_task_records_already_landed_commit_reconciliation(tmp_path: Path, m
 
     monkeypatch.setattr(orchestration, "build_commit_node_for_workspace", lambda workspace: _AlreadyLandedCommitNode())
 
-    result = run_task(tmp_path, task, engine_factory=lambda _engine_name: _PassEngine())
+    result = run_task_for_workspace(workspace, workspace.load_config(), task, engine_factory=lambda _engine_name: _PassEngine())
     refreshed = get_task_for_workspace(workspace, task.id)
 
     assert result.final_stage == "done"
@@ -430,7 +430,7 @@ def test_run_task_honors_task_retry_limit_override_for_live_execution_retries(tm
     )
     engine = _FlakyEngine("timeout")
 
-    result = run_task(tmp_path, task, engine_factory=lambda _engine_name: engine)
+    result = run_task_for_workspace(workspace, workspace.load_config(), task, engine_factory=lambda _engine_name: engine)
 
     assert result.final_stage == "done"
     assert engine.calls == 2

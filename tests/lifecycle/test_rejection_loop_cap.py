@@ -10,7 +10,7 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import create_workspace
 from litehive.config.workspace_files import config_path
 from litehive.lifecycle.nodes.agent import AgentVerdict
-from litehive.lifecycle.orchestration import run_task as run_pipeline_task
+from litehive.lifecycle.orchestration import run_task_for_workspace
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.workspace import Workspace
 from litehive.state.records import create_task_for_workspace, get_task_for_workspace, save_task_for_workspace
@@ -57,7 +57,7 @@ def test_rejection_loop_flags_task_preserves_worktree_and_branch(tmp_path: Path)
     task = create_task_for_workspace(workspace, title="Looping QA task")
     engine = _StageScriptEngine({"testing": ["reject", "reject", "reject"]})
 
-    result = run_pipeline_task(tmp_path, task, engine_factory=lambda _: engine)
+    result = run_task_for_workspace(workspace, workspace.load_config(), task, engine_factory=lambda _: engine)
     refreshed = get_task_for_workspace(workspace, task.id)
     pipeline_state = SqlitePersistence(workspace).load(task.id)
 
@@ -99,7 +99,7 @@ def test_rejection_loop_counter_resets_after_testing_pass(tmp_path: Path) -> Non
         }
     )
 
-    result = run_pipeline_task(tmp_path, task, engine_factory=lambda _: engine)
+    result = run_task_for_workspace(workspace, workspace.load_config(), task, engine_factory=lambda _: engine)
     refreshed = get_task_for_workspace(workspace, task.id)
 
     assert result.final_stage == "done"
@@ -116,7 +116,7 @@ def test_task_rejection_loop_limit_overrides_workspace_default(tmp_path: Path) -
     save_task_for_workspace(workspace, task)
     engine = _StageScriptEngine({"testing": ["reject", "reject"]})
 
-    result = run_pipeline_task(tmp_path, task, engine_factory=lambda _: engine)
+    result = run_task_for_workspace(workspace, workspace.load_config(), task, engine_factory=lambda _: engine)
     refreshed = get_task_for_workspace(workspace, task.id)
     pipeline_state = SqlitePersistence(workspace).load(task.id)
 
@@ -137,7 +137,7 @@ def test_repeated_stage_retry_exhaustion_survives_requeue_and_blocks_blind_reque
     task = create_task_for_workspace(workspace, title="Repeated implementing reject", pipeline_mode="single")
     first_engine = _StageScriptEngine({"implementing": ["reject", "reject", "reject", "reject"]})
 
-    first = run_pipeline_task(tmp_path, task, engine_factory=lambda _: first_engine)
+    first = run_task_for_workspace(workspace, workspace.load_config(), task, engine_factory=lambda _: first_engine)
     first_refreshed = get_task_for_workspace(workspace, task.id)
     first_state = SqlitePersistence(workspace).load(task.id)
 
@@ -153,7 +153,7 @@ def test_repeated_stage_retry_exhaustion_survives_requeue_and_blocks_blind_reque
 
     requeued = requeue_task_for_workspace(workspace, task.id)
     second_engine = _StageScriptEngine({"implementing": ["reject", "reject", "reject", "reject"]})
-    second = run_pipeline_task(tmp_path, requeued, engine_factory=lambda _: second_engine)
+    second = run_task_for_workspace(workspace, workspace.load_config(), requeued, engine_factory=lambda _: second_engine)
     second_refreshed = get_task_for_workspace(workspace, task.id)
     second_state = SqlitePersistence(workspace).load(task.id)
 

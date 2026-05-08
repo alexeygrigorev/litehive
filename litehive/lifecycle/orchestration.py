@@ -1,8 +1,7 @@
 """Task orchestration entry point.
 
 ``run_task_for_workspace`` wires injected workspace dependencies into the
-pipeline and drives one task through the state machine. ``run_task`` remains
-the path-based process-boundary wrapper used by older callers.
+pipeline and drives one task through the state machine.
 
 What it does, in order:
 
@@ -21,9 +20,7 @@ caller can render.
 """
 
 from dataclasses import dataclass, replace
-from pathlib import Path
 
-from litehive.container import build_container
 from litehive.config.model import LitehiveConfig
 from litehive.config.engine_models import resolve_task_rejection_loop_limit, resolve_task_retry_policy
 from litehive.git.ops import GitError
@@ -71,7 +68,6 @@ __all__ = [
     "_load_or_initialize",
     "_sync_back",
     "hook_specs_from_config",
-    "run_task",
     "run_task_for_workspace",
 ]
 
@@ -96,36 +92,6 @@ class ExecutionResult:
     final_stage: PipelineState
     failed_reason: str | None = None
     failed_message: str | None = None
-
-
-def run_task(
-    root: Path,
-    task: TaskRecord,
-    engine_factory: EngineFactory | None = None,
-    engine_override: str | None = None,
-    model_override: str | None = None,
-) -> ExecutionResult:
-    """
-    Run a single task through the state machine.
-
-    Takes the workspace runner guard and publishes a heartbeat so other
-    tools (CLI status, daemon supervisors) see the task as active.
-    Always uses the real ``GitCommitNode`` so tests that exercise the
-    commit stage do touch git plumbing.
-
-    ``engine_factory`` is an injection point for tests: pass a callable
-    that produces fake ``Engine`` instances and the pipeline will use
-    it in place of the real ``heru_engine_factory``.
-    """
-    container = build_container(root.resolve())
-    return run_task_for_workspace(
-        container.workspace,
-        container.config,
-        task,
-        engine_factory=engine_factory,
-        engine_override=engine_override,
-        model_override=model_override,
-    )
 
 
 def run_task_for_workspace(

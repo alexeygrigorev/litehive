@@ -9,7 +9,7 @@ from litehive.lifecycle.journal import SqliteJournal
 from litehive.workspace import Workspace
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.system import StubCommitNode
-from litehive.lifecycle.orchestration import ExecutionResult, _load_or_initialize, _sync_back, run_task
+from litehive.lifecycle.orchestration import ExecutionResult, _load_or_initialize, _sync_back, run_task_for_workspace
 from litehive.lifecycle.persistence import FailedRunRecord, SqlitePersistence, TaskState
 from litehive.lifecycle.types import PipelineMode
 from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
@@ -65,7 +65,7 @@ def _run_recovered_task(
     assert queued is not None and queued.id == task_id
     monkeypatch.setattr("litehive.lifecycle.orchestration.build_commit_node_for_workspace", lambda workspace: StubCommitNode())
     engine = _PassEngine("stub")
-    result = run_task(workspace.root, queued, engine_factory=lambda _: engine)
+    result = run_task_for_workspace(workspace, workspace.load_config(), queued, engine_factory=lambda _: engine)
     routes = [row["to_stage"] for row in SqliteJournal(workspace).load_transitions(task_id)]
     return result, engine.calls, routes
 
