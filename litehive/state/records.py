@@ -20,7 +20,7 @@ from litehive.domain.task import (
 from litehive.state.store import runtime_store_for_workspace
 
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
-from litehive.state.locking import workspace_lock, workspace_mutation_guard_for_workspace
+from litehive.state.locking import workspace_lock_for_workspace, workspace_mutation_guard_for_workspace
 from litehive.state.persist import (
     load_state_for_workspace,
     save_state_without_runner_guard_for_workspace,
@@ -542,7 +542,7 @@ def create_task_for_workspace(
     # inline: tasks.queue top-level-imports state.records (would cycle).
     from litehive.tasks.queue import validate_task_dependencies_for_workspace  # noqa: PLC0415
 
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace, bootstrap=False)
         task_id = f"T-{_reserve_next_task_numbers_for_workspace(workspace, state)[0]:04d}"
         slug = slugify(title)
@@ -688,7 +688,7 @@ def create_follow_up_tasks_for_workspace(
     create_workspace(root)
     created_tasks: list[TaskRecord] = []
     created_dirs: list[Path] = []
-    with workspace_mutation_guard_for_workspace(workspace), workspace_lock(root):
+    with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace, bootstrap=False)
         reserved_numbers = _reserve_next_task_numbers_for_workspace(workspace, state, count=len(follow_ups))
 
@@ -757,7 +757,7 @@ def discard_created_task_for_workspace(workspace: Workspace, task_id: str) -> No
     pre-creation shape.
     """
     root = workspace.root
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         task = get_task_for_workspace(workspace, task_id)
         state = load_state_for_workspace(workspace)
         queue_before = list(state.queue)
