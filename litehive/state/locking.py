@@ -34,6 +34,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _runner_lock_key_for_workspace(workspace: Workspace) -> Path:
+    """
+    Return the normalized key for the in-process runner-lock registry.
+    """
+    return workspace.root.resolve()
+
+
 def _pid_is_zombie(pid: int) -> bool:
     """
     Distinguish a defunct (zombie) process from a live one.
@@ -73,11 +80,10 @@ def _runner_lock_manager_for_workspace(
     settings) lives in one place rather than being re-derived in every
     caller.
     """
-    root = workspace.root
     return ProcessLockManager(
         process_name="runner",
         lock_manager=WorkspaceLockManager(
-            path=runner_lock_path(root),
+            path=runner_lock_path(workspace.root),
             pid_is_alive=runner_pid_is_alive,
             held_in_process=held_in_process,
         ),
@@ -232,8 +238,8 @@ def runner_lock_is_active_for_workspace(workspace: Workspace) -> bool:
     """
     Probe whether this workspace's runner lock is currently held.
     """
-    root = workspace.root.resolve()
-    return _runner_lock_manager_for_workspace(workspace, held_in_process=lambda: root in RUNNER_LOCKS).is_active()
+    lock_key = _runner_lock_key_for_workspace(workspace)
+    return _runner_lock_manager_for_workspace(workspace, held_in_process=lambda: lock_key in RUNNER_LOCKS).is_active()
 
 
 def runner_status_needs_reconciliation_for_workspace(workspace: Workspace) -> bool:
@@ -272,8 +278,8 @@ def clear_runner_lock_metadata_for_workspace(workspace: Workspace) -> None:
     is gone; without the cleanup the next status query would still see
     the dead runner's identity and spend cycles re-reconciling nothing.
     """
-    root = workspace.root.resolve()
-    manager = _runner_lock_manager_for_workspace(workspace, held_in_process=lambda: root in RUNNER_LOCKS)
+    lock_key = _runner_lock_key_for_workspace(workspace)
+    manager = _runner_lock_manager_for_workspace(workspace, held_in_process=lambda: lock_key in RUNNER_LOCKS)
     if manager.clear_metadata_if_unlocked():
         _clear_runner_process_state_for_workspace(workspace)
 
@@ -438,10 +444,10 @@ def current_thread_owns_runner_guard_for_workspace(workspace: Workspace) -> bool
     """
     Distinguish reentrant calls from foreign threads for an injected workspace.
     """
-    root = workspace.root.resolve()
+    lock_key = _runner_lock_key_for_workspace(workspace)
     owner_thread_id = threading.get_ident()
     with RUNNER_LOCKS_MUTEX:
-        existing = RUNNER_LOCKS.get(root)
+        existing = RUNNER_LOCKS.get(lock_key)
     return existing is not None and existing.owner_thread_id == owner_thread_id
 
 
@@ -598,23 +604,23 @@ def workspace_runner_guard(workspace: Workspace):
     mutation guards work without deadlocking. The single canonical
     entry-point — every other guard helper layers on top of this.
     """
-    root = workspace.root
+    lock_key = _runner_lock_key_for_workspace(workspace)
     owner_thread_id = threading.get_ident()
-    manager = _runner_lock_manager_for_workspace(workspace, held_in_process=lambda: root in RUNNER_LOCKS)
+    manager = _runner_lock_manager_for_workspace(workspace, held_in_process=lambda: lock_key in RUNNER_LOCKS)
     with RUNNER_LOCKS_MUTEX:
-        existing = RUNNER_LOCKS.get(root)
+        existing = RUNNER_LOCKS.get(lock_key)
         if existing is not None:
             if existing.owner_thread_id != owner_thread_id:
-                raise WorkspaceConflictError(runner_conflict_message(root))
+                raise WorkspaceConflictError(runner_conflict_message(lock_key))
             existing.depth += 1
     if existing is not None:
         try:
             yield
         finally:
             with RUNNER_LOCKS_MUTEX:
-                lock_state = RUNNER_LOCKS[root]
+                lock_state = RUNNER_LOCKS[lock_key]
                 if lock_state.depth <= 1:
-                    RUNNER_LOCKS.pop(root, None)
+                    RUNNER_LOCKS.pop(lock_key, None)
                     should_close = True
                 else:
                     lock_state.depth -= 1
@@ -629,7 +635,7 @@ def workspace_runner_guard(workspace: Workspace):
         try:
             handle = manager.lock_manager.acquire(nonblocking=True)
         except BlockingIOError as exc:
-            raise WorkspaceConflictError(runner_conflict_message(root)) from exc
+            raise WorkspaceConflictError(runner_conflict_message(lock_key)) from exc
         # Auto-repair stale state left by a crashed runner.  We hold the
         # exclusive flock, so no other runner is alive — any active_task_id
         # or "running" execution_status is leftover from a dead process.
@@ -638,7 +644,7 @@ def workspace_runner_guard(workspace: Workspace):
         status = RunnerStatusState(
             status=RunnerStatus.RUNNING,
             pid=os.getpid(),
-            workspace=str(root),
+            workspace=str(lock_key),
             command=" ".join(sys.argv),
             started_at=now,
             heartbeat_at=now,
@@ -646,7 +652,12 @@ def workspace_runner_guard(workspace: Workspace):
         write_runner_lock_metadata(handle, status)
         _save_runner_process_state_for_workspace(workspace, status)
         with RUNNER_LOCKS_MUTEX:
-            RUNNER_LOCKS[root] = RunnerLockState(handle=handle, depth=1, status=status, owner_thread_id=owner_thread_id)
+            RUNNER_LOCKS[lock_key] = RunnerLockState(
+                handle=handle,
+                depth=1,
+                status=status,
+                owner_thread_id=owner_thread_id,
+            )
     except (OSError, RuntimeError, ValueError):
         if handle is not None and not handle.closed:
             handle.close()
@@ -656,7 +667,7 @@ def workspace_runner_guard(workspace: Workspace):
         yield
     finally:
         with RUNNER_LOCKS_MUTEX:
-            RUNNER_LOCKS.pop(root, None)
+            RUNNER_LOCKS.pop(lock_key, None)
         manager.lock_manager.release(handle, clear_metadata=True)
         _clear_runner_process_state_for_workspace(workspace)
 
@@ -671,10 +682,10 @@ def workspace_mutation_guard_for_workspace(workspace: Workspace):
     mutation. CLI mutation commands rely on this so they can run
     correctly with or without an active runner.
     """
-    root = workspace.root
+    lock_key = _runner_lock_key_for_workspace(workspace)
     owner_thread_id = threading.get_ident()
     with RUNNER_LOCKS_MUTEX:
-        existing = RUNNER_LOCKS.get(root)
+        existing = RUNNER_LOCKS.get(lock_key)
     if existing is not None and existing.owner_thread_id == owner_thread_id:
         yield
         return
