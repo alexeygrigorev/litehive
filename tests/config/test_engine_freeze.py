@@ -34,8 +34,8 @@ from litehive.git.ops import GitError
 from litehive.lifecycle.engines import ConfigBackedEngineSelector, EngineFactory
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.types import PipelineMode
-from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard_for_workspace
-from litehive.state.records import create_task, get_task_record
+from litehive.state.persist import load_state_for_workspace, persist_task_and_state_without_runner_guard_for_workspace
+from litehive.state.records import create_task_for_workspace, get_task_record_for_workspace
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.workspace import Workspace
 from litehive.domain.common import PipelineState, PipelineStatus
@@ -56,11 +56,12 @@ def _load_config(root: Path) -> LitehiveConfig:
 
 
 def _prepare_runnable_task(root: Path, title: str) -> TaskRecord:
-    task = create_task(root, title=title)
-    state = load_state(root)
+    workspace = Workspace.from_path(root)
+    task = create_task_for_workspace(workspace, title=title)
+    state = load_state_for_workspace(workspace)
     task.pipeline_status = PipelineStatus.IMPLEMENTING
-    persist_task_and_state_without_runner_guard_for_workspace(Workspace.from_path(root), task=task, state=state)
-    return get_task_record(root, task.id) or task
+    persist_task_and_state_without_runner_guard_for_workspace(workspace, task=task, state=state)
+    return get_task_record_for_workspace(workspace, task.id) or task
 
 
 class _StubLifecycleEngine:
@@ -393,7 +394,7 @@ def test_queue_switch_cli_queues_task_for_new_engine(tmp_path: Path) -> None:
 
     assert exit_code == 0
     assert "engine: codex -> gemini" in output
-    refreshed = get_task_record(tmp_path, task.id)
+    refreshed = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert refreshed is not None
     assert refreshed.runtime.execution.last_engine_switch is not None
     assert refreshed.runtime.execution.last_engine_switch.to_engine == "gemini"
@@ -423,7 +424,7 @@ def test_switch_task_engine_accepts_injected_workspace(tmp_path: Path) -> None:
     assert summary.previous_engine == "codex"
     assert summary.new_engine == "gemini"
     assert summary.task.status == "queued"
-    refreshed = get_task_record(tmp_path, task.id)
+    refreshed = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert refreshed is not None
     assert refreshed.runtime.execution.last_engine_switch is not None
     assert refreshed.runtime.execution.last_engine_switch.to_engine == "gemini"
@@ -446,7 +447,7 @@ def test_queue_switch_subcommand_still_works(tmp_path: Path) -> None:
 
     assert exit_code == 0
     assert "engine: codex -> gemini" in output
-    refreshed = get_task_record(tmp_path, task.id)
+    refreshed = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert refreshed is not None
     assert refreshed.runtime.execution.last_engine_switch is not None
     assert refreshed.runtime.execution.last_engine_switch.to_engine == "gemini"
@@ -648,7 +649,7 @@ def test_select_engine_skips_current_heru_quota_status_shape(
         tmp_path,
         LitehiveConfig(default_engine="codex", recovery_engine="claude"),
     )
-    task = create_task(tmp_path, title="quota selection repro")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="quota selection repro")
     config = _load_config(tmp_path)
     monkeypatch.setattr(engine_quota, "check_codex_quota", lambda: status)
     monkeypatch.setattr(engine_quota, "check_claude_quota", lambda: UsageStatus())
@@ -855,7 +856,7 @@ def test_recovery_engine_uses_shared_select_engine(
             engine_preference=["codex", "gemini"],
         ),
     )
-    task = create_task(tmp_path, title="Recovery selection")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Recovery selection")
     config = _load_config(tmp_path)
 
     def fake_select_engine(
@@ -902,7 +903,7 @@ def test_recovery_auto_engine_respects_shared_selector_blocked_result(tmp_path: 
             engine_freeze={"codex": future, "gemini": future},
         ),
     )
-    task = create_task(tmp_path, title="Recovery freeze repro")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Recovery freeze repro")
     config = _load_config(tmp_path)
 
     selection = select_engine_for_workspace(
@@ -945,7 +946,7 @@ def test_recovery_non_auto_branches_skip_frozen_engines(
             engine_freeze={"codex": future},
         ),
     )
-    task = create_task(tmp_path, title=f"Recovery branch {recovery_engine!r}")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title=f"Recovery branch {recovery_engine!r}")
     config = _load_config(tmp_path)
 
     selection = select_engine_for_workspace(Workspace.from_path(tmp_path), task, config, selector_request)
