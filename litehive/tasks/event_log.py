@@ -9,7 +9,6 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from litehive.config.paths import workspace_path
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskIntentRecord, TaskStateRecord, WorkspaceState
 from litehive.state.rebuild_safety import (
@@ -275,7 +274,7 @@ def rebuild_sqlite_from_task_event_log(workspace: Workspace, clear_existing: boo
         _apply_event(replay_state, event)
     if clear_existing:
         replay_task_ids = set(replay_state.task_intents) | set(replay_state.task_states)
-        db_path = workspace_path(workspace.root, "data.db")
+        db_path = workspace.runtime_path("data.db")
         assert_database_rebuild_safe_for_workspace(
             workspace,
             db_path,

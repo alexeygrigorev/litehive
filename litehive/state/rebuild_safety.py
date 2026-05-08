@@ -9,8 +9,6 @@ import sqlite3
 from pathlib import Path
 from typing import Iterable, TYPE_CHECKING
 
-from litehive.config.paths import workspace_path
-
 if TYPE_CHECKING:
     from litehive.workspace import Workspace
 
@@ -90,7 +88,7 @@ def task_artifact_dir_ids_for_workspace(workspace: "Workspace") -> set[str]:
     artifacts are evidence that a task did exist, even if the DB and
     log no longer agree.
     """
-    tasks_dir = workspace.root / ".litehive" / "tasks"
+    tasks_dir = workspace.control_dir() / "tasks"
     if not tasks_dir.exists():
         return set()
 
@@ -126,7 +124,7 @@ def event_log_replay_task_ids_for_workspace(workspace: "Workspace") -> set[str]:
     those tombstones or every legitimately deleted task would block a
     rebuild.
     """
-    path = workspace_path(workspace.root, TASK_EVENT_LOG_NAME)
+    path = workspace.runtime_path(TASK_EVENT_LOG_NAME)
     if not path.exists():
         return set()
 
@@ -246,7 +244,7 @@ def backup_database_before_rebuild_for_workspace(
     """
     if not db_path.exists():
         return None
-    backup_dir = workspace_path(workspace.root, "backups")
+    backup_dir = workspace.runtime_path("backups")
     backup_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
     safe_label = re.sub(r"[^A-Za-z0-9_.-]+", "-", label).strip("-") or "pre-rebuild"

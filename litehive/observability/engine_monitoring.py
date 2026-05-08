@@ -12,7 +12,6 @@ concurrent stages cannot interleave half-written rows.
 import json
 import sqlite3
 
-from litehive.config.paths import workspace_path
 from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from heru.types import EngineLimitKind
 from litehive.domain.common import utcnow
@@ -62,7 +61,7 @@ def _load_engine_monitoring_from_db(workspace: Workspace) -> WorkspaceEngineMoni
     surfaces query monitoring without competing with the writer
     for the workspace mutation guard.
     """
-    db_path = workspace_path(workspace.root, "data.db")
+    db_path = workspace.runtime_path("data.db")
     if not db_path.exists():
         return WorkspaceEngineMonitoring()
     with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as connection:
