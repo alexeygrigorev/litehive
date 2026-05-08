@@ -461,13 +461,6 @@ def runner_lock_pid_is_stale_for_workspace(workspace: Workspace) -> bool:
     return _runner_lock_manager_for_workspace(workspace).pid_is_stale()
 
 
-def runner_lock_is_held(root: Path) -> bool:
-    """
-    Path-based compatibility wrapper for runner guard ownership probes.
-    """
-    return runner_lock_is_held_for_workspace(Workspace.from_path(root))
-
-
 def runner_lock_is_held_for_workspace(workspace: Workspace) -> bool:
     """
     Probe whether this thread or another process holds the injected workspace's runner guard.

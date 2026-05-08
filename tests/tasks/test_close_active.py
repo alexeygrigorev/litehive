@@ -17,7 +17,7 @@ from litehive.tasks.paths import runner_lock_path
 from litehive.state.persist import load_state
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.tasks.queue import set_active_task
-from litehive.state.locking import runner_lock_is_held
+from litehive.state.locking import runner_lock_is_held_for_workspace
 from litehive.tasks.runtime import (
     mark_subagent_pid_for_workspace,
     mark_subagent_started_for_workspace,
@@ -97,7 +97,7 @@ with workspace_runner_guard(Workspace.from_path(root)):
     try:
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
-            if ready_file.exists() and runner_lock_is_held(tmp_path):
+            if ready_file.exists() and runner_lock_is_held_for_workspace(workspace):
                 break
             time.sleep(0.05)
         else:
@@ -124,7 +124,7 @@ with workspace_runner_guard(Workspace.from_path(root)):
         assert "status: closed" in out
         assert "close_reason: wont_do" in out
 
-        assert not runner_lock_is_held(tmp_path)
+        assert not runner_lock_is_held_for_workspace(workspace)
         lock_text = runner_lock_path(tmp_path).read_text(encoding="utf-8")
         assert lock_text == ""
         returncode = _wait_for_process_exit(proc, timeout_seconds=15.0)

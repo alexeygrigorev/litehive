@@ -13,11 +13,12 @@ from litehive.cli.app import app
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import create_workspace
 from litehive.domain.task import UnmergedWorktree
-from litehive.state.locking import runner_lock_is_held
+from litehive.state.locking import runner_lock_is_held_for_workspace
 from litehive.state.persist import load_state, save_state
 from litehive.state.records import create_task, get_task, save_task
 from litehive.worktree.paths import serialize_worktree_path, task_worktree_branch
 from litehive.domain.common import PipelineStatus, TaskStatus
+from litehive.workspace import Workspace
 
 _RUNNER = CliRunner()
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -126,6 +127,7 @@ def _spawn_fake_runner(workspace: Path, *, active_task_id: str, ready_file: Path
 
 
 def _wait_for_runner_lock(proc: subprocess.Popen[str], workspace: Path, ready_file: Path) -> None:
+    workspace_context = Workspace.from_path(workspace)
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
         returncode = proc.poll()
@@ -135,19 +137,20 @@ def _wait_for_runner_lock(proc: subprocess.Popen[str], workspace: Path, ready_fi
                 "fake runner exited before acquiring the runner lock "
                 f"(returncode={returncode}, stdout={stdout!r}, stderr={stderr!r})"
             )
-        if ready_file.exists() and runner_lock_is_held(workspace):
+        if ready_file.exists() and runner_lock_is_held_for_workspace(workspace_context):
             return
         time.sleep(0.05)
     raise AssertionError("fake runner did not acquire the runner lock within 15s")
 
 
 def _stop_runner(proc: subprocess.Popen[str], workspace: Path) -> None:
+    workspace_context = Workspace.from_path(workspace)
     try:
         if proc.poll() is None:
             proc.send_signal(signal.SIGINT)
             proc.wait(timeout=5)
     finally:
-        assert not runner_lock_is_held(workspace)
+        assert not runner_lock_is_held_for_workspace(workspace_context)
 
 
 def test_worktree_rescue_apply_completes_while_another_runner_holds_the_lock(tmp_path: Path) -> None:
