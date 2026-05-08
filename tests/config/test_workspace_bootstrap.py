@@ -14,7 +14,7 @@ from litehive.config.model import (
 from litehive.config.profiles.defaults import PROCESS_PROFILE_OVERLAYS, SHARED_PROCESS_PROFILE
 from litehive.config.profiles.loader import resolve_process_profile
 from litehive.config.workspace import create_workspace
-from litehive.state.persist import load_state
+from litehive.state.persist import load_state_for_workspace
 from litehive.workspace import Workspace
 
 
@@ -111,7 +111,7 @@ def test_create_workspace_bootstraps_runtime_db(tmp_path: Path, monkeypatch: pyt
 
 def test_load_state_requires_existing_workspace_without_creating_it(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="not an existing Litehive project"):
-        load_state(tmp_path)
+        load_state_for_workspace(Workspace.from_path(tmp_path))
 
     assert not (tmp_path / ".litehive").exists()
 
