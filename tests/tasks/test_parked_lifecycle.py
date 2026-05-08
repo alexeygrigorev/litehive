@@ -14,8 +14,13 @@ from litehive.workspace import Workspace
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.system import StubCommitNode
 from litehive.lifecycle.orchestration import run_task
-from litehive.state.persist import load_state, save_state
-from litehive.state.records import create_task, get_task, list_tasks, save_task
+from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
+from litehive.state.records import (
+    create_task_for_workspace,
+    get_task_for_workspace,
+    list_tasks_for_workspace,
+    save_task_for_workspace,
+)
 from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.tasks.queue import dequeue_next_task, restore_missing_queued_tasks
 from litehive.tasks.status import requeue_task_for_workspace, resume_task_for_workspace, stop_current_task
@@ -42,20 +47,21 @@ class _PassEngine:
 
 def test_stop_current_task_marks_active_work_as_parked(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(
-        tmp_path,
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(
+        workspace,
         title="Stop me later",
         acceptance_criteria=["resume from current stage"],
     )
     _set_running_task(task)
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
 
-    state = load_state(tmp_path)
+    state = load_state_for_workspace(workspace)
     state.active_task_id = task.id
     state.queue = []
-    save_state(tmp_path, state)
+    save_state_for_workspace(workspace, state)
 
-    summary = stop_current_task(Workspace.from_path(tmp_path))
+    summary = stop_current_task(workspace)
 
     assert summary.task.status == "parked"
     assert summary.task.pipeline_status == "implementing"
@@ -69,49 +75,50 @@ def test_stop_current_task_marks_active_work_as_parked(tmp_path: Path) -> None:
     assert summary.task.runtime.execution.interruption.reason == "Task parked via CLI command from implementing stage"
     # No longer using the magic string "Task stopped via CLI"
 
-    refreshed = get_task(tmp_path, task.id)
+    refreshed = get_task_for_workspace(workspace, task.id)
     assert refreshed is not None
     assert refreshed.status == "parked"
-    assert load_state(tmp_path).active_task_id is None
-    assert task.id not in load_state(tmp_path).queue
+    assert load_state_for_workspace(workspace).active_task_id is None
+    assert task.id not in load_state_for_workspace(workspace).queue
 
 
 def test_restore_missing_queued_tasks_skips_parked_and_restores_interrupted(
     tmp_path: Path,
 ) -> None:
     create_workspace(tmp_path)
-    interrupted = create_task(
-        tmp_path,
+    workspace = Workspace.from_path(tmp_path)
+    interrupted = create_task_for_workspace(
+        workspace,
         title="Interrupted work",
         acceptance_criteria=["resume interrupted work"],
     )
     interrupted.status = TaskStatus.INTERRUPTED
     interrupted.pipeline_status = PipelineStatus.IMPLEMENTING
-    save_task(tmp_path, interrupted)
+    save_task_for_workspace(workspace, interrupted)
 
-    parked = create_task(
-        tmp_path,
+    parked = create_task_for_workspace(
+        workspace,
         title="Parked work",
         acceptance_criteria=["resume parked work explicitly"],
     )
     parked.status = TaskStatus.PARKED
     parked.pipeline_status = PipelineStatus.IMPLEMENTING
-    save_task(tmp_path, parked)
+    save_task_for_workspace(workspace, parked)
 
-    backlog = create_task(
-        tmp_path,
+    backlog = create_task_for_workspace(
+        workspace,
         title="Dormant backlog work",
         acceptance_criteria=["stay off the live queue until explicitly queued"],
     )
     backlog.status = TaskStatus.QUEUED
     backlog.pipeline_status = PipelineStatus.BACKLOG
-    save_task(tmp_path, backlog)
+    save_task_for_workspace(workspace, backlog)
 
-    state = load_state(tmp_path)
+    state = load_state_for_workspace(workspace)
     state.queue = []
-    save_state(tmp_path, state)
+    save_state_for_workspace(workspace, state)
 
-    tasks_by_id = {task.id: task for task in list_tasks(tmp_path)}
+    tasks_by_id = {task.id: task for task in list_tasks_for_workspace(workspace)}
     restored = restore_missing_queued_tasks(state, tasks_by_id)
 
     assert restored == [interrupted.id]
@@ -123,40 +130,41 @@ def test_restore_missing_queued_tasks_skips_parked_and_restores_interrupted(
 @pytest.mark.parametrize("execution_status", ["interrupted", "idle"])
 def test_resume_task_allows_stranded_in_progress_task(tmp_path: Path, execution_status: str) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Resume stranded task")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Resume stranded task")
     task.status = TaskStatus.IN_PROGRESS
     task.pipeline_status = PipelineStatus.GROOMING
     task.runtime.pipeline.execution_status = execution_status
     task.runtime.pipeline.current_stage.stage = "grooming"
     task.runtime.pipeline.current_stage.status = execution_status
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
 
-    state = load_state(tmp_path)
+    state = load_state_for_workspace(workspace)
     state.active_task_id = None
     state.queue = [item for item in state.queue if item != task.id]
-    save_state(tmp_path, state)
+    save_state_for_workspace(workspace, state)
 
-    resumed = resume_task_for_workspace(Workspace.from_path(tmp_path), task.id, front=True)
+    resumed = resume_task_for_workspace(workspace, task.id, front=True)
 
     assert resumed.status == "queued"
     assert resumed.pipeline_status == "grooming"
     assert resumed.runtime.pipeline.execution_status == "idle"
     assert resumed.runtime.pipeline.current_stage.stage == "grooming"
     assert resumed.runtime.pipeline.current_stage.status == "idle"
-    assert load_state(tmp_path).queue[0] == task.id
+    assert load_state_for_workspace(workspace).queue[0] == task.id
 
 
 def test_resume_and_requeue_accept_injected_workspace(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    parked = create_task(tmp_path, title="Resume through workspace")
+    parked = create_task_for_workspace(workspace, title="Resume through workspace")
     parked.status = TaskStatus.PARKED
     parked.pipeline_status = PipelineStatus.IMPLEMENTING
-    save_task(tmp_path, parked)
-    flagged = create_task(tmp_path, title="Requeue through workspace")
+    save_task_for_workspace(workspace, parked)
+    flagged = create_task_for_workspace(workspace, title="Requeue through workspace")
     flagged.status = TaskStatus.FLAGGED
     flagged.pipeline_status = PipelineStatus.IMPLEMENTING
-    save_task(tmp_path, flagged)
+    save_task_for_workspace(workspace, flagged)
 
     resumed = resume_task_for_workspace(workspace, parked.id, front=True)
     requeued = requeue_task_for_workspace(workspace, flagged.id, force=True)
@@ -172,13 +180,14 @@ def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(
     monkeypatch,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(
-        tmp_path,
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(
+        workspace,
         title="Dirty ownership",
         acceptance_criteria=["allow resume with owned dirty paths"],
     )
     append_activity_entry(
-        Workspace.from_path(tmp_path),
+        workspace,
         task,
         TaskActivityEntry(
             role="swe",
@@ -200,8 +209,8 @@ def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(
 
     task.status = TaskStatus.INTERRUPTED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
-    save_task(tmp_path, task)
-    interrupted_report = inspect_dirty_worktree_gate(Workspace.from_path(tmp_path))
+    save_task_for_workspace(workspace, task)
+    interrupted_report = inspect_dirty_worktree_gate(workspace)
 
     assert interrupted_report.blocks_pool is False
     assert interrupted_report.findings[0].ownership is DirtyWorktreeOwnership.TASK_OWNED
@@ -210,8 +219,9 @@ def test_dirty_worktree_gate_only_auto_attributes_interrupted_tasks(
 
 def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(
-        tmp_path,
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(
+        workspace,
         title="Restart saved stage",
         acceptance_criteria=["resume in testing without replaying earlier stages"],
     )
@@ -220,9 +230,9 @@ def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkey
     task.runtime.pipeline.execution_status = "paused"
     task.runtime.pipeline.current_stage.stage = "testing"
     task.runtime.pipeline.current_stage.status = "paused"
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
 
-    resumed = resume_task_for_workspace(Workspace.from_path(tmp_path), task.id, front=True)
+    resumed = resume_task_for_workspace(workspace, task.id, front=True)
     assert resumed.runtime.pipeline.current_stage.stage == "testing"
     assert resumed.runtime.pipeline.current_stage.status == "idle"
 
@@ -231,7 +241,7 @@ def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkey
         lambda workspace: StubCommitNode(),
     )
 
-    queued = dequeue_next_task(Workspace.from_path(tmp_path))
+    queued = dequeue_next_task(workspace)
     assert queued is not None
 
     result = run_task(
@@ -239,7 +249,7 @@ def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkey
         queued,
         engine_factory=lambda name: _PassEngine(name),
     )
-    routed_stages = [row["to_stage"] for row in SqliteJournal(Workspace.from_path(tmp_path)).load_transitions(task.id)]
+    routed_stages = [row["to_stage"] for row in SqliteJournal(workspace).load_transitions(task.id)]
 
     assert result.final_stage == "done"
     assert routed_stages[:2] == ["worktree_sync", "before_testing"]
@@ -249,8 +259,9 @@ def test_restarted_execution_enters_saved_resumable_stage(tmp_path: Path, monkey
 
 def test_resume_task_recovers_preserved_stage_when_pipeline_status_degraded(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(
-        tmp_path,
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(
+        workspace,
         title="Resume preserved stage",
         acceptance_criteria=["resume from testing after stale state cleanup"],
     )
@@ -267,24 +278,25 @@ def test_resume_task_recovers_preserved_stage_when_pipeline_status_degraded(tmp_
         reason="Preserve resumable stage",
         summary="Resume from testing.",
     )
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
 
-    resumed = resume_task_for_workspace(Workspace.from_path(tmp_path), task.id, front=True)
+    resumed = resume_task_for_workspace(workspace, task.id, front=True)
 
     assert resumed.status == "queued"
     assert resumed.pipeline_status == "testing"
     assert resumed.runtime.pipeline.execution_status == "idle"
     assert resumed.runtime.pipeline.current_stage.stage == "testing"
     assert resumed.runtime.pipeline.current_stage.status == "idle"
-    assert load_state(tmp_path).queue[0] == task.id
+    assert load_state_for_workspace(workspace).queue[0] == task.id
 
 
 def test_resume_task_canonicalizes_stranded_in_progress_with_degraded_pipeline_status(
     tmp_path: Path,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(
-        tmp_path,
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(
+        workspace,
         title="Resume stranded degraded task",
         acceptance_criteria=["resume from testing"],
     )
@@ -293,14 +305,14 @@ def test_resume_task_canonicalizes_stranded_in_progress_with_degraded_pipeline_s
     task.runtime.pipeline.execution_status = "idle"
     task.runtime.pipeline.current_stage.stage = "testing"
     task.runtime.pipeline.current_stage.status = "idle"
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
 
-    state = load_state(tmp_path)
+    state = load_state_for_workspace(workspace)
     state.active_task_id = task.id
     state.queue = []
-    save_state(tmp_path, state)
+    save_state_for_workspace(workspace, state)
 
-    resumed = resume_task_for_workspace(Workspace.from_path(tmp_path), task.id, front=True)
+    resumed = resume_task_for_workspace(workspace, task.id, front=True)
 
     assert resumed.status == "queued"
     assert resumed.pipeline_status == "testing"
@@ -308,7 +320,7 @@ def test_resume_task_canonicalizes_stranded_in_progress_with_degraded_pipeline_s
     assert resumed.runtime.pipeline.current_stage.stage == "testing"
     assert resumed.runtime.pipeline.current_stage.status == "idle"
 
-    refreshed_state = load_state(tmp_path)
+    refreshed_state = load_state_for_workspace(workspace)
     assert refreshed_state.active_task_id is None
     assert refreshed_state.queue[0] == task.id
 
@@ -318,21 +330,22 @@ def test_queue_resume_and_requeue_keep_parked_semantics_explicit(
     monkeypatch,
 ) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     runner = CliRunner()
 
-    task = create_task(
-        tmp_path,
+    task = create_task_for_workspace(
+        workspace,
         title="Queued later",
         acceptance_criteria=["resume from testing", "requeue from implementing"],
     )
     task.status = TaskStatus.PARKED
     task.pipeline_status = PipelineStatus.TESTING
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
 
-    state = load_state(tmp_path)
+    state = load_state_for_workspace(workspace)
     state.queue = []
-    save_state(tmp_path, state)
+    save_state_for_workspace(workspace, state)
 
     queue_result = runner.invoke(
         cli_app,
@@ -351,7 +364,7 @@ def test_queue_resume_and_requeue_keep_parked_semantics_explicit(
     assert "status: queued" in resume_result.output
     assert "pipeline_stage: testing" in resume_result.output
 
-    refreshed = get_task(tmp_path, task.id)
+    refreshed = get_task_for_workspace(workspace, task.id)
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "testing"
@@ -360,10 +373,10 @@ def test_queue_resume_and_requeue_keep_parked_semantics_explicit(
     # validate_assignment narrowing (the equality assertions above collapse
     # the field types to literals, so direct assignment then looks bad).
     refreshed = refreshed.model_copy(update={"status": TaskStatus.PARKED, "pipeline_status": PipelineStatus.TESTING})
-    save_task(tmp_path, refreshed)
-    state = load_state(tmp_path)
+    save_task_for_workspace(workspace, refreshed)
+    state = load_state_for_workspace(workspace)
     state.queue = []
-    save_state(tmp_path, state)
+    save_state_for_workspace(workspace, state)
 
     requeue_result = runner.invoke(
         cli_app,
@@ -374,7 +387,7 @@ def test_queue_resume_and_requeue_keep_parked_semantics_explicit(
     assert "status: queued" in requeue_result.output
     assert "pipeline_stage: implementing" in requeue_result.output
 
-    refreshed = get_task(tmp_path, task.id)
+    refreshed = get_task_for_workspace(workspace, task.id)
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "implementing"
