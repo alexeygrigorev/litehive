@@ -36,14 +36,14 @@ from litehive.lifecycle.nodes.system import MergeConflict
 from litehive.lifecycle.persistence import Limits, SqlitePersistence
 from litehive.lifecycle.types import PipelineMode
 from litehive.domain.recovery import RecoveryTrigger
-from litehive.state.records import get_task, get_task_worktree_path
+from litehive.state.records import get_task_for_workspace, get_task_worktree_path
 from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace
 from tests.support.lifecycle_fakes import InMemorySessionStore
 
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import create_workspace
 from litehive.lifecycle.orchestration import run_task
-from litehive.state.records import create_task
+from litehive.state.records import create_task_for_workspace
 from litehive.tasks.journal import render_task_journal
 
 pytestmark = pytest.mark.integration
@@ -262,7 +262,8 @@ def test_run_task_uses_workspace_retry_on_for_live_execution_retries(tmp_path: P
             retry_on=[TransientFailureKind.TIMEOUT],
         ),
     )
-    task = create_task(tmp_path, title="Retry once on timeout", pipeline_mode="single")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Retry once on timeout", pipeline_mode="single")
     engine = _FlakyEngine("timeout")
 
     result = run_task(tmp_path, task, engine_factory=lambda _engine_name: engine)
@@ -283,9 +284,10 @@ class _WorktreeCommitEngine:
     def run_turn(self, session: Any, prompt: Any, state: Any) -> AgentVerdict:
         session.engine_session_id = f"stub-{state.task_id}-{state.stage}"
         if state.stage == "implementing":
-            task = get_task(self.root, state.task_id)
+            workspace = Workspace.from_path(self.root)
+            task = get_task_for_workspace(workspace, state.task_id)
             assert task is not None
-            worktree = resolve_recorded_worktree_path_for_workspace(Workspace.from_path(self.root), get_task_worktree_path(task))
+            worktree = resolve_recorded_worktree_path_for_workspace(workspace, get_task_worktree_path(task))
             assert worktree is not None and worktree.exists()
             self.observed_worktree = worktree
             status = subprocess.run(
@@ -334,11 +336,12 @@ def test_run_task_creates_worktree_and_merges_back_into_main(tmp_path: Path) -> 
         LitehiveConfig(default_engine="codex", engine_preference=["codex"]),
     )
     _init_git_workspace(tmp_path)
-    task = create_task(tmp_path, title="Worktree merge")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Worktree merge")
     engine = _WorktreeCommitEngine(tmp_path)
 
     result = run_task(tmp_path, task, engine_factory=lambda _engine_name: engine)
-    refreshed = get_task(tmp_path, task.id)
+    refreshed = get_task_for_workspace(workspace, task.id)
 
     assert result.final_stage == "done"
     assert engine.observed_main_clean is True
@@ -355,11 +358,12 @@ def test_run_task_cleans_up_worktree_after_failed_terminal_state(tmp_path: Path)
         LitehiveConfig(default_engine="codex", engine_preference=["codex"]),
     )
     _init_git_workspace(tmp_path)
-    task = create_task(tmp_path, title="Worktree failure")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Worktree failure")
     engine = _WorktreeCommitEngine(tmp_path, fail_stage="implementing")
 
     result = run_task(tmp_path, task, engine_factory=lambda _engine_name: engine)
-    refreshed = get_task(tmp_path, task.id)
+    refreshed = get_task_for_workspace(workspace, task.id)
 
     assert result.final_stage == "failed"
     assert engine.observed_worktree is not None
@@ -385,8 +389,9 @@ def test_run_task_records_already_landed_commit_reconciliation(tmp_path: Path, m
         tmp_path,
         LitehiveConfig(default_engine="codex", engine_preference=["codex"]),
     )
-    task = create_task(tmp_path, title="Already landed reconcile", pipeline_mode="single")
-    persistence = SqlitePersistence(Workspace.from_path(tmp_path))
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Already landed reconcile", pipeline_mode="single")
+    persistence = SqlitePersistence(workspace)
     state = persistence.initialize(task.id, pipeline_mode=PipelineMode.SINGLE)
     state.last_report.files_changed = 1
     persistence.save(state)
@@ -394,7 +399,7 @@ def test_run_task_records_already_landed_commit_reconciliation(tmp_path: Path, m
     monkeypatch.setattr(orchestration, "build_commit_node_for_workspace", lambda workspace: _AlreadyLandedCommitNode())
 
     result = run_task(tmp_path, task, engine_factory=lambda _engine_name: _PassEngine())
-    refreshed = get_task(tmp_path, task.id)
+    refreshed = get_task_for_workspace(workspace, task.id)
 
     assert result.final_stage == "done"
     assert refreshed is not None
@@ -402,7 +407,7 @@ def test_run_task_records_already_landed_commit_reconciliation(tmp_path: Path, m
     assert refreshed.pipeline_status == "done"
     assert refreshed.git.commit_sha == "deadbeefcafebabe"
 
-    journal = render_task_journal(Workspace.from_path(tmp_path), refreshed)
+    journal = render_task_journal(workspace, refreshed)
     assert "patch already landed on main at deadbeefcafebabe" in journal
 
 
@@ -416,8 +421,9 @@ def test_run_task_honors_task_retry_limit_override_for_live_execution_retries(tm
             retry_on=[TransientFailureKind.TIMEOUT],
         ),
     )
-    task = create_task(
-        tmp_path,
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(
+        workspace,
         title="Task override gets one retry",
         pipeline_mode="single",
         retry_limit=2,

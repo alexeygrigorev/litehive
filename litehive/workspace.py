@@ -215,7 +215,7 @@ class Workspace:
         """
         Return task records for this workspace.
 
-        Method form of ``litehive.state.records.list_tasks`` so
+        Method form of ``litehive.state.records.list_tasks_for_workspace`` so
         workspace-aware helpers do not need to re-thread ``root`` for
         ordinary task lookup.
         """

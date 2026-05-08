@@ -17,7 +17,7 @@ def _boom(*args, **kwargs):  # type: ignore[no-untyped-def]
 
 def test_recover_stale_runner_state_skips_task_scan_for_clean_queue(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    monkeypatch.setattr("litehive.state.records.list_tasks", _boom)
+    monkeypatch.setattr("litehive.state.records.list_tasks_for_workspace", _boom)
     assert recover_stale_runner_state_for_workspace(Workspace.from_path(tmp_path)) is False
 
 
@@ -26,7 +26,7 @@ def test_repair_clean_workspace_with_100_tasks_skips_task_scan(tmp_path: Path, m
     workspace = Workspace.from_path(tmp_path)
     for index in range(100):
         create_task_for_workspace(workspace, title=f"Task {index}")
-    monkeypatch.setattr("litehive.state.records.list_tasks", _boom)
+    monkeypatch.setattr("litehive.state.records.list_tasks_for_workspace", _boom)
     start = time.perf_counter()
     result = CliRunner().invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
     elapsed = time.perf_counter() - start

@@ -39,13 +39,6 @@ def skip_bootstrap_load_state():
         _SKIP_BOOTSTRAP_LOAD_STATE.reset(token)
 
 
-def load_state(root: Path, bootstrap: bool = True) -> WorkspaceState:
-    """
-    Path-based compatibility wrapper for workspace state loading.
-    """
-    return load_state_for_workspace(Workspace.from_path(root), bootstrap=bootstrap)
-
-
 def load_state_for_workspace(workspace: Workspace, bootstrap: bool = True) -> WorkspaceState:
     """
     Return the workspace state for an existing Litehive workspace.
@@ -173,13 +166,6 @@ def write_atomic_files_and_then(writes: dict[Path, str], callback) -> None:
             assert isinstance(previous, str)
             atomic_write_text(path, previous)
         raise
-
-
-def save_state(root: Path, state: WorkspaceState) -> None:
-    """
-    Path-based compatibility wrapper for workspace state persistence.
-    """
-    save_state_for_workspace(Workspace.from_path(root), state)
 
 
 def save_state_for_workspace(workspace: Workspace, state: WorkspaceState) -> None:

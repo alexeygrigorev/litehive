@@ -3,9 +3,14 @@ import pytest
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.outcomes import OutcomeReasonCode, TaskOutcomeKind
 from litehive.domain.runtime import SubagentRef
-from litehive.state.records import create_task, get_task, save_task, save_task_runtime_for_workspace
+from litehive.state.records import (
+    create_task_for_workspace,
+    get_task_for_workspace,
+    save_task_for_workspace,
+    save_task_runtime_for_workspace,
+)
 from litehive.tasks.paths import task_dir
-from litehive.state.persist import load_state
+from litehive.state.persist import load_state_for_workspace
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.workspace import Workspace
 
@@ -16,8 +21,9 @@ pytestmark = pytest.mark.integration
 
 
 def test_switch_cli_persists_engine_switch_and_requeues_task(integration_root) -> None:
-    first = create_task(integration_root, title="Keep first queued", auto_commit=False)
-    interrupted = create_task(integration_root, title="Switch interrupted task", auto_commit=False)
+    workspace = Workspace.from_path(integration_root)
+    first = create_task_for_workspace(workspace, title="Keep first queued", auto_commit=False)
+    interrupted = create_task_for_workspace(workspace, title="Switch interrupted task", auto_commit=False)
     interrupted.status = TaskStatus.INTERRUPTED
     interrupted.pipeline_status = PipelineStatus.IMPLEMENTING
     interrupted.runtime.pipeline.execution_status = "interrupted"
@@ -33,8 +39,8 @@ def test_switch_cli_persists_engine_switch_and_requeues_task(integration_root) -
             path="subagents/SA-0002-swe",
         )
     ]
-    save_task(integration_root, interrupted)
-    save_task_runtime_for_workspace(Workspace.from_path(integration_root), interrupted)
+    save_task_for_workspace(workspace, interrupted)
+    save_task_runtime_for_workspace(workspace, interrupted)
     (task_dir(integration_root, interrupted) / "subagents" / "SA-0002-swe").mkdir(parents=True)
 
     completed = cli_command(
@@ -55,7 +61,7 @@ def test_switch_cli_persists_engine_switch_and_requeues_task(integration_root) -
     assert "engine: codex -> gemini" in completed.stdout
     assert "was_active: no" in completed.stdout
 
-    refreshed = get_task(integration_root, interrupted.id)
+    refreshed = get_task_for_workspace(workspace, interrupted.id)
     assert refreshed is not None
     assert refreshed.runtime.execution.last_engine_switch is not None
     assert refreshed.runtime.execution.last_engine_switch.to_engine == "gemini"
@@ -65,6 +71,6 @@ def test_switch_cli_persists_engine_switch_and_requeues_task(integration_root) -
     assert refreshed.runtime.execution.last_engine_switch.from_engine == "codex"
     assert refreshed.runtime.execution.last_engine_switch.to_engine == "gemini"
     assert refreshed.runtime.execution.last_engine_switch.reason == "Need larger context window"
-    entries = load_task_audit_entries(Workspace.from_path(integration_root), task_id=interrupted.id, action="engine_switched", limit=5)
+    entries = load_task_audit_entries(workspace, task_id=interrupted.id, action="engine_switched", limit=5)
     assert entries[0].context["prior_work_paths"] == ["subagents/SA-0002-swe"]
-    assert load_state(integration_root).queue == [interrupted.id, first.id]
+    assert load_state_for_workspace(workspace).queue == [interrupted.id, first.id]

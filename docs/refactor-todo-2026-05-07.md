@@ -183,6 +183,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove runner-owned state merge path wrapper after migrating tests.
 - [x] Remove unused agent task mutator container path wrapper.
 - [x] Remove unused private task records path wrappers.
+- [x] Remove public state persist/task-record path compatibility wrappers after migrating tests.
 - [x] Migrate config loading tests to workspace-native config loader helper.
 - [x] Migrate runner hook config tests to workspace-native config loader helper.
 - [x] Migrate Claude config tests to workspace-native config loader helper.

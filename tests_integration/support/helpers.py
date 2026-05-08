@@ -498,15 +498,16 @@ def _skip_if_execution_limited(engine_name: str, execution: CLIExecutionResult) 
 
 
 def prepare_smoke_session(engine_name: str, *, cwd: Path, sandboxed: bool = False) -> SmokeSession:
-    from litehive.state.records import create_task, require_task, save_task
+    from litehive.state.records import create_task_for_workspace, require_task_for_workspace, save_task_for_workspace
     from litehive.tasks.queue import set_active_task
 
     require_real_engine(engine_name)
-    task = create_task(cwd, title=f"{engine_name} nudge task", auto_commit=False)
-    task = require_task(cwd, task.id)
+    workspace = Workspace.from_path(cwd)
+    task = create_task_for_workspace(workspace, title=f"{engine_name} nudge task", auto_commit=False)
+    task = require_task_for_workspace(workspace, task.id)
     task.pipeline_status = PipelineStatus.IMPLEMENTING
-    save_task(cwd, task)
-    set_active_task(Workspace.from_path(cwd), task.id)
+    save_task_for_workspace(workspace, task)
+    set_active_task(workspace, task.id)
     engine, execution = execute_engine_prompt(
         engine_name,
         prompt=smoke_prompt(engine_name),
@@ -552,7 +553,7 @@ def assert_nudge_verdict_submission(
 ) -> None:
     """Verify the nudge flow: run engine, then nudge to submit verdict via CLI."""
     from litehive.agents.session_store import SubagentArtifactPayload, subagent_artifacts
-    from litehive.state.records import require_task
+    from litehive.state.records import require_task_for_workspace
     from litehive.tasks.activity import load_task_activity
     from litehive.workspace import Workspace
 
@@ -564,7 +565,8 @@ def assert_nudge_verdict_submission(
         assert session.engine_name == engine_name, (session.engine_name, engine_name)
 
     subagent_id = "SI-nudge-swe"
-    subagent_artifacts(Workspace.from_path(session.cwd), session.task_id, subagent_id).save(
+    workspace = Workspace.from_path(session.cwd)
+    subagent_artifacts(workspace, session.task_id, subagent_id).save(
         session=SubagentArtifactPayload({"id": subagent_id, "role": "swe", "engine": engine_name, "status": "running"}),
     )
     report_command = (
@@ -579,7 +581,7 @@ def assert_nudge_verdict_submission(
     )
 
     def verdict_persisted() -> bool:
-        thread = load_task_activity(Workspace.from_path(session.cwd), require_task(session.cwd, session.task_id))
+        thread = load_task_activity(workspace, require_task_for_workspace(workspace, session.task_id))
         verdicts = [c for c in thread if c.verdict != "comment"]
         return bool(
             verdicts
@@ -608,7 +610,7 @@ def assert_nudge_verdict_submission(
     # Step 3: verify verdict persisted
     deadline = time.monotonic() + 3.0
     while True:
-        thread = load_task_activity(Workspace.from_path(session.cwd), require_task(session.cwd, session.task_id))
+        thread = load_task_activity(workspace, require_task_for_workspace(workspace, session.task_id))
         verdicts = [c for c in thread if c.verdict != "comment"]
         if verdicts:
             assert verdicts[-1].verdict == "pass"

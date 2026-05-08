@@ -409,35 +409,6 @@ def _load_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> 
     return task
 
 
-def create_task(
-    root: Path,
-    title: str,
-    depends_on: list[str] | None = None,
-    pipeline_mode: str = "full",
-    model: str | None = None,
-    retry_limit: int | None = None,
-    goal: str = "",
-    acceptance_criteria: list[str] | None = None,
-    auto_commit: bool = True,
-    priority: str | None = None,
-) -> TaskRecord:
-    """
-    Path-based compatibility wrapper for task creation.
-    """
-    return create_task_for_workspace(
-        Workspace.from_path(root),
-        title=title,
-        depends_on=depends_on,
-        pipeline_mode=pipeline_mode,
-        model=model,
-        retry_limit=retry_limit,
-        goal=goal,
-        acceptance_criteria=acceptance_criteria,
-        auto_commit=auto_commit,
-        priority=priority,
-    )
-
-
 def create_task_for_workspace(
     workspace: Workspace,
     title: str,
@@ -741,21 +712,6 @@ def _load_tasks_from_store_for_workspace(
     return records
 
 
-def list_tasks(
-    root: Path,
-    include_runtime: bool = True,
-    strict: bool = True,
-) -> list[TaskRecord]:
-    """
-    Path-based compatibility wrapper for task listing.
-    """
-    return list_tasks_for_workspace(
-        Workspace.from_path(root),
-        include_runtime=include_runtime,
-        strict=strict,
-    )
-
-
 def list_tasks_for_workspace(
     workspace: Workspace,
     include_runtime: bool = True,
@@ -773,21 +729,6 @@ def list_tasks_for_workspace(
         workspace,
         include_runtime=include_runtime,
         strict=strict,
-    )
-
-
-def list_tasks_state_first(
-    root: Path,
-    state: WorkspaceState | None = None,
-    include_runtime: bool = False,
-) -> list[TaskRecord]:
-    """
-    Path-based compatibility wrapper for priority-ordered task listing.
-    """
-    return list_tasks_state_first_for_workspace(
-        Workspace.from_path(root),
-        state=state,
-        include_runtime=include_runtime,
     )
 
 
@@ -838,13 +779,6 @@ def list_tasks_state_first_for_workspace(
     return [task_by_id[task_id] for task_id in ordered_ids]
 
 
-def get_task(root: Path, task_id: str) -> TaskRecord | None:
-    """
-    Path-based compatibility wrapper for task lookup.
-    """
-    return get_task_for_workspace(Workspace.from_path(root), task_id)
-
-
 def get_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord | None:
     """
     Look up a task by id and require its runtime row to exist.
@@ -859,13 +793,6 @@ def get_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord | N
         return None
     task = _load_task_runtime_for_workspace(workspace, TaskRecord.from_intent_and_state(intent))
     return task
-
-
-def get_task_record(root: Path, task_id: str) -> TaskRecord | None:
-    """
-    Path-based compatibility wrapper for lenient task lookup.
-    """
-    return get_task_record_for_workspace(Workspace.from_path(root), task_id)
 
 
 def get_task_record_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord | None:
@@ -888,13 +815,6 @@ def get_task_record_for_workspace(workspace: Workspace, task_id: str) -> TaskRec
     return task
 
 
-def require_task(root: Path, task_id: str) -> TaskRecord:
-    """
-    Path-based compatibility wrapper for required task lookup.
-    """
-    return require_task_for_workspace(Workspace.from_path(root), task_id)
-
-
 def require_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord:
     """
     Look up a task by id and raise if it does not exist.
@@ -908,13 +828,6 @@ def require_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord
     if task is None:
         raise ValueError(f"Task {task_id} not found")
     return task
-
-
-def save_task(root: Path, task: TaskRecord) -> None:
-    """
-    Path-based compatibility wrapper for task persistence.
-    """
-    save_task_for_workspace(Workspace.from_path(root), task)
 
 
 def save_task_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
