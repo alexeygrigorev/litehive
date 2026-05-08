@@ -96,6 +96,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove unused private raw-root runner process-state wrappers.
 - [x] Add workspace-native runtime gitignore refresh helper and migrate state callers.
 - [x] Use `Workspace.task_dir()` for task artifact paths in workspace-aware callers.
+- [x] Use `Workspace.runtime_path()` inside workspace backup helpers.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

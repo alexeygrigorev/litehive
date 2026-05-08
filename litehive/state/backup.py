@@ -9,7 +9,6 @@ import re
 import sqlite3
 import tempfile
 
-from litehive.config.paths import workspace_path
 from litehive.workspace import Workspace
 
 _BACKUP_NAME_RE = re.compile(r"^data-(\d{4}-\d{2}-\d{2}T\d{2})\.db\.gz$")
@@ -45,13 +44,20 @@ def _backup_timestamp(when: datetime) -> str:
 
 def _backup_path(root: Path, when: datetime) -> Path:
     """
+    Path-based compatibility wrapper for backup snapshot paths.
+    """
+    return _backup_path_for_workspace(Workspace.from_path(root), when)
+
+
+def _backup_path_for_workspace(workspace: Workspace, when: datetime) -> Path:
+    """
     Compute the canonical ``backups/data-<timestamp>.db.gz`` path.
 
     Used by ``create_workspace_backup`` to derive the destination from the
     snapshot moment so listing/parsing helpers can work backwards from the
     filename to a datetime without a sidecar metadata file.
     """
-    return workspace_path(root, "backups") / f"data-{_backup_timestamp(when)}.db.gz"
+    return workspace.runtime_path("backups") / f"data-{_backup_timestamp(when)}.db.gz"
 
 
 def _parse_backup_path(path: Path) -> WorkspaceBackup | None:
@@ -92,7 +98,7 @@ def list_workspace_backups_for_workspace(workspace: Workspace) -> list[Workspace
     "have we already taken today's backup?" without a separate timestamp
     cursor.
     """
-    backup_dir = workspace_path(workspace.root, "backups")
+    backup_dir = workspace.runtime_path("backups")
     if not backup_dir.exists():
         return []
     backups = [_parse_backup_path(path) for path in backup_dir.iterdir()]
@@ -169,9 +175,9 @@ def create_workspace_backup_for_workspace(
     path.
     """
     when = when or datetime.now(UTC)
-    backup_dir = workspace_path(workspace.root, "backups")
+    backup_dir = workspace.runtime_path("backups")
     backup_dir.mkdir(parents=True, exist_ok=True)
-    destination = _backup_path(workspace.root, when)
+    destination = _backup_path_for_workspace(workspace, when)
 
     with tempfile.NamedTemporaryFile(
         suffix=".db",
@@ -187,7 +193,7 @@ def create_workspace_backup_for_workspace(
         temp_gz_path = Path(gz_handle.name)
 
     try:
-        source = sqlite3.connect(workspace_path(workspace.root, "data.db"))
+        source = sqlite3.connect(workspace.runtime_path("data.db"))
         target = sqlite3.connect(temp_db_path)
         try:
             source.backup(target)
@@ -262,7 +268,7 @@ def restore_workspace_backup_for_workspace(workspace: Workspace, timestamp: str)
     if backup is None:
         raise ValueError(f"backup not found for timestamp {timestamp}")
 
-    database_path = workspace_path(workspace.root, "data.db")
+    database_path = workspace.runtime_path("data.db")
     database_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         suffix=".db",
