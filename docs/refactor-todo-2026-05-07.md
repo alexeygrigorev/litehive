@@ -120,6 +120,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove unused guarded state persist path wrappers.
 - [x] Remove pool-stop state path wrapper after migrating tests.
 - [x] Remove unguarded single-task persist path wrapper after migrating tests.
+- [x] Remove unguarded state-save path wrapper after migrating tests.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

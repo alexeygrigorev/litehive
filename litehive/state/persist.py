@@ -194,21 +194,6 @@ def save_state_for_workspace(workspace: Workspace, state: WorkspaceState) -> Non
         runtime_store_for_workspace(workspace).save_workspace_state(state)
 
 
-def save_state_without_runner_guard(
-    root: Path,
-    state: WorkspaceState,
-    audit_entries: list[TaskAuditEntry] | None = None,
-) -> None:
-    """
-    Path-based compatibility wrapper for unguarded workspace state persistence.
-    """
-    save_state_without_runner_guard_for_workspace(
-        Workspace.from_path(root),
-        state,
-        audit_entries=audit_entries,
-    )
-
-
 def save_state_without_runner_guard_for_workspace(
     workspace: Workspace,
     state: WorkspaceState,

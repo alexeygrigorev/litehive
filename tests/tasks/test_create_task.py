@@ -291,7 +291,7 @@ from pathlib import Path
 from litehive.config.workspace import create_workspace
 from litehive.state.records import create_task
 from litehive.state.persist import load_state
-from litehive.state.persist import save_state_without_runner_guard
+from litehive.state.persist import save_state_without_runner_guard_for_workspace
 import litehive.state.persist
 
 root = Path(__import__("sys").argv[1])
@@ -307,7 +307,7 @@ def inject_latest_state(workspace, *, state, protected_task_ids=()):
         injected = True
         latest = load_state(workspace.root)
         latest.queue = [second.id, first.id]
-        save_state_without_runner_guard(workspace.root, latest)
+        save_state_without_runner_guard_for_workspace(workspace, latest)
     return original_merge(workspace, state=state, protected_task_ids=protected_task_ids)
 
 litehive.state.persist.merged_state_for_runner_owned_write_for_workspace = inject_latest_state
