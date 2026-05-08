@@ -13,9 +13,8 @@ from litehive.workspace import Workspace
 from litehive.lifecycle.types import PipelineMode
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, TaskActivityEntry
 from litehive.domain.task import TaskRecord
-from litehive.state.persist import load_state, save_state
-from litehive.state.records import create_task
-from litehive.state.records import get_task_record
+from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
+from litehive.state.records import create_task_for_workspace, get_task_record_for_workspace
 from litehive.state.store import runtime_store_for_workspace
 
 
@@ -82,7 +81,7 @@ def test_agent_report_derives_role_from_subagent_session_and_records_source(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Session-bound report")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Session-bound report")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="qa", subagent_id="SA-0042")
     monkeypatch.setenv("LITEHIVE_STAGE", "testing")
 
@@ -103,7 +102,7 @@ def test_agent_report_derives_role_from_subagent_session_and_records_source(
     assert result.exit_code == 0, result.output
     assert "role: qa" in result.output
     assert "source_subagent_id: SA-0042" in result.output
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     _assert_activity_entries(
         Workspace.from_path(tmp_path).task_activity(updated).load(),
@@ -126,7 +125,7 @@ def test_agent_report_rejects_removed_role_override(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="No role spoofing")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="No role spoofing")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="qa")
 
     result = CliRunner().invoke(
@@ -148,7 +147,7 @@ def test_agent_report_rejects_removed_role_override(
     assert result.exit_code == 1
     assert result.exception is not None
     assert "No such option: --role" in str(result.exception)
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     assert Workspace.from_path(tmp_path).task_activity(updated).load() == []
 
@@ -200,7 +199,7 @@ def test_agent_report_uses_intent_record_when_runtime_row_is_missing(
     )
 
     assert result.exit_code == 0, result.output
-    task = get_task_record(tmp_path, "T-0001")
+    task = get_task_record_for_workspace(Workspace.from_path(tmp_path), "T-0001")
     assert task is not None
     activity_entries = Workspace.from_path(tmp_path).task_activity(task).load()
     _assert_activity_entries(
@@ -225,7 +224,7 @@ def test_agent_report_persists_hidden_recovery_target_stage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Persist target stage")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Persist target stage")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
 
     result = CliRunner().invoke(
@@ -247,7 +246,7 @@ def test_agent_report_persists_hidden_recovery_target_stage(
     )
 
     assert result.exit_code == 0, result.output
-    task = get_task_record(tmp_path, task.id)
+    task = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert task is not None
     activity_entries = Workspace.from_path(tmp_path).task_activity(task).load()
     _assert_activity_entries(
@@ -272,7 +271,7 @@ def test_agent_report_rejects_recovery_resume_without_target_stage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Recovery target stage required")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Recovery target stage required")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
 
     result = CliRunner().invoke(
@@ -316,7 +315,7 @@ def test_agent_report_uses_env_stage_when_runtime_row_is_missing(tmp_path: Path,
     )
 
     assert result.exit_code == 0, result.output
-    task = get_task_record(tmp_path, "T-0001")
+    task = get_task_record_for_workspace(Workspace.from_path(tmp_path), "T-0001")
     assert task is not None
     activity_entries = Workspace.from_path(tmp_path).task_activity(task).load()
     _assert_activity_entries(
@@ -337,7 +336,7 @@ def test_agent_report_uses_env_stage_when_runtime_row_is_missing(tmp_path: Path,
 
 def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Prefer env stage")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Prefer env stage")
     SqlitePersistence(Workspace.from_path(tmp_path)).save(TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL))
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="planner")
     monkeypatch.setenv("LITEHIVE_STAGE", "grooming")
@@ -357,7 +356,7 @@ def test_agent_report_prefers_env_stage_over_stale_pipeline_stage(tmp_path: Path
     )
 
     assert result.exit_code == 0, result.output
-    task = get_task_record(tmp_path, task.id)
+    task = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert task is not None
     activity_entries = Workspace.from_path(tmp_path).task_activity(task).load()
     _assert_activity_entries(
@@ -390,7 +389,7 @@ def test_agent_report_classifies_qa_reviewer_rejects_as_semantic(
     stage: str,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title=f"{role} semantic reject")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title=f"{role} semantic reject")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role=role)
 
     result = CliRunner().invoke(
@@ -411,7 +410,7 @@ def test_agent_report_classifies_qa_reviewer_rejects_as_semantic(
 
     assert result.exit_code == 0, result.output
     assert f"verdict_classification: {SEMANTIC_REJECT_CLASSIFICATION}" in result.output
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     activity_entries = Workspace.from_path(tmp_path).task_activity(updated).load()
     assert len(activity_entries) == 1
@@ -424,7 +423,7 @@ def test_agent_report_rejects_agent_blocked_verdict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Agent blocked verdict rejected")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Agent blocked verdict rejected")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
 
     result = CliRunner().invoke(
@@ -452,7 +451,7 @@ def test_agent_report_rejects_removed_fail_verdict_alias(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Legacy fail verdict")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Legacy fail verdict")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
 
     result = CliRunner().invoke(
@@ -473,7 +472,7 @@ def test_agent_report_rejects_removed_fail_verdict_alias(
 
     assert result.exit_code == 1
     assert "not authorized" in result.output
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     activity_entries = Workspace.from_path(tmp_path).task_activity(updated).load()
     assert activity_entries == []
@@ -481,10 +480,10 @@ def test_agent_report_rejects_removed_fail_verdict_alias(
 
 def test_agent_update_allows_planner_to_shape_active_task(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Shape active task", goal="old goal")
-    state = load_state(tmp_path)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Shape active task", goal="old goal")
+    state = load_state_for_workspace(Workspace.from_path(tmp_path))
     state.active_task_id = task.id
-    save_state(tmp_path, state)
+    save_state_for_workspace(Workspace.from_path(tmp_path), state)
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
     monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
 
@@ -505,7 +504,7 @@ def test_agent_update_allows_planner_to_shape_active_task(tmp_path: Path, monkey
     )
 
     assert result.exit_code == 0, result.output
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     assert updated.goal == "new goal"
     assert updated.acceptance_criteria == ["one boundary"]
@@ -514,10 +513,10 @@ def test_agent_update_allows_planner_to_shape_active_task(tmp_path: Path, monkey
 
 def test_agent_update_resolves_source_workspace_from_managed_worktree(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Managed worktree update", goal="old goal")
-    state = load_state(tmp_path)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Managed worktree update", goal="old goal")
+    state = load_state_for_workspace(Workspace.from_path(tmp_path))
     state.active_task_id = task.id
-    save_state(tmp_path, state)
+    save_state_for_workspace(Workspace.from_path(tmp_path), state)
     managed_worktree = tmp_path / ".litehive" / "worktrees" / f"{task.id}-managed"
     managed_worktree.mkdir(parents=True)
     monkeypatch.chdir(managed_worktree)
@@ -538,7 +537,7 @@ def test_agent_update_resolves_source_workspace_from_managed_worktree(tmp_path: 
     )
 
     assert result.exit_code == 0, result.output
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     assert updated.goal == "new goal from worktree"
     assert updated.acceptance_criteria == ["mutates source workspace"]
@@ -546,10 +545,10 @@ def test_agent_update_resolves_source_workspace_from_managed_worktree(tmp_path: 
 
 def test_agent_close_resolves_source_workspace_from_managed_worktree(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Managed worktree close")
-    state = load_state(tmp_path)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Managed worktree close")
+    state = load_state_for_workspace(Workspace.from_path(tmp_path))
     state.active_task_id = task.id
-    save_state(tmp_path, state)
+    save_state_for_workspace(Workspace.from_path(tmp_path), state)
     managed_worktree = tmp_path / ".litehive" / "worktrees" / f"{task.id}-managed"
     managed_worktree.mkdir(parents=True)
     monkeypatch.chdir(managed_worktree)
@@ -570,7 +569,7 @@ def test_agent_close_resolves_source_workspace_from_managed_worktree(tmp_path: P
     )
 
     assert result.exit_code == 0, result.output
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     assert updated.status == "closed"
     assert updated.close_reason == "duplicate"
@@ -578,11 +577,11 @@ def test_agent_close_resolves_source_workspace_from_managed_worktree(tmp_path: P
 
 def test_agent_update_rejects_wrong_task_id(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    active = create_task(tmp_path, title="Active task", goal="old")
-    other = create_task(tmp_path, title="Other task", goal="old")
-    state = load_state(tmp_path)
+    active = create_task_for_workspace(Workspace.from_path(tmp_path), title="Active task", goal="old")
+    other = create_task_for_workspace(Workspace.from_path(tmp_path), title="Other task", goal="old")
+    state = load_state_for_workspace(Workspace.from_path(tmp_path))
     state.active_task_id = active.id
-    save_state(tmp_path, state)
+    save_state_for_workspace(Workspace.from_path(tmp_path), state)
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
     monkeypatch.setenv("LITEHIVE_TASK_ID", active.id)
     monkeypatch.setenv("LITEHIVE_WORKSPACE_ROOT", str(tmp_path))
@@ -595,17 +594,17 @@ def test_agent_update_rejects_wrong_task_id(tmp_path: Path, monkeypatch) -> None
 
     assert result.exit_code == 1
     assert f"agents may only mutate active task {active.id}, not {other.id}" in result.output
-    unchanged = get_task_record(tmp_path, other.id)
+    unchanged = get_task_record_for_workspace(Workspace.from_path(tmp_path), other.id)
     assert unchanged is not None
     assert unchanged.goal == "old"
 
 
 def test_root_task_update_allows_planner_agent_api(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Shape via task update", goal="old goal")
-    state = load_state(tmp_path)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Shape via task update", goal="old goal")
+    state = load_state_for_workspace(Workspace.from_path(tmp_path))
     state.active_task_id = task.id
-    save_state(tmp_path, state)
+    save_state_for_workspace(Workspace.from_path(tmp_path), state)
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
     monkeypatch.chdir(tmp_path)
 
@@ -630,7 +629,7 @@ def test_root_task_update_allows_planner_agent_api(tmp_path: Path, monkeypatch) 
     )
 
     assert result.exit_code == 0, result.output
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     assert updated.goal == "new goal"
     assert updated.acceptance_criteria == ["one boundary"]
@@ -640,10 +639,10 @@ def test_root_task_update_allows_planner_agent_api(tmp_path: Path, monkeypatch) 
 
 def test_root_task_update_delegates_agent_resolution_from_managed_worktree(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Root update from worktree", goal="old goal")
-    state = load_state(tmp_path)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Root update from worktree", goal="old goal")
+    state = load_state_for_workspace(Workspace.from_path(tmp_path))
     state.active_task_id = task.id
-    save_state(tmp_path, state)
+    save_state_for_workspace(Workspace.from_path(tmp_path), state)
     managed_worktree = tmp_path / ".litehive" / "worktrees" / f"{task.id}-managed"
     managed_worktree.mkdir(parents=True)
     monkeypatch.chdir(managed_worktree)
@@ -664,14 +663,14 @@ def test_root_task_update_delegates_agent_resolution_from_managed_worktree(tmp_p
     )
 
     assert result.exit_code == 0, result.output
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     assert updated.goal == "new goal via root task update"
 
 
 def test_root_task_update_rejects_non_planner_reviewer_agent(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Blocked agent task update", goal="old goal")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Blocked agent task update", goal="old goal")
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
     monkeypatch.chdir(tmp_path)
 
@@ -687,10 +686,10 @@ def test_root_task_update_rejects_non_planner_reviewer_agent(tmp_path: Path, mon
 
 def test_root_task_close_allows_reviewer_agent_api(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Close via task group")
-    state = load_state(tmp_path)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Close via task group")
+    state = load_state_for_workspace(Workspace.from_path(tmp_path))
     state.active_task_id = task.id
-    save_state(tmp_path, state)
+    save_state_for_workspace(Workspace.from_path(tmp_path), state)
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "reviewer")
     monkeypatch.chdir(tmp_path)
 
@@ -711,7 +710,7 @@ def test_root_task_close_allows_reviewer_agent_api(tmp_path: Path, monkeypatch) 
     )
 
     assert result.exit_code == 0, result.output
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     assert updated.status == "closed"
     assert updated.close_reason == "duplicate"
@@ -721,10 +720,10 @@ def test_root_task_close_allows_reviewer_agent_api(tmp_path: Path, monkeypatch) 
 
 def test_root_task_close_allows_planner_to_mark_done_from_grooming(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Already satisfied on main")
-    state = load_state(tmp_path)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Already satisfied on main")
+    state = load_state_for_workspace(Workspace.from_path(tmp_path))
     state.active_task_id = task.id
-    save_state(tmp_path, state)
+    save_state_for_workspace(Workspace.from_path(tmp_path), state)
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
     monkeypatch.setenv("LITEHIVE_STAGE", "grooming")
     monkeypatch.chdir(tmp_path)
@@ -748,7 +747,7 @@ def test_root_task_close_allows_planner_to_mark_done_from_grooming(tmp_path: Pat
     assert result.exit_code == 0, result.output
     assert "status: done" in result.output
     assert "pipeline_stage: done" in result.output
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     assert updated.status == "done"
     assert updated.pipeline_status == "done"
@@ -764,7 +763,7 @@ def test_agent_report_rejects_legacy_recovery_pass_verdict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Recovery verdict contract")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Recovery verdict contract")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
     result = CliRunner().invoke(
         agent_app,
@@ -789,7 +788,7 @@ def test_agent_report_accepts_recovery_resume_verdict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Recovery resume verdict")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Recovery resume verdict")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
 
     result = CliRunner().invoke(
@@ -811,7 +810,7 @@ def test_agent_report_accepts_recovery_resume_verdict(
     )
 
     assert result.exit_code == 0, result.output
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     _assert_activity_entries(
         Workspace.from_path(tmp_path).task_activity(updated).load(),
@@ -835,7 +834,7 @@ def test_agent_report_rejects_removed_step_alias(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Agent report step alias")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Agent report step alias")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
 
     result = CliRunner().invoke(
@@ -857,14 +856,14 @@ def test_agent_report_rejects_removed_step_alias(
     assert result.exit_code == 1
     assert result.exception is not None
     assert "No such option: --step" in str(result.exception)
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     assert Workspace.from_path(tmp_path).task_activity(updated).load() == []
 
 
 def test_root_report_rejects_removed_step_alias(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Legacy step alias for root report")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Legacy step alias for root report")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="recovery")
     monkeypatch.setenv("LITEHIVE_STAGE", "recovering")
 
@@ -887,14 +886,14 @@ def test_root_report_rejects_removed_step_alias(tmp_path: Path, monkeypatch) -> 
     assert result.exit_code == 1
     assert result.exception is not None
     assert "No such option: --step" in str(result.exception)
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     assert Workspace.from_path(tmp_path).task_activity(updated).load() == []
 
 
 def test_root_report_rejects_removed_fail_verdict_alias(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Legacy root fail verdict")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Legacy root fail verdict")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
     monkeypatch.setenv("LITEHIVE_STAGE", "implementing")
 
@@ -917,14 +916,14 @@ def test_root_report_rejects_removed_fail_verdict_alias(tmp_path: Path, monkeypa
     assert result.exit_code == 1
     assert result.exception is not None
     assert "'fail' is not one of" in str(result.exception)
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     assert Workspace.from_path(tmp_path).task_activity(updated).load() == []
 
 
 def test_root_report_defaults_to_litehive_task_id_env(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Root report task env")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Root report task env")
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
     monkeypatch.setenv("LITEHIVE_TASK_ID", task.id)
     monkeypatch.setenv("LITEHIVE_STAGE", "implementing")
@@ -942,7 +941,7 @@ def test_root_report_defaults_to_litehive_task_id_env(tmp_path: Path, monkeypatc
     )
 
     assert result.exit_code == 0, result.output
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     activity_entries = Workspace.from_path(tmp_path).task_activity(updated).load()
     assert len(activity_entries) == 1
@@ -951,7 +950,7 @@ def test_root_report_defaults_to_litehive_task_id_env(tmp_path: Path, monkeypatc
 
 def test_root_report_accepts_workspace_override(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Root report workspace override")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Root report workspace override")
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
@@ -978,7 +977,7 @@ def test_root_report_accepts_workspace_override(tmp_path: Path, monkeypatch) -> 
         )
 
     assert result.exit_code == 0, result.output
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     activity_entries = Workspace.from_path(tmp_path).task_activity(updated).load()
     assert len(activity_entries) == 1
@@ -1012,7 +1011,7 @@ def test_root_report_fails_clearly_when_workspace_cannot_be_resolved(tmp_path: P
 
 def test_agent_report_accepts_workspace_override(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Agent report workspace override")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Agent report workspace override")
     monkeypatch.delenv("LITEHIVE_WORKSPACE_ROOT", raising=False)
     _bind_report_identity(tmp_path, monkeypatch, task_id=task.id, role="swe")
 
@@ -1035,7 +1034,7 @@ def test_agent_report_accepts_workspace_override(tmp_path: Path, monkeypatch) ->
     )
 
     assert result.exit_code == 0, result.output
-    updated = get_task_record(tmp_path, task.id)
+    updated = get_task_record_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     activity_entries = Workspace.from_path(tmp_path).task_activity(updated).load()
     assert len(activity_entries) == 1
