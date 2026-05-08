@@ -19,7 +19,7 @@ from litehive.state.records import (
     get_task,
     list_tasks,
     save_task,
-    save_task_runtime,
+    save_task_runtime_for_workspace,
 )
 from litehive.state.store import runtime_store_for_workspace
 from litehive.tasks.report_storage import record_stage_report
@@ -132,7 +132,7 @@ def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
     task = create_task(tmp_path, title="DB runtime")
     task.runtime.pipeline.execution_status = "running"
     task.runtime.pipeline.current_stage.stage = "implementing"
-    save_task_runtime(tmp_path, task)
+    save_task_runtime_for_workspace(Workspace.from_path(tmp_path), task)
 
     loaded = get_task(tmp_path, task.id)
 
@@ -166,7 +166,7 @@ def test_task_runtime_persists_pipeline_and_execution_slices(tmp_path: Path) -> 
         reason="stale state",
         resume_stage="implementing",
     )
-    save_task_runtime(tmp_path, task)
+    save_task_runtime_for_workspace(Workspace.from_path(tmp_path), task)
 
     runtime_payload = _task_state_payload(tmp_path, task.id)["runtime"]
 
@@ -196,7 +196,7 @@ def test_current_storage_contract_uses_sqlite_without_workspace_yaml(tmp_path: P
     task = create_task(tmp_path, title="SQLite contract")
     task.runtime.pipeline.execution_status = "running"
     task.runtime.pipeline.current_stage.stage = "implementing"
-    save_task_runtime(tmp_path, task)
+    save_task_runtime_for_workspace(Workspace.from_path(tmp_path), task)
     subagent_artifacts(Workspace.from_path(tmp_path), task.id, "SA-0001").save(
         session=SubagentArtifactPayload({"id": "SA-0001", "role": "swe", "status": "completed"}),
         report=SubagentArtifactPayload({"verdict": "pass", "summary": "stored in sqlite"}),
@@ -271,7 +271,7 @@ def test_task_runtime_outcome_string_mutations_persist_without_pydantic_warnings
 
     with warnings.catch_warnings():
         warnings.filterwarnings("error", message="Pydantic serializer warnings", category=UserWarning)
-        save_task_runtime(tmp_path, task)
+        save_task_runtime_for_workspace(Workspace.from_path(tmp_path), task)
 
     outcome_payload = _task_state_payload(tmp_path, task.id)["runtime"]["pipeline"]["last_outcome"]
 

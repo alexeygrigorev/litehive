@@ -3,10 +3,9 @@ import pytest
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.outcomes import OutcomeReasonCode, TaskOutcomeKind
 from litehive.domain.runtime import SubagentRef
-from litehive.state.records import create_task, get_task, save_task
+from litehive.state.records import create_task, get_task, save_task, save_task_runtime_for_workspace
 from litehive.tasks.paths import task_dir
 from litehive.state.persist import load_state
-from litehive.state.records import save_task_runtime
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.workspace import Workspace
 
@@ -35,7 +34,7 @@ def test_switch_cli_persists_engine_switch_and_requeues_task(integration_root) -
         )
     ]
     save_task(integration_root, interrupted)
-    save_task_runtime(integration_root, interrupted)
+    save_task_runtime_for_workspace(Workspace.from_path(integration_root), interrupted)
     (task_dir(integration_root, interrupted) / "subagents" / "SA-0002-swe").mkdir(parents=True)
 
     completed = cli_command(

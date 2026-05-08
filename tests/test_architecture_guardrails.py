@@ -194,7 +194,7 @@ def test_role_prompt_code_does_not_mutate_tasks() -> None:
         "save_state",
         "save_state_without_runner_guard",
         "save_task",
-        "save_task_runtime",
+        "save_task_runtime_for_workspace",
     }
     violations: list[str] = []
     for path in prompt_policy_files:

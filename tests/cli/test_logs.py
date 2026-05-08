@@ -12,7 +12,7 @@ from litehive.agents.session_store import SubagentArtifactPayload, subagent_arti
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import create_workspace
 from litehive.domain.runtime import RuntimeSubagentState
-from litehive.state.records import create_task, save_task, save_task_runtime
+from litehive.state.records import create_task, save_task, save_task_runtime_for_workspace
 from litehive.tasks.paths import task_dir
 from litehive.workspace import Workspace
 
@@ -75,7 +75,7 @@ def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
             }),
         )
     save_task(tmp_path, task)
-    save_task_runtime(tmp_path, task)
+    save_task_runtime_for_workspace(Workspace.from_path(tmp_path), task)
 
     base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
     base.mkdir(parents=True, exist_ok=True)

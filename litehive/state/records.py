@@ -399,13 +399,6 @@ def _persist_created_tasks_for_workspace(
         raise
 
 
-def save_task_runtime(root: Path, task: TaskRecord) -> None:
-    """
-    Path-based compatibility wrapper for guarded task runtime persistence.
-    """
-    save_task_runtime_for_workspace(Workspace.from_path(root), task)
-
-
 def save_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
     """
     Persist a task's runtime row under the workspace mutation guard.
