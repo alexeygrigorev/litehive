@@ -729,7 +729,7 @@ def persist_future_task_update_for_workspace(
     transaction.
     """
     # inline: state.records top-level-imports state.locking (would cycle).
-    from litehive.state.records import ensure_runtime_ignored, task_state_for_storage  # noqa: PLC0415
+    from litehive.state.records import ensure_runtime_ignored_for_workspace, task_state_for_storage  # noqa: PLC0415
 
     task.updated_at = utcnow()
     if journal_message is None:
@@ -742,4 +742,4 @@ def persist_future_task_update_for_workspace(
         task_journal_messages=task_journal_messages,
         audit_entries=audit_entries,
     )
-    ensure_runtime_ignored(workspace.root)
+    ensure_runtime_ignored_for_workspace(workspace)

@@ -467,7 +467,7 @@ def persist_tasks_and_state_for_workspace(
     instead of being overwritten by the runner's stale read.
     """
     # inline: state.records top-level-imports state.persist (would cycle).
-    from litehive.state.records import ensure_runtime_ignored, task_state_for_storage  # noqa: PLC0415
+    from litehive.state.records import ensure_runtime_ignored_for_workspace, task_state_for_storage  # noqa: PLC0415
 
     for task in tasks:
         task.updated_at = utcnow()
@@ -484,7 +484,7 @@ def persist_tasks_and_state_for_workspace(
             task_journal_messages=journal_messages,
             audit_entries=audit_entries,
         )
-        ensure_runtime_ignored(workspace.root)
+        ensure_runtime_ignored_for_workspace(workspace)
 
 
 def persist_tasks_and_state_without_runner_guard(
@@ -525,7 +525,7 @@ def persist_tasks_and_state_without_runner_guard_for_workspace(
     already inside ``workspace_runner_guard``.
     """
     # inline: state.records top-level-imports state.persist (would cycle).
-    from litehive.state.records import ensure_runtime_ignored, task_state_for_storage  # noqa: PLC0415
+    from litehive.state.records import ensure_runtime_ignored_for_workspace, task_state_for_storage  # noqa: PLC0415
 
     for task in tasks:
         task.updated_at = utcnow()
@@ -541,7 +541,7 @@ def persist_tasks_and_state_without_runner_guard_for_workspace(
         task_journal_messages=journal_messages,
         audit_entries=audit_entries,
     )
-    ensure_runtime_ignored(workspace.root)
+    ensure_runtime_ignored_for_workspace(workspace)
 
 
 def persist_task_and_state_without_runner_guard(

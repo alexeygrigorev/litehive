@@ -168,6 +168,13 @@ def _default_task_creation_source_for_workspace(workspace: Workspace) -> TaskCre
 
 def ensure_runtime_ignored(root: Path) -> None:
     """
+    Path-based compatibility wrapper for workspace gitignore refreshes.
+    """
+    ensure_runtime_ignored_for_workspace(Workspace.from_path(root))
+
+
+def ensure_runtime_ignored_for_workspace(workspace: Workspace) -> None:
+    """
     Refresh the workspace ``.gitignore`` after any persistence write.
 
     Newly materialized runtime files (lockfiles, run logs, transcripts)
@@ -175,7 +182,7 @@ def ensure_runtime_ignored(root: Path) -> None:
     every write keeps the ignore rules in sync with whatever the latest
     layout produces.
     """
-    ignore_path = workspace_gitignore_path(root)
+    ignore_path = workspace_gitignore_path(workspace.root)
     expected = render_workspace_gitignore()
     if not ignore_path.exists() or ignore_path.read_text(encoding="utf-8") != expected:
         ignore_path.write_text(expected, encoding="utf-8")
@@ -212,7 +219,7 @@ def write_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> 
     that has already taken it via a different pathway.
     """
     runtime_store_for_workspace(workspace).save_task_state(task.id, task_state_for_storage(task))
-    ensure_runtime_ignored(workspace.root)
+    ensure_runtime_ignored_for_workspace(workspace)
 
 
 def set_task_commit_sha(task: TaskRecord, commit_sha: str | None) -> None:
@@ -603,7 +610,7 @@ def create_task_for_workspace(
                 )
             ],
         )
-        ensure_runtime_ignored(workspace.root)
+        ensure_runtime_ignored_for_workspace(workspace)
         return task
 
 
@@ -733,7 +740,7 @@ def create_follow_up_tasks_for_workspace(
             cleanup_dirs=created_dirs,
             audit_entries=audit_entries,
         )
-        ensure_runtime_ignored(workspace.root)
+        ensure_runtime_ignored_for_workspace(workspace)
     return created_tasks
 
 
@@ -1046,4 +1053,4 @@ def save_task_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
                 task_states={task.id: task_state_for_storage(task)},
             ),
         )
-        ensure_runtime_ignored(workspace.root)
+        ensure_runtime_ignored_for_workspace(workspace)
