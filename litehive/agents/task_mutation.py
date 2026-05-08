@@ -1,5 +1,6 @@
 """Authorization service for agent-initiated task mutations."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -55,6 +56,7 @@ class AgentTaskMutationAuthorizer:
     role: str | None
     env_task_id: str | None
     env_workspace_root: str | None
+    workspace_from_path: Callable[[Path], Workspace]
 
     def authorize(self, requested_task_id: str | None, allowed_roles: set[str]) -> AgentTaskMutationTarget:
         role = self._authorized_role(allowed_roles)
@@ -89,7 +91,7 @@ class AgentTaskMutationAuthorizer:
                 root = normalize_workspace_root(Path(env_workspace_root), source="LITEHIVE_WORKSPACE_ROOT")
             else:
                 root = resolve_workspace(task_id)
-            return Workspace.from_path(root)
+            return self.workspace_from_path(root)
         except ValueError as exc:
             raise AgentTaskMutationError(str(exc)) from exc
 

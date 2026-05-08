@@ -239,6 +239,7 @@ def resolve_active_agent_task_mutation_target(
         role=environment.agent_role,
         env_task_id=environment.task_id,
         env_workspace_root=environment.workspace_root,
+        workspace_from_path=build_workspace,
     )
     try:
         return authorizer.authorize(requested_task_id, allowed_roles)

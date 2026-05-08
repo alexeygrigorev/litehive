@@ -30,6 +30,7 @@ def test_agent_task_mutation_authorizer_resolves_active_env_task(tmp_path: Path)
         role="planner",
         env_task_id=task.id,
         env_workspace_root=str(tmp_path),
+        workspace_from_path=Workspace.from_path,
     )
 
     target = authorizer.authorize(requested_task_id=None, allowed_roles={"planner", "reviewer"})
@@ -48,6 +49,7 @@ def test_agent_task_mutation_authorizer_rejects_inactive_requested_task(tmp_path
         role="planner",
         env_task_id=active.id,
         env_workspace_root=str(tmp_path),
+        workspace_from_path=Workspace.from_path,
     )
 
     with pytest.raises(AgentTaskMutationError, match=f"agents may only mutate active task {active.id}, not {queued.id}"):
@@ -62,6 +64,7 @@ def test_agent_task_mutation_authorizer_marks_role_rejections_as_unauthorized(tm
         role="swe",
         env_task_id=task.id,
         env_workspace_root=str(tmp_path),
+        workspace_from_path=Workspace.from_path,
     )
 
     with pytest.raises(AgentTaskMutationError) as excinfo:
