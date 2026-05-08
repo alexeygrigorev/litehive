@@ -8,6 +8,7 @@ from litehive.config.workspace import create_workspace
 from litehive.state.persist import load_state
 from litehive.state.records import create_task, get_task, save_task
 from litehive.domain.common import PipelineStatus, TaskStatus
+from litehive.workspace import Workspace
 
 
 def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
@@ -51,8 +52,8 @@ def test_workspace_transition_writes_preserve_task_added_after_state_snapshot(
     stale_state.active_task_id = None
     stale_state.queue = [queued.id]
 
-    merged_state = workflow_module.merged_state_for_runner_owned_write(
-        tmp_path,
+    merged_state = workflow_module.merged_state_for_runner_owned_write_for_workspace(
+        Workspace.from_path(tmp_path),
         state=stale_state,
         protected_task_ids=[active.id],
     )

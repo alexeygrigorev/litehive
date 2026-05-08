@@ -309,21 +309,6 @@ def _merge_queue_preserving_future_changes(
     return merged
 
 
-def merged_state_for_runner_owned_write(
-    root: Path,
-    state: WorkspaceState,
-    protected_task_ids: list[str] | tuple[str, ...] = (),
-) -> WorkspaceState:
-    """
-    Path-based compatibility wrapper for runner-owned state rebasing.
-    """
-    return merged_state_for_runner_owned_write_for_workspace(
-        Workspace.from_path(root),
-        state,
-        protected_task_ids=protected_task_ids,
-    )
-
-
 def merged_state_for_runner_owned_write_for_workspace(
     workspace: Workspace,
     state: WorkspaceState,
@@ -390,7 +375,7 @@ def persist_tasks_and_state_for_workspace(
     Atomic write of tasks plus workspace state under the mutation guard.
 
     The runner-owned write path: rebases via
-    ``merged_state_for_runner_owned_write`` before persisting so
+    ``merged_state_for_runner_owned_write_for_workspace`` before persisting so
     concurrent operator edits land alongside the runner's changes
     instead of being overwritten by the runner's stale read.
     """
