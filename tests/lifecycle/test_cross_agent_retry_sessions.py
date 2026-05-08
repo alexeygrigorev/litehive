@@ -15,7 +15,7 @@ from litehive.lifecycle.runner import StateMachineRunner
 from litehive.lifecycle.sessions import SqliteSessionStore
 from litehive.lifecycle.types import PipelineMode
 from litehive.roles.base import PromptContext
-from litehive.state.records import create_task
+from litehive.state.records import create_task_for_workspace
 from litehive.workspace import Workspace
 
 
@@ -75,34 +75,34 @@ class _SameAgentRetryEngine:
 
 
 @pytest.fixture
-def workspace(tmp_path: Path) -> Path:
+def workspace(tmp_path: Path) -> Workspace:
     create_workspace(tmp_path)
-    return tmp_path
+    return Workspace.from_path(tmp_path)
 
 
 def _build_runner(
-    workspace: Path,
+    workspace: Workspace,
     *,
     engine,
 ) -> tuple[StateMachineRunner, SqliteSessionStore]:
-    persistence = SqlitePersistence(Workspace.from_path(workspace))
-    sessions = SqliteSessionStore(Workspace.from_path(workspace))
+    persistence = SqlitePersistence(workspace)
+    sessions = SqliteSessionStore(workspace)
     registry = build_registry(
         selector=_FixedSelector(engine),
         session_store=sessions,
         hook_runner=_NoopHookRunner(),
         commit_node=StubCommitNode(),
-        prompt_context=PromptContext(workspace=Workspace.from_path(workspace)),
+        prompt_context=PromptContext(workspace=workspace),
     )
     return (
-        StateMachineRunner(registry, persistence, journal=SqliteJournal(Workspace.from_path(workspace)), session_store=sessions),
+        StateMachineRunner(registry, persistence, journal=SqliteJournal(workspace), session_store=sessions),
         sessions,
     )
 
 
-def test_cross_agent_reject_clears_target_stage_sessions(workspace: Path) -> None:
-    task = create_task(workspace, title="QA sends SWE back", pipeline_mode="full")
-    persistence = SqlitePersistence(Workspace.from_path(workspace))
+def test_cross_agent_reject_clears_target_stage_sessions(workspace: Workspace) -> None:
+    task = create_task_for_workspace(workspace, title="QA sends SWE back", pipeline_mode="full")
+    persistence = SqlitePersistence(workspace)
     persistence.initialize(task.id, pipeline_mode=PipelineMode.FULL)
     engine = _CrossAgentRetryEngine()
     runner, sessions = _build_runner(
@@ -120,7 +120,7 @@ def test_cross_agent_reject_clears_target_stage_sessions(workspace: Path) -> Non
     ]
     persisted = sessions.get_or_create(task.id, PipelineState.IMPLEMENTING, engine.name)
     assert persisted.engine_session_id == "implementing-2"
-    transitions = SqliteJournal(Workspace.from_path(workspace)).load_transitions(task.id)
+    transitions = SqliteJournal(workspace).load_transitions(task.id)
     implementing_attempts = [
         transition
         for transition in transitions
@@ -129,9 +129,9 @@ def test_cross_agent_reject_clears_target_stage_sessions(workspace: Path) -> Non
     assert len(implementing_attempts) == 2
 
 
-def test_same_agent_reject_keeps_stage_session_continuity(workspace: Path) -> None:
-    task = create_task(workspace, title="SWE retries in place", pipeline_mode="single")
-    persistence = SqlitePersistence(Workspace.from_path(workspace))
+def test_same_agent_reject_keeps_stage_session_continuity(workspace: Workspace) -> None:
+    task = create_task_for_workspace(workspace, title="SWE retries in place", pipeline_mode="single")
+    persistence = SqlitePersistence(workspace)
     persistence.initialize(task.id, pipeline_mode=PipelineMode.SINGLE)
     engine = _SameAgentRetryEngine()
     runner, sessions = _build_runner(
