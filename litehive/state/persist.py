@@ -466,27 +466,6 @@ def persist_tasks_and_state_without_runner_guard_for_workspace(
     ensure_runtime_ignored_for_workspace(workspace)
 
 
-def persist_task_and_state_without_runner_guard(
-    root: Path,
-    task: TaskRecord,
-    state: WorkspaceState,
-    journal_message: str | None = None,
-    protected_task_ids: list[str] | tuple[str, ...] = (),
-    audit_entries: list[TaskAuditEntry] | None = None,
-) -> None:
-    """
-    Path-based compatibility wrapper for unguarded single-task persistence.
-    """
-    persist_task_and_state_without_runner_guard_for_workspace(
-        Workspace.from_path(root),
-        task=task,
-        state=state,
-        journal_message=journal_message,
-        protected_task_ids=protected_task_ids,
-        audit_entries=audit_entries,
-    )
-
-
 def persist_task_and_state_without_runner_guard_for_workspace(
     workspace: Workspace,
     task: TaskRecord,

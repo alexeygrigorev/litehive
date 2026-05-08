@@ -34,7 +34,7 @@ from litehive.git.ops import GitError
 from litehive.lifecycle.engines import ConfigBackedEngineSelector, EngineFactory
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.types import PipelineMode
-from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard
+from litehive.state.persist import load_state, persist_task_and_state_without_runner_guard_for_workspace
 from litehive.state.records import create_task, get_task_record
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.workspace import Workspace
@@ -55,7 +55,7 @@ def _prepare_runnable_task(root: Path, title: str) -> TaskRecord:
     task = create_task(root, title=title)
     state = load_state(root)
     task.pipeline_status = PipelineStatus.IMPLEMENTING
-    persist_task_and_state_without_runner_guard(root, task=task, state=state)
+    persist_task_and_state_without_runner_guard_for_workspace(Workspace.from_path(root), task=task, state=state)
     return get_task_record(root, task.id) or task
 
 
