@@ -36,6 +36,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove duplicate cached root field from `GitWorktreeSyncNode`.
 - [x] Move Heru execution-root helpers from raw root to injected `Workspace`.
 - [x] Remove raw-root alternate `SubagentManager` construction path from the DI container.
+- [x] Remove unused raw-root `build_subagent_manager` container wrapper after migrating tests.
 - [x] Move recovery scope-analysis internals from raw root to injected `Workspace`.
 - [x] Move daemon termination helpers from raw root to injected `Workspace`.
 - [x] Move workspace health daemon-status lookup to workspace-native registry helper.

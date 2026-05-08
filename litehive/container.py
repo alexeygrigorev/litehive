@@ -184,19 +184,3 @@ def build_subagent_manager_for_workspace(
         engines=engines,
         subagent_ids=subagent_ids,
     )
-
-
-def build_subagent_manager(root: Path, execution_root: Path):
-    """
-    Assemble a ``SubagentManager`` for one agent turn from a raw path.
-
-    Process boundaries and tests can use this wrapper; internal callers
-    that already have workspace dependencies should call
-    :func:`build_subagent_manager_for_workspace`.
-    """
-    container = build_container(root)
-    return build_subagent_manager_for_workspace(
-        container.workspace,
-        container.config,
-        execution_root=execution_root,
-    )

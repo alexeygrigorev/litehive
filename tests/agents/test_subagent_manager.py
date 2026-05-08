@@ -12,7 +12,7 @@ from litehive.agents.callbacks import CallbackWarnings
 from litehive.agents.manager import SubagentManager, SubagentStartupError
 from litehive.agents.session import SubagentSessionManager
 from litehive.agents.subagent_ids import SubagentIdRepository
-from litehive.container import build_subagent_manager
+from litehive.container import build_subagent_manager_for_workspace
 from litehive.agents.session_store import (
     load_subagent_event_stream,
     load_subagent_report,
@@ -28,10 +28,19 @@ from litehive.tasks.report_storage import load_stage_reports
 from litehive.workspace import Workspace
 
 
+def _build_manager(workspace: Workspace, *, execution_root: Path):
+    return build_subagent_manager_for_workspace(
+        workspace,
+        workspace.load_config(),
+        execution_root=execution_root,
+    )
+
+
 def test_subagent_manager_receives_session_manager_from_container(tmp_path: Path) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
 
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(workspace, execution_root=tmp_path)
 
     assert isinstance(manager.sessions, SubagentSessionManager)
     assert isinstance(manager.engines, EngineManager)
@@ -109,7 +118,7 @@ def test_subagent_manager_passes_workspace_root_in_extra_env(tmp_path: Path, mon
     execution_root = tmp_path / "other-project"
     execution_root.mkdir()
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Pass workspace root")
-    manager = build_subagent_manager(tmp_path, execution_root=execution_root)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=execution_root)
     captured: dict[str, Any] = {}
 
     class FakeEngine:
@@ -161,7 +170,7 @@ def test_subagent_manager_id_allocation_ignores_stale_subagent_directories(
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Ignore stale subagent folders")
     stale_dir = task_dir(tmp_path, task) / "subagents" / "SA-0099-swe"
     stale_dir.mkdir(parents=True)
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     class FakeEngine:
         name = "codex"
@@ -208,7 +217,7 @@ def test_subagent_manager_uses_runtime_current_stage_for_cli_verdict_lookup(
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Use runtime stage for reports")
     task.runtime.pipeline.current_stage.stage = "grooming"
     save_task_for_workspace(Workspace.from_path(tmp_path), task)
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     class FakeEngine:
         name = "codex"
@@ -272,7 +281,7 @@ def test_subagent_manager_uses_recovering_stage_for_recovery_cli_verdict(
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Use recovery stage for reports")
     task.runtime.pipeline.current_stage.stage = "recovering"
     save_task_for_workspace(Workspace.from_path(tmp_path), task)
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     class FakeEngine:
         name = "codex"
@@ -330,7 +339,7 @@ def test_subagent_manager_file_changes_are_bound_to_current_subagent(
 ) -> None:
     create_workspace(tmp_path)
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Keep files bound to source subagent")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     class FakeEngine:
         name = "codex"
@@ -401,7 +410,7 @@ def test_subagent_manager_consumes_unified_stdout_for_reports_and_continuation(
 ) -> None:
     create_workspace(tmp_path)
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Consume unified stdout")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
     captured: dict[str, Any] = {}
 
     class FakeEngine:
@@ -472,7 +481,7 @@ def test_subagent_manager_prefers_instance_run_override_over_inherited_run_live(
 ) -> None:
     create_workspace(tmp_path)
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Fallback usage-limit task")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     def fail_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
         raise AssertionError("run_live should not be used when only run is overridden")
@@ -519,7 +528,7 @@ def test_subagent_manager_prefers_bound_instance_run_override_over_inherited_run
 ) -> None:
     create_workspace(tmp_path)
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Fallback usage-limit task")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     def fail_run_live(*args, **kwargs) -> CLIExecutionResult:  # type: ignore[no-untyped-def]
         raise AssertionError("run_live should not be used when run is rebound to a custom method")
@@ -566,7 +575,7 @@ def test_subagent_manager_prefers_bound_instance_run_override_over_inherited_run
 def test_subagent_manager_wraps_unexpected_pre_start_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     create_workspace(tmp_path)
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Startup failure")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     class FakeEngine:
         name = "codex"
@@ -601,7 +610,7 @@ def test_subagent_manager_wraps_unavailable_engine_as_startup_failure(
 ) -> None:
     create_workspace(tmp_path)
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Unavailable engine")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     class FakeEngine:
         name = "codex"
@@ -629,7 +638,7 @@ def test_subagent_manager_wraps_unavailable_engine_as_startup_failure(
 def test_subagent_manager_preserves_started_run_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     create_workspace(tmp_path)
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Started failure")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     class FakeEngine:
         name = "codex"
@@ -667,7 +676,7 @@ def test_subagent_manager_does_not_fabricate_execution_for_started_engine_errors
 ) -> None:
     create_workspace(tmp_path)
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Started engine error")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     class FakeEngine:
         name = "codex"
@@ -703,7 +712,7 @@ def test_subagent_manager_kills_stale_live_codex_output_after_timeout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     create_workspace(tmp_path)
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
     manager.config.subagent_inactivity_timeout_seconds = 1.0
     base = tmp_path / "subagent"
     base.mkdir()
@@ -736,7 +745,7 @@ def test_subagent_manager_enforces_300s_inactivity_timeout_for_opencode(
 ) -> None:
     create_workspace(tmp_path)
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Live inactivity timeout")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
     manager.config.subagent_inactivity_timeout_seconds = 123.0
     captured: dict[str, Any] = {}
 
@@ -793,7 +802,7 @@ def test_subagent_manager_omits_model_override_when_resuming_opencode(
 ) -> None:
     create_workspace(tmp_path)
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Resume opencode without model")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
     captured: dict[str, Any] = {}
 
     class FakeEngine:
@@ -854,7 +863,7 @@ def test_subagent_manager_preserves_workspace_timeout_for_non_opencode_live_runs
 ) -> None:
     create_workspace(tmp_path)
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Live inactivity timeout")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
     manager.config.subagent_inactivity_timeout_seconds = 123.0
     captured: dict[str, Any] = {}
 
@@ -911,7 +920,7 @@ def test_subagent_manager_does_not_pass_live_timeout_to_non_live_engine(
 ) -> None:
     create_workspace(tmp_path)
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Non-live execution timeout")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
     manager.config.subagent_inactivity_timeout_seconds = 123.0
     captured: dict[str, Any] = {}
 
@@ -962,7 +971,7 @@ def test_subagent_manager_survives_nonfatal_start_callback_failure_for_planner(
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Planner start callback failure")
     task.runtime.pipeline.current_stage.stage = "grooming"
     save_task_for_workspace(Workspace.from_path(tmp_path), task)
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     class FakeEngine:
         name = "codex"
@@ -1027,7 +1036,7 @@ def test_subagent_manager_survives_nonfatal_progress_callback_failure_for_planne
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Planner progress callback failure")
     task.runtime.pipeline.current_stage.stage = "grooming"
     save_task_for_workspace(Workspace.from_path(tmp_path), task)
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     class FakeEngine:
         name = "codex"
@@ -1112,7 +1121,7 @@ def test_subagent_manager_classifies_completed_inactivity_timeout_as_retryable_t
 ) -> None:
     create_workspace(tmp_path)
     task = create_task_for_workspace(Workspace.from_path(tmp_path), title=f"Retry stalled {engine_name} run")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
     manager.config.subagent_inactivity_timeout_seconds = configured_timeout_seconds
     captured: dict[str, float] = {}
 

@@ -1,12 +1,13 @@
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from heru.base import CLIExecutionResult
 from heru.types import SubagentRef
 
-from litehive.container import build_subagent_manager
+from litehive.container import build_subagent_manager_for_workspace
 from litehive.agents.session_store import load_subagent_report, load_subagent_event_stream
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import create_workspace
@@ -18,13 +19,21 @@ from litehive.tasks.runtime import mark_subagent_started_for_workspace
 from litehive.workspace import Workspace
 
 
+def _build_manager(workspace: Workspace, *, execution_root: Path) -> Any:
+    return build_subagent_manager_for_workspace(
+        workspace,
+        workspace.load_config(),
+        execution_root=execution_root,
+    )
+
+
 def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_snippet(
     tmp_path: Path,
 ) -> None:
     create_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
     workspace = Workspace.from_path(tmp_path)
     task = create_task_for_workspace(workspace, title="Claude live restart summary", auto_commit=False)
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(workspace, execution_root=tmp_path)
 
     ref = SubagentRef(
         id="SA-0001",
@@ -84,7 +93,7 @@ def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monke
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
     task = create_task_for_workspace(workspace, title="Event stream live progress test")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     partial_stdout = (
         '{"kind":"message","engine":"opencode","sequence":0,'
@@ -159,7 +168,7 @@ def test_subagent_skips_event_stream_when_no_events(tmp_path: Path, monkeypatch:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
     task = create_task_for_workspace(workspace, title="No event stream test")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     class FakeEngine:
         name = "codex"

@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -6,7 +7,7 @@ from pydantic import ValidationError
 from heru.base import CLIExecutionResult
 from heru.types import SubagentRef
 
-from litehive.container import build_subagent_manager
+from litehive.container import build_subagent_manager_for_workspace
 from litehive.agents.report_extraction import stage_report_from_subagent
 from litehive.config.workspace import create_workspace
 from litehive.domain.agent import EngineFailure, ExecutionTrace, SubagentResult
@@ -17,6 +18,14 @@ from litehive.state.records import create_task_for_workspace
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
 from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.workspace import Workspace
+
+
+def _build_manager(workspace: Workspace, *, execution_root: Path) -> Any:
+    return build_subagent_manager_for_workspace(
+        workspace,
+        workspace.load_config(),
+        execution_root=execution_root,
+    )
 
 
 def _stub_execution(exit_code: int = 0) -> CLIExecutionResult:
@@ -169,8 +178,9 @@ def test_subagent_manager_keeps_full_transcript_artifacts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Keep full transcript artifacts")
-    manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Keep full transcript artifacts")
+    manager = _build_manager(workspace, execution_root=tmp_path)
     transcript = "full transcript\n" + ("z" * (FEEDBACK_CAP + 400))
 
     class FakeEngine:
