@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from litehive.config.workspace import create_workspace
-from litehive.state.records import create_task, save_task
+from litehive.state.records import create_task_for_workspace, save_task_for_workspace
 from litehive.domain.common import TaskStatus
 from litehive.worktree.cleanup import remove_cleanable_worktrees_for_workspace
 from litehive.worktree.execution_root import resolve_task_execution_root_for_workspace
@@ -48,7 +48,7 @@ def test_resolve_task_execution_root_links_worktree_venv_to_workspace_venv(tmp_p
     _git_ok(workspace, "add", "app.txt")
     _git_ok(workspace, "commit", "-m", "initial")
 
-    task = create_task(workspace, title="Resolve execution root")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="Resolve execution root")
 
     worktree = resolve_task_execution_root_for_workspace(Workspace.from_path(workspace), task)
 
@@ -67,7 +67,7 @@ def test_resolve_task_execution_root_accepts_injected_workspace(tmp_path: Path) 
     _git_ok(workspace, "add", "app.txt")
     _git_ok(workspace, "commit", "-m", "initial")
 
-    task = create_task(workspace, title="Resolve execution root from workspace")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="Resolve execution root from workspace")
 
     worktree = resolve_task_execution_root_for_workspace(Workspace.from_path(workspace), task)
 
@@ -108,7 +108,7 @@ def test_resolve_task_execution_root_logs_target_and_raises_on_worktree_cleanup_
     _git_ok(workspace, "add", "app.txt")
     _git_ok(workspace, "commit", "-m", "initial")
 
-    task = create_task(workspace, title="Cleanup stale worktree")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="Cleanup stale worktree")
     stale_worktree = task_worktree_path_for_workspace(Workspace.from_path(workspace), task)
     stale_worktree.mkdir(parents=True)
 
@@ -128,13 +128,13 @@ def test_remove_cleanable_worktrees_includes_closed_tasks(tmp_path: Path) -> Non
     _configure_repo(workspace)
     create_workspace(workspace)
 
-    task = create_task(workspace, title="Closed worktree cleanup")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="Closed worktree cleanup")
     worktree = task_worktree_path_for_workspace(Workspace.from_path(workspace), task)
     worktree.mkdir(parents=True)
     task.status = TaskStatus.CLOSED
     task.close_reason = "deferred"
     task.runtime.pipeline.git.worktree_path = str(worktree)
-    save_task(workspace, task)
+    save_task_for_workspace(Workspace.from_path(workspace), task)
 
     result = remove_cleanable_worktrees_for_workspace(Workspace.from_path(workspace), dry_run=True)
 
