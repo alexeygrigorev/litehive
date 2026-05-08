@@ -30,7 +30,7 @@ from litehive.lifecycle.persistence import FailedRunRecord, LastRejection, LastR
 from litehive.lifecycle.prompt_serializer import serialize_prompt
 from litehive.lifecycle.prompt_types import AgentPrompt
 from litehive.lifecycle.types import FailedReason, PipelineMode
-from litehive.state.records import create_task, save_task
+from litehive.state.records import create_task_for_workspace, save_task_for_workspace
 from litehive.tasks.paths import task_dir
 
 
@@ -129,14 +129,14 @@ def test_role_agent_rejects_stage_role_mismatch(workspace: Path) -> None:
 
 
 def test_serialize_includes_header_goal_acceptance_plan(workspace: Path) -> None:
-    task = create_task(
-        workspace,
+    task = create_task_for_workspace(
+        Workspace.from_path(workspace),
         title="Add prompt serializer",
         goal="Build the serializer",
         acceptance_criteria=["Serializer exists", "Tests pass"],
     )
     task.plan = ["Read current prompt", "Write serializer module", "Cover with tests"]
-    save_task(workspace, task)
+    save_task_for_workspace(Workspace.from_path(workspace), task)
 
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(task.id)
@@ -158,7 +158,7 @@ def test_serialize_includes_header_goal_acceptance_plan(workspace: Path) -> None
 
 
 def test_serialize_includes_role_instructions(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     prompt = agent.build_prompt(make_state(task.id))
     text = serialize_prompt(prompt, task_record=task, workspace=Workspace.from_path(workspace))
@@ -175,7 +175,7 @@ def test_serialize_includes_role_instructions(workspace: Path) -> None:
 
 
 def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(
         task.id,
@@ -216,7 +216,7 @@ def test_serialize_recovery_includes_recovery_trigger(workspace: Path) -> None:
 
 
 def test_serialize_recovery_diagnoses_invalid_current_config(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     config_path(workspace).write_text("- not\n- mapping\n", encoding="utf-8")
     agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(
@@ -252,11 +252,11 @@ def test_serialize_recovery_diagnoses_invalid_current_config(workspace: Path) ->
 
 
 def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     task.subagents.append(
         SubagentRef(id="SA-0001", role="swe", engine="codex", status="failed", path="subagents/SA-0001-swe")
     )
-    save_task(workspace, task)
+    save_task_for_workspace(Workspace.from_path(workspace), task)
 
     subagent_base = task_dir(workspace, task) / "subagents" / "SA-0001-swe"
     subagent_base.mkdir(parents=True)
@@ -314,7 +314,7 @@ def test_serialize_recovery_inlines_failed_subagent_diagnostics(workspace: Path)
 
 
 def test_serialize_recovery_includes_repeated_fingerprint_escalation(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     task.runtime.pipeline.recovery_history = [
         RuntimeRecoveryOutcome(
             origin_stage="implementing",
@@ -327,7 +327,7 @@ def test_serialize_recovery_includes_repeated_fingerprint_escalation(workspace: 
             created_at="2026-04-20T00:00:00+00:00",
         )
     ]
-    save_task(workspace, task)
+    save_task_for_workspace(Workspace.from_path(workspace), task)
     agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(
         task.id,
@@ -359,7 +359,7 @@ def test_serialize_recovery_includes_repeated_fingerprint_escalation(workspace: 
 
 
 def test_serialize_recovery_ignores_same_budget_key_with_different_fingerprint(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     task.runtime.pipeline.recovery_history = [
         RuntimeRecoveryOutcome(
             origin_stage="implementing",
@@ -372,7 +372,7 @@ def test_serialize_recovery_ignores_same_budget_key_with_different_fingerprint(w
             created_at="2026-04-20T00:00:00+00:00",
         )
     ]
-    save_task(workspace, task)
+    save_task_for_workspace(Workspace.from_path(workspace), task)
     agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(
         task.id,
@@ -397,7 +397,7 @@ def test_serialize_recovery_ignores_same_budget_key_with_different_fingerprint(w
 
 
 def test_serialize_ignores_corrupt_task_activity_payload(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     with connect_workspace_db(workspace) as connection:
         connection.execute(
             """
@@ -438,7 +438,7 @@ def test_serialize_ignores_corrupt_task_activity_payload(workspace: Path) -> Non
 
 
 def test_serialize_reads_activity_through_boundary(workspace: Path, monkeypatch) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     calls: list[tuple[Workspace, str]] = []
 
@@ -466,7 +466,7 @@ def test_serialize_reads_activity_through_boundary(workspace: Path, monkeypatch)
 
 
 def test_serialize_includes_last_rejection(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(task.id)
     state.last_rejection_by_stage[PipelineState.IMPLEMENTING] = LastRejection(
@@ -483,7 +483,7 @@ def test_serialize_includes_last_rejection(workspace: Path) -> None:
 
 
 def test_planner_prompt_surfaces_failed_run_history(workspace: Path) -> None:
-    task = create_task(workspace, title="Repeated retry exhaustion")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="Repeated retry exhaustion")
     agent = PlannerAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(task.id, stage=PipelineState.GROOMING)
     state.failed_run_history["implementing:agent:tests fail"] = FailedRunRecord(
@@ -508,7 +508,7 @@ def test_planner_prompt_surfaces_failed_run_history(workspace: Path) -> None:
 
 
 def test_planner_prompt_requires_current_main_preflight_before_scoping(workspace: Path) -> None:
-    task = create_task(workspace, title="Avoid redundant implementation", goal="check current main first")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="Avoid redundant implementation", goal="check current main first")
     agent = PlannerAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
 
     text = serialize_prompt(agent.build_prompt(make_state(task.id, stage=PipelineState.GROOMING)), task_record=task, workspace=Workspace.from_path(workspace))
@@ -523,7 +523,7 @@ def test_planner_prompt_requires_current_main_preflight_before_scoping(workspace
 
 
 def test_retry_prompt_includes_prior_work_summary_from_last_report(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(task.id)
     state.stage_retry[PipelineState.IMPLEMENTING] = 1
@@ -552,7 +552,7 @@ def test_retry_prompt_includes_prior_work_summary_from_last_report(workspace: Pa
 
 
 def test_retry_prompt_omits_prior_work_when_last_report_has_no_retry_summary(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(task.id)
     state.stage_retry[PipelineState.IMPLEMENTING] = 1
@@ -563,7 +563,7 @@ def test_retry_prompt_omits_prior_work_when_last_report_has_no_retry_summary(wor
 
 
 def test_retry_prompt_filters_last_rejection_reason_from_prior_work(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(task.id)
     state.stage_retry[PipelineState.IMPLEMENTING] = 1
@@ -590,7 +590,7 @@ def test_retry_prompt_filters_last_rejection_reason_from_prior_work(workspace: P
 
 
 def test_swe_retry_prompt_selects_retry_attempt_guidance(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(task.id)
     state.last_rejection_by_stage[PipelineState.IMPLEMENTING] = LastRejection(
@@ -610,7 +610,7 @@ def test_swe_retry_prompt_selects_retry_attempt_guidance(workspace: Path) -> Non
 
 
 def test_qa_prompt_includes_default_vs_opt_in_verification_guidance(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = QAAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
 
     prompt = agent.build_prompt(make_state(task.id, stage=PipelineState.TESTING))
@@ -622,7 +622,7 @@ def test_qa_prompt_includes_default_vs_opt_in_verification_guidance(workspace: P
 
 
 def test_qa_retry_prompt_selects_retry_attempt_guidance(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = QAAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(task.id, stage=PipelineState.TESTING)
     state.last_rejection_by_stage[PipelineState.TESTING] = LastRejection(
@@ -642,7 +642,7 @@ def test_qa_retry_prompt_selects_retry_attempt_guidance(workspace: Path) -> None
 
 
 def test_reviewer_prompt_calls_out_qa_override_with_last_testing_rejection(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = ReviewerAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(task.id, stage=PipelineState.ACCEPTING)
     state.last_rejection_by_stage[PipelineState.ACCEPTING] = LastRejection(
@@ -664,7 +664,7 @@ def test_reviewer_prompt_calls_out_qa_override_with_last_testing_rejection(works
 
 
 def test_build_prompt_ignores_corrupt_hook_config(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     config_path(workspace).write_text("[\n", encoding="utf-8")
 
     agent = SWEAgent(
@@ -679,7 +679,7 @@ def test_build_prompt_ignores_corrupt_hook_config(workspace: Path) -> None:
 
 
 def test_swe_prompt_lists_after_stage_hooks_with_descriptions(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     config_path(workspace).write_text(
         yaml.safe_dump(
             {
@@ -736,7 +736,7 @@ def test_serialize_works_without_task_record(workspace: Path) -> None:
 
 
 def test_serialize_verdict_instructions_match_role_and_stage(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     text = serialize_prompt(agent.build_prompt(make_state(task.id)), task_record=task, workspace=Workspace.from_path(workspace))
 
@@ -744,7 +744,7 @@ def test_serialize_verdict_instructions_match_role_and_stage(workspace: Path) ->
 
 
 def test_recovery_prompt_uses_recovery_verdict_contract(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = RecoveryAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(
         task.id,
@@ -767,7 +767,7 @@ def test_recovery_prompt_uses_recovery_verdict_contract(workspace: Path) -> None
 
 
 def test_serialize_includes_nudge_message_when_present(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     prompt = agent.build_nudge_prompt(make_state(task.id), agent.build_prompt(make_state(task.id)))
 
@@ -782,7 +782,7 @@ def test_serialize_includes_nudge_message_when_present(workspace: Path) -> None:
 def test_implementing_retry_activity_keeps_only_grooming_and_dedups_last_rejection_by_source_and_reason(
     workspace: Path,
 ) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(task.id)
     state.stage_retry[PipelineState.IMPLEMENTING] = 1
@@ -815,7 +815,7 @@ def test_implementing_retry_activity_keeps_only_grooming_and_dedups_last_rejecti
 
 
 def test_prompt_surfaces_semantic_reject_classification(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     agent = SWEAgent(_NullSelector(), _NullSessions(), prompt_context=PromptContext(workspace=Workspace.from_path(workspace)))
     state = make_state(task.id)
     state.stage_retry[PipelineState.IMPLEMENTING] = 1
@@ -846,7 +846,7 @@ def test_prompt_surfaces_semantic_reject_classification(workspace: Path) -> None
 
 
 def test_implementing_prompt_uses_latest_testing_reject_that_sent_work_back(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     journal = SqliteJournal(Workspace.from_path(workspace))
     journal.task_started(task.id, PipelineState.READY)
     journal.transition(
@@ -892,7 +892,7 @@ def test_implementing_prompt_uses_latest_testing_reject_that_sent_work_back(work
 
 
 def test_implementing_prompt_keeps_latest_hook_reject_when_it_is_newest(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     journal = SqliteJournal(Workspace.from_path(workspace))
     journal.task_started(task.id, PipelineState.READY)
     journal.transition(
@@ -936,7 +936,7 @@ def test_implementing_prompt_keeps_latest_hook_reject_when_it_is_newest(workspac
 
 
 def test_activity_does_not_dedup_reject_when_source_differs(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     prompt = make_prompt(
         task.id,
         last_rejection={
@@ -959,7 +959,7 @@ def test_activity_does_not_dedup_reject_when_source_differs(workspace: Path) -> 
 
 
 def test_activity_dedups_agent_reject_when_last_rejection_uses_generic_agent_source(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     prompt = make_prompt(
         task.id,
         last_rejection={
@@ -981,7 +981,7 @@ def test_activity_dedups_agent_reject_when_last_rejection_uses_generic_agent_sou
 
 
 def test_activity_does_not_dedup_generic_agent_reject_when_stage_differs(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     prompt = make_prompt(
         task.id,
         last_rejection={
@@ -1004,7 +1004,7 @@ def test_activity_does_not_dedup_generic_agent_reject_when_stage_differs(workspa
 
 
 def test_activity_dedups_hook_reject_when_reason_is_embedded_in_activity_message(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     prompt = make_prompt(
         task.id,
         last_rejection={
@@ -1035,7 +1035,7 @@ def test_activity_dedups_hook_reject_when_reason_is_embedded_in_activity_message
 
 
 def test_activity_section_is_omitted_when_filtering_removes_all_entries(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     prompt = make_prompt(
         task.id,
         stage=PipelineState.TESTING,
@@ -1051,7 +1051,7 @@ def test_activity_section_is_omitted_when_filtering_removes_all_entries(workspac
 
 
 def test_testing_activity_keeps_only_last_implementing_pass(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     prompt = make_prompt(
         task.id,
         stage=PipelineState.TESTING,
@@ -1072,7 +1072,7 @@ def test_testing_activity_keeps_only_last_implementing_pass(workspace: Path) -> 
 
 
 def test_accepting_activity_keeps_only_last_implementing_and_testing_passes(workspace: Path) -> None:
-    task = create_task(workspace, title="t", goal="g")
+    task = create_task_for_workspace(Workspace.from_path(workspace), title="t", goal="g")
     prompt = make_prompt(
         task.id,
         stage=PipelineState.ACCEPTING,
