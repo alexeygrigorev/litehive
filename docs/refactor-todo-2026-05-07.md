@@ -130,6 +130,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate entrypoint CLI tests to workspace-native state/task helpers.
 - [x] Migrate logs CLI tests to workspace-native task helpers.
 - [x] Migrate task debug CLI tests to workspace-native task helpers.
+- [x] Migrate task list/show CLI tests to workspace-native task helpers.
 - [x] Remove unused runtime gitignore path wrapper.
 - [x] Remove task runtime save path wrapper after migrating tests.
 - [x] Remove runner-lock held path wrapper after migrating tests.

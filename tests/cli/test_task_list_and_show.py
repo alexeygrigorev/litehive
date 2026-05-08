@@ -8,7 +8,8 @@ from typer.testing import CliRunner
 
 from litehive.cli.task_cli import app as task_app
 from litehive.config.workspace import create_workspace
-from litehive.state.records import create_task, get_task, save_task
+from litehive.state.records import create_task_for_workspace, get_task_for_workspace, save_task_for_workspace
+from litehive.workspace import Workspace
 
 from tests.support.helpers import _cmd_list, _cmd_recover, _cmd_show, _cmd_update
 from litehive.domain.common import PipelineStatus, TaskStatus
@@ -32,11 +33,11 @@ def test_list_help_matches_trimmed_option_surface() -> None:
 
 def test_list_excludes_done_tasks_by_default(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     create_workspace(tmp_path)
-    active = create_task(tmp_path, title="Active task", auto_commit=False)
-    done = create_task(tmp_path, title="Done task", auto_commit=False)
+    active = create_task_for_workspace(Workspace.from_path(tmp_path), title="Active task", auto_commit=False)
+    done = create_task_for_workspace(Workspace.from_path(tmp_path), title="Done task", auto_commit=False)
     done.status = TaskStatus.DONE
     done.pipeline_status = PipelineStatus.DONE
-    save_task(tmp_path, done)
+    save_task_for_workspace(Workspace.from_path(tmp_path), done)
 
     exit_code = _cmd_list(
         argparse.Namespace(
@@ -54,11 +55,11 @@ def test_list_excludes_done_tasks_by_default(tmp_path: Path, capsys: pytest.Capt
 
 def test_list_all_includes_done_tasks(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     create_workspace(tmp_path)
-    active = create_task(tmp_path, title="Active task", auto_commit=False)
-    done = create_task(tmp_path, title="Done task", auto_commit=False)
+    active = create_task_for_workspace(Workspace.from_path(tmp_path), title="Active task", auto_commit=False)
+    done = create_task_for_workspace(Workspace.from_path(tmp_path), title="Done task", auto_commit=False)
     done.status = TaskStatus.DONE
     done.pipeline_status = PipelineStatus.DONE
-    save_task(tmp_path, done)
+    save_task_for_workspace(Workspace.from_path(tmp_path), done)
 
     exit_code = _cmd_list(
         argparse.Namespace(
@@ -77,7 +78,7 @@ def test_list_all_includes_done_tasks(tmp_path: Path, capsys: pytest.CaptureFixt
 def test_list_compact_format(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Each task prints as one line: ID [status/pipeline_status] title."""
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="My test task", auto_commit=False)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="My test task", auto_commit=False)
 
     exit_code = _cmd_list(
         argparse.Namespace(
@@ -100,13 +101,13 @@ def test_show_prints_task_details(
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
     monkeypatch.delenv("LITEHIVE_STAGE", raising=False)
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Detail task", auto_commit=False)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Detail task", auto_commit=False)
     task.goal = "Test the show command"
     task.acceptance_criteria = ["criterion one", "criterion two"]
     task.constraints = ["keep it simple"]
     task.plan = ["step one", "step two"]
     task.priority = "high"
-    save_task(tmp_path, task)
+    save_task_for_workspace(Workspace.from_path(tmp_path), task)
 
     exit_code = _cmd_show(argparse.Namespace(workspace=tmp_path, task_id=task.id))
     output = capsys.readouterr().out
@@ -140,11 +141,11 @@ def test_show_prints_agent_creation_provenance(
     monkeypatch.delenv("LITEHIVE_TASK_ID", raising=False)
     monkeypatch.delenv("LITEHIVE_STAGE", raising=False)
     create_workspace(tmp_path)
-    parent = create_task(tmp_path, title="Current task", auto_commit=False)
+    parent = create_task_for_workspace(Workspace.from_path(tmp_path), title="Current task", auto_commit=False)
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "planner")
     monkeypatch.setenv("LITEHIVE_TASK_ID", parent.id)
     monkeypatch.setenv("LITEHIVE_STAGE", "grooming")
-    created = create_task(tmp_path, title="Spawned from planner", auto_commit=False)
+    created = create_task_for_workspace(Workspace.from_path(tmp_path), title="Spawned from planner", auto_commit=False)
 
     exit_code = _cmd_show(argparse.Namespace(workspace=tmp_path, task_id=created.id))
     output = capsys.readouterr().out
@@ -161,11 +162,11 @@ def test_show_prints_agent_creation_provenance(
 
 def test_show_prints_done_history(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Done history task", auto_commit=False)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Done history task", auto_commit=False)
     task.status = TaskStatus.DONE
     task.pipeline_status = PipelineStatus.DONE
     task.goal = "Keep completed history directly inspectable"
-    save_task(tmp_path, task)
+    save_task_for_workspace(Workspace.from_path(tmp_path), task)
 
     exit_code = _cmd_show(argparse.Namespace(workspace=tmp_path, task_id=task.id))
     output = capsys.readouterr().out
@@ -184,10 +185,10 @@ def test_recover_done_task_requeues_follow_up_work(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Done recover task", auto_commit=False)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Done recover task", auto_commit=False)
     task.status = TaskStatus.DONE
     task.pipeline_status = PipelineStatus.DONE
-    save_task(tmp_path, task)
+    save_task_for_workspace(Workspace.from_path(tmp_path), task)
 
     exit_code = _cmd_recover(argparse.Namespace(workspace=tmp_path, task_id=task.id))
     output = capsys.readouterr().out
@@ -203,7 +204,7 @@ def test_task_update_renames_title_in_place(
 ) -> None:
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Original title", auto_commit=False)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Original title", auto_commit=False)
 
     exit_code = _cmd_update(
         argparse.Namespace(
@@ -225,7 +226,7 @@ def test_task_update_renames_title_in_place(
     assert exit_code == 0
     assert f"task: {task.id} Renamed title" in update_output
 
-    updated = get_task(tmp_path, task.id)
+    updated = get_task_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert updated is not None
     assert updated.id == task.id
     assert updated.title == "Renamed title"
@@ -240,18 +241,18 @@ def test_task_update_renames_title_in_place(
 
 def test_show_displays_dependency_statuses(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     create_workspace(tmp_path)
-    live = create_task(tmp_path, title="Live dependency", auto_commit=False)
+    live = create_task_for_workspace(Workspace.from_path(tmp_path), title="Live dependency", auto_commit=False)
     live.status = TaskStatus.FLAGGED
-    save_task(tmp_path, live)
+    save_task_for_workspace(Workspace.from_path(tmp_path), live)
 
-    done = create_task(tmp_path, title="Done dependency", auto_commit=False)
+    done = create_task_for_workspace(Workspace.from_path(tmp_path), title="Done dependency", auto_commit=False)
     done.status = TaskStatus.DONE
     done.pipeline_status = PipelineStatus.DONE
-    save_task(tmp_path, done)
+    save_task_for_workspace(Workspace.from_path(tmp_path), done)
 
-    task = create_task(tmp_path, title="Depends on multiple states", auto_commit=False)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Depends on multiple states", auto_commit=False)
     task.depends_on = [live.id, done.id, "T-9999"]
-    save_task(tmp_path, task)
+    save_task_for_workspace(Workspace.from_path(tmp_path), task)
 
     exit_code = _cmd_show(argparse.Namespace(workspace=tmp_path, task_id=task.id))
     output = capsys.readouterr().out
