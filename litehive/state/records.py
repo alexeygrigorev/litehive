@@ -51,13 +51,6 @@ class TaskStateMissingError(RuntimeError):
     """
 
 
-def _highest_task_number_in_store(root: Path) -> int:
-    """
-    Path-based compatibility wrapper for task-number scanning.
-    """
-    return _highest_task_number_in_store_for_workspace(Workspace.from_path(root))
-
-
 def _highest_task_number_in_store_for_workspace(workspace: Workspace) -> int:
     """
     Return the largest ``T-NNNN`` numeric prefix actually present in the store.
@@ -67,13 +60,6 @@ def _highest_task_number_in_store_for_workspace(workspace: Workspace) -> int:
     workspace cannot reuse an existing id when the counter was lost.
     """
     return runtime_store_for_workspace(workspace).highest_task_number()
-
-
-def _reserve_next_task_numbers(root: Path, state: WorkspaceState, count: int = 1) -> list[int]:
-    """
-    Path-based compatibility wrapper for task-number reservation.
-    """
-    return _reserve_next_task_numbers_for_workspace(Workspace.from_path(root), state, count=count)
 
 
 def _reserve_next_task_numbers_for_workspace(
@@ -96,13 +82,6 @@ def _reserve_next_task_numbers_for_workspace(
     start = state.next_task_number + 1
     state.next_task_number += count
     return list(range(start, start + count))
-
-
-def _task_creation_stage(root: Path, current_task_id: str | None) -> str | None:
-    """
-    Path-based compatibility wrapper for task creation stage lookup.
-    """
-    return _task_creation_stage_for_workspace(Workspace.from_path(root), current_task_id=current_task_id)
 
 
 def _task_creation_stage_for_workspace(workspace: Workspace, current_task_id: str | None) -> str | None:
@@ -129,13 +108,6 @@ def _task_creation_stage_for_workspace(workspace: Workspace, current_task_id: st
     if pipeline_stage and pipeline_stage != PipelineStatus.BACKLOG:
         return pipeline_stage
     return None
-
-
-def _default_task_creation_source(root: Path) -> TaskCreationSource:
-    """
-    Path-based compatibility wrapper for task creation provenance.
-    """
-    return _default_task_creation_source_for_workspace(Workspace.from_path(root))
 
 
 def _default_task_creation_source_for_workspace(workspace: Workspace) -> TaskCreationSource:
@@ -459,13 +431,6 @@ def save_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> N
     """
     with workspace_mutation_guard_for_workspace(workspace):
         write_task_runtime_for_workspace(workspace, task)
-
-
-def _load_task_runtime(root: Path, task: TaskRecord) -> TaskRecord:
-    """
-    Path-based compatibility wrapper for task runtime hydration.
-    """
-    return _load_task_runtime_for_workspace(Workspace.from_path(root), task)
 
 
 def _load_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> TaskRecord:

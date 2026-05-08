@@ -103,6 +103,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Add workspace creation/existence boundary methods and migrate workspace-aware callers.
 - [x] Remove config workspace resolver dependency on path-based task-existence wrapper.
 - [x] Remove the unused task-existence compatibility wrapper.
+- [x] Remove unused private state.records path wrappers.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`
