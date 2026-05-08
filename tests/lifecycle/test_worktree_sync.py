@@ -8,7 +8,7 @@ from litehive.domain.common import PipelineState
 from litehive.lifecycle.nodes.system import GitWorktreeSyncNode
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.types import PipelineMode
-from litehive.state.records import create_task, get_task, save_task
+from litehive.state.records import create_task_for_workspace, get_task_for_workspace, save_task_for_workspace
 from litehive.workspace import Workspace
 from litehive.worktree.paths import task_worktree_branch
 
@@ -54,10 +54,11 @@ def test_worktree_sync_creates_missing_task_worktree(tmp_path: Path) -> None:
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "app.txt")
     _git_ok(workspace, "commit", "-m", "initial")
+    workspace_obj = Workspace.from_path(workspace)
 
-    task = create_task(workspace, title="Sync")
+    task = create_task_for_workspace(workspace_obj, title="Sync")
     node = GitWorktreeSyncNode(
-        workspace=Workspace.from_path(workspace),
+        workspace=workspace_obj,
         worktree_resolver=lambda state: workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}",
     )
 
@@ -80,10 +81,11 @@ def test_worktree_sync_links_worktree_venv_to_workspace_venv(tmp_path: Path) -> 
     (workspace / ".venv").mkdir()
     _git_ok(workspace, "add", "app.txt")
     _git_ok(workspace, "commit", "-m", "initial")
+    workspace_obj = Workspace.from_path(workspace)
 
-    task = create_task(workspace, title="Shared venv")
+    task = create_task_for_workspace(workspace_obj, title="Shared venv")
     node = GitWorktreeSyncNode(
-        workspace=Workspace.from_path(workspace),
+        workspace=workspace_obj,
         worktree_resolver=lambda state: workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}",
     )
 
@@ -105,10 +107,11 @@ def test_worktree_sync_skips_broken_venv_link_when_workspace_has_no_venv(tmp_pat
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "app.txt")
     _git_ok(workspace, "commit", "-m", "initial")
+    workspace_obj = Workspace.from_path(workspace)
 
-    task = create_task(workspace, title="No shared venv")
+    task = create_task_for_workspace(workspace_obj, title="No shared venv")
     node = GitWorktreeSyncNode(
-        workspace=Workspace.from_path(workspace),
+        workspace=workspace_obj,
         worktree_resolver=lambda state: workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}",
     )
 
@@ -130,8 +133,9 @@ def test_worktree_sync_rebases_existing_task_worktree_onto_local_main(tmp_path: 
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "app.txt")
     _git_ok(workspace, "commit", "-m", "initial")
+    workspace_obj = Workspace.from_path(workspace)
 
-    task = create_task(workspace, title="Rebase before resume")
+    task = create_task_for_workspace(workspace_obj, title="Rebase before resume")
     worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
     worktree.parent.mkdir(parents=True, exist_ok=True)
     _git_ok(
@@ -145,7 +149,7 @@ def test_worktree_sync_rebases_existing_task_worktree_onto_local_main(tmp_path: 
         "HEAD",
     )
     task.runtime.pipeline.git.worktree_path = str(worktree.resolve())
-    save_task(workspace, task)
+    save_task_for_workspace(workspace_obj, task)
 
     (worktree / "feature.txt").write_text("feature\n", encoding="utf-8")
     _git_ok(worktree, "add", "feature.txt")
@@ -158,7 +162,7 @@ def test_worktree_sync_rebases_existing_task_worktree_onto_local_main(tmp_path: 
     main_head = _git_ok(workspace, "rev-parse", "HEAD")
 
     node = GitWorktreeSyncNode(
-        workspace=Workspace.from_path(workspace),
+        workspace=workspace_obj,
         worktree_resolver=lambda state: worktree,
     )
     changed = node.sync(_state(task.id, entry_stage=PipelineState.IMPLEMENTING))
@@ -181,8 +185,9 @@ def test_worktree_sync_rebases_dirty_resumed_worktree_and_preserves_wip(tmp_path
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "app.txt")
     _git_ok(workspace, "commit", "-m", "initial")
+    workspace_obj = Workspace.from_path(workspace)
 
-    task = create_task(workspace, title="Dirty resume")
+    task = create_task_for_workspace(workspace_obj, title="Dirty resume")
     worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
     worktree.parent.mkdir(parents=True, exist_ok=True)
     _git_ok(
@@ -196,7 +201,7 @@ def test_worktree_sync_rebases_dirty_resumed_worktree_and_preserves_wip(tmp_path
         "HEAD",
     )
     task.runtime.pipeline.git.worktree_path = str(worktree.resolve())
-    save_task(workspace, task)
+    save_task_for_workspace(workspace_obj, task)
 
     (worktree / "app.txt").write_text("base\nlocal draft\n", encoding="utf-8")
     (worktree / "notes.txt").write_text("untracked draft\n", encoding="utf-8")
@@ -207,7 +212,7 @@ def test_worktree_sync_rebases_dirty_resumed_worktree_and_preserves_wip(tmp_path
     main_head = _git_ok(workspace, "rev-parse", "HEAD")
 
     node = GitWorktreeSyncNode(
-        workspace=Workspace.from_path(workspace),
+        workspace=workspace_obj,
         worktree_resolver=lambda state: worktree,
     )
     changed = node.sync(_state(task.id, entry_stage=PipelineState.TESTING))
@@ -240,7 +245,8 @@ def test_worktree_sync_skips_dirty_worktrees(tmp_path: Path) -> None:
     _git_ok(tmp_path, "clone", str(origin), str(workspace))
     _configure_repo(workspace)
     create_workspace(workspace)
-    task = create_task(workspace, title="Sync")
+    workspace_obj = Workspace.from_path(workspace)
+    task = create_task_for_workspace(workspace_obj, title="Sync")
     worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
     worktree.parent.mkdir(parents=True, exist_ok=True)
     _git_ok(
@@ -254,7 +260,7 @@ def test_worktree_sync_skips_dirty_worktrees(tmp_path: Path) -> None:
         "HEAD",
     )
     task.runtime.pipeline.git.worktree_path = str(worktree.resolve())
-    save_task(workspace, task)
+    save_task_for_workspace(workspace_obj, task)
 
     _git_ok(tmp_path, "clone", str(origin), str(upstream))
     _configure_repo(upstream)
@@ -265,7 +271,7 @@ def test_worktree_sync_skips_dirty_worktrees(tmp_path: Path) -> None:
     (worktree / "app.txt").write_text("base\nlocal draft\n", encoding="utf-8")
 
     node = GitWorktreeSyncNode(
-        workspace=Workspace.from_path(workspace),
+        workspace=workspace_obj,
         worktree_resolver=lambda state: worktree,
     )
     changed = node.sync(_state(task.id))
@@ -286,8 +292,9 @@ def test_worktree_sync_prunes_stale_git_worktree_metadata_before_recreate(tmp_pa
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "app.txt")
     _git_ok(workspace, "commit", "-m", "initial")
+    workspace_obj = Workspace.from_path(workspace)
 
-    task = create_task(workspace, title="QA verify venv symlink")
+    task = create_task_for_workspace(workspace_obj, title="QA verify venv symlink")
     worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
     worktree.parent.mkdir(parents=True, exist_ok=True)
     _git_ok(
@@ -301,12 +308,12 @@ def test_worktree_sync_prunes_stale_git_worktree_metadata_before_recreate(tmp_pa
         "HEAD",
     )
     task.runtime.pipeline.git.worktree_path = None
-    save_task(workspace, task)
+    save_task_for_workspace(workspace_obj, task)
 
     shutil.rmtree(worktree)
 
     node = GitWorktreeSyncNode(
-        workspace=Workspace.from_path(workspace),
+        workspace=workspace_obj,
         worktree_resolver=lambda state: worktree,
     )
     changed = node.sync(_state(task.id))
@@ -326,8 +333,9 @@ def test_worktree_sync_reuses_existing_branch_worktree_when_runtime_path_missing
     (workspace / "app.txt").write_text("base\n", encoding="utf-8")
     _git_ok(workspace, "add", "app.txt")
     _git_ok(workspace, "commit", "-m", "initial")
+    workspace_obj = Workspace.from_path(workspace)
 
-    task = create_task(workspace, title="Recover existing task worktree")
+    task = create_task_for_workspace(workspace_obj, title="Recover existing task worktree")
     worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
     worktree.parent.mkdir(parents=True, exist_ok=True)
     _git_ok(
@@ -341,15 +349,15 @@ def test_worktree_sync_reuses_existing_branch_worktree_when_runtime_path_missing
         "HEAD",
     )
     task.runtime.pipeline.git.worktree_path = None
-    save_task(workspace, task)
+    save_task_for_workspace(workspace_obj, task)
 
     node = GitWorktreeSyncNode(
-        workspace=Workspace.from_path(workspace),
+        workspace=workspace_obj,
         worktree_resolver=lambda state: worktree,
     )
     changed = node.sync(_state(task.id))
 
-    refreshed = get_task(workspace, task.id)
+    refreshed = get_task_for_workspace(workspace_obj, task.id)
     assert refreshed is not None
     assert changed is False
     assert refreshed.runtime.pipeline.git.worktree_path == str(worktree.resolve())
