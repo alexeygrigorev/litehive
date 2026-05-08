@@ -409,12 +409,13 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_when_engine_is_unavai
     tmp_path,
     monkeypatch,
 ) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="missing binary handoff", goal="recover unavailable engine")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="missing binary handoff", goal="recover unavailable engine")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=workspace)
     captured: dict[str, Any] = {}
 
     class FakeEngine:
@@ -494,12 +495,13 @@ def test_heru_engine_adapter_does_not_launch_direct_recovery_after_started_run_f
     tmp_path,
     monkeypatch,
 ) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="started failure", goal="preserve post-start failures")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="started failure", goal="preserve post-start failures")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=workspace)
     captured = {"called": False}
 
     class FakeEngine:
@@ -552,9 +554,10 @@ def test_heru_engine_adapter_returns_direct_recovery_verdict_during_recovering_s
     tmp_path,
     monkeypatch,
 ) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="recovery stage handoff", goal="return recovery verdict")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="recovery stage handoff", goal="return recovery verdict")
     session = Session()
     state = TaskState(
         task_id=task.id,
@@ -571,7 +574,7 @@ def test_heru_engine_adapter_returns_direct_recovery_verdict_during_recovering_s
             message="implementing crashed",
         ),
     )
-    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=workspace)
     captured: dict[str, Any] = {}
 
     class FakeCodexAdapter:
@@ -621,12 +624,13 @@ def test_heru_engine_adapter_returns_direct_recovery_verdict_during_recovering_s
 
 
 def test_heru_engine_adapter_reuses_failed_turn_continuation_on_retry(tmp_path, monkeypatch) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="resume timeout", goal="reuse continuation after timeout")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="resume timeout", goal="reuse continuation after timeout")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=workspace)
 
     _StubManager.last_kwargs = None
     _TimeoutThenResumeManager.calls = 0
@@ -664,9 +668,10 @@ def test_heru_engine_adapter_retries_crash_once_with_resume_id(
     continuation: RuntimeEngineContinuation,
     expected_resume_session_id: str | None,
 ) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title=f"{engine_name} crash resume", goal="retry crashed run once")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title=f"{engine_name} crash resume", goal="retry crashed run once")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
     adapter = HeruEngineAdapter(engine_name, workspace=Workspace.from_path(tmp_path))
@@ -713,9 +718,10 @@ def test_heru_engine_adapter_skips_crash_resume_without_resume_id(
     monkeypatch,
     engine_name: str,
 ) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title=f"{engine_name} no resume id", goal="skip crash resume without continuation id")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title=f"{engine_name} no resume id", goal="skip crash resume without continuation id")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
     adapter = HeruEngineAdapter(engine_name, workspace=Workspace.from_path(tmp_path))
@@ -747,9 +753,10 @@ def test_heru_engine_adapter_skips_crash_resume_without_resume_id(
 
 
 def test_heru_engine_adapter_crash_resume_requires_fresh_resume_id(tmp_path, monkeypatch) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="resume id required", goal="only fresh continuation can trigger crash resume")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="resume id required", goal="only fresh continuation can trigger crash resume")
     session = Session(engine_session_id="existing-session")
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
     adapter = HeruEngineAdapter("gemini", workspace=Workspace.from_path(tmp_path))
@@ -777,9 +784,10 @@ def test_heru_engine_adapter_crash_resume_requires_fresh_resume_id(tmp_path, mon
 
 
 def test_heru_engine_adapter_only_attempts_crash_resume_once(tmp_path, monkeypatch) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="single crash resume", goal="resume at most once per crash")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="single crash resume", goal="resume at most once per crash")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
     adapter = HeruEngineAdapter("opencode", workspace=Workspace.from_path(tmp_path))
@@ -816,17 +824,18 @@ def test_heru_engine_adapter_only_attempts_crash_resume_once(tmp_path, monkeypat
 
 
 def test_heru_engine_adapter_runs_subagent_in_task_worktree(tmp_path, monkeypatch) -> None:
-    from litehive.state.records import create_task, save_task
+    from litehive.state.records import create_task_for_workspace, save_task_for_workspace
 
-    task = create_task(tmp_path, title="worktree", goal="use execution root")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="worktree", goal="use execution root")
     worktree = tmp_path / ".litehive" / "worktrees" / f"{task.id}-{task.slug}"
     worktree.mkdir(parents=True)
     task.runtime.pipeline.git.worktree_path = str(worktree)
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
 
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=workspace)
 
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
     monkeypatch.setattr(
@@ -843,9 +852,10 @@ def test_heru_engine_adapter_passes_selected_model_to_subagent_manager(
     tmp_path,
     monkeypatch,
 ) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="model handoff", goal="use configured model")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="model handoff", goal="use configured model")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
     adapter = HeruEngineAdapter("goz", workspace=Workspace.from_path(tmp_path)).with_model("goz-preview-model")
@@ -864,9 +874,10 @@ def test_heru_engine_adapter_passes_selected_model_to_subagent_manager(
 
 
 def test_latest_verdict_after_allows_clean_implementing_noop(tmp_path, monkeypatch) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="empty pass")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="empty pass")
     append_activity_entry(
         Workspace.from_path(tmp_path),
         task,
@@ -897,9 +908,10 @@ def test_latest_verdict_after_allows_clean_implementing_noop(tmp_path, monkeypat
 
 
 def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, monkeypatch) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="hallucinated pass")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="hallucinated pass")
     append_activity_entry(
         Workspace.from_path(tmp_path),
         task,
@@ -962,9 +974,10 @@ def test_latest_verdict_after_rewrites_hallucinated_implementing_pass(tmp_path, 
 
 
 def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatch) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="real pass")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="real pass")
     append_activity_entry(
         Workspace.from_path(tmp_path),
         task,
@@ -995,9 +1008,10 @@ def test_latest_verdict_after_allows_real_implementing_pass(tmp_path, monkeypatc
 
 
 def test_latest_verdict_after_returns_semantic_reject_classification(tmp_path) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="semantic reviewer reject")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="semantic reviewer reject")
     append_activity_entry(
         Workspace.from_path(tmp_path),
         task,
@@ -1026,9 +1040,10 @@ def test_latest_verdict_after_returns_semantic_reject_classification(tmp_path) -
 
 
 def test_latest_verdict_after_can_filter_to_source_subagent_id(tmp_path) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="source-bound verdict")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="source-bound verdict")
     append_activity_entry(
         Workspace.from_path(tmp_path),
         task,
@@ -1066,9 +1081,10 @@ def test_latest_verdict_after_can_filter_to_source_subagent_id(tmp_path) -> None
 
 
 def test_latest_verdict_after_includes_retry_summary_metadata(tmp_path, monkeypatch) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="retry summary")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="retry summary")
     append_activity_entry(
         Workspace.from_path(tmp_path),
         task,
@@ -1115,9 +1131,10 @@ def test_latest_verdict_after_includes_retry_summary_metadata(tmp_path, monkeypa
 
 
 def test_latest_verdict_after_accepts_recovery_resume(tmp_path) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="recovery resume")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="recovery resume")
     append_activity_entry(
         Workspace.from_path(tmp_path),
         task,
@@ -1146,9 +1163,10 @@ def test_latest_verdict_after_accepts_recovery_resume(tmp_path) -> None:
 
 
 def test_latest_verdict_after_preserves_recovery_advance_target_stage(tmp_path) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="recovery advance target stage")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="recovery advance target stage")
     append_activity_entry(
         Workspace.from_path(tmp_path),
         task,
