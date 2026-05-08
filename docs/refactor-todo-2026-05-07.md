@@ -124,6 +124,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove runner-owned state merge path wrapper after migrating tests.
 - [x] Remove unused agent task mutator container path wrapper.
 - [x] Remove unused private task records path wrappers.
+- [x] Migrate config loading tests to workspace-native config loader helper.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

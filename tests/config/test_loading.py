@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from litehive.config.loading import load_config
+from litehive.config.loading import load_config_for_workspace
 from litehive.config.model import (
     DaemonConfig,
     DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS,
@@ -14,6 +14,11 @@ from litehive.config.model import (
 from litehive.config.paths import litehive_root
 from litehive.config.workspace import create_workspace
 from litehive.domain.common import TransientFailureKind
+from litehive.workspace import Workspace
+
+
+def _load_config(root: Path) -> LitehiveConfig:
+    return load_config_for_workspace(Workspace.from_path(root))
 
 
 def test_configure_persists_gemini_model(tmp_path: Path) -> None:
@@ -25,7 +30,7 @@ def test_configure_persists_gemini_model(tmp_path: Path) -> None:
         yaml.safe_dump(raw_config, sort_keys=False),
         encoding="utf-8",
     )
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
     assert config.default_engine == "gemini"
     assert config.gemini_model == "gemini-2.5-pro"
 
@@ -39,7 +44,7 @@ def test_configure_persists_copilot_model(tmp_path: Path) -> None:
         yaml.safe_dump(raw_config, sort_keys=False),
         encoding="utf-8",
     )
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
     assert config.default_engine == "copilot"
     assert config.copilot_model == "gpt-5"
 
@@ -52,7 +57,7 @@ def test_configure_persists_process_profile(tmp_path: Path) -> None:
         yaml.safe_dump(raw_config, sort_keys=False),
         encoding="utf-8",
     )
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
     assert config.process_profile == "rust"
 
 
@@ -78,7 +83,7 @@ def test_load_config_uses_global_defaults_when_workspace_config_is_empty(
     create_workspace(workspace)
     (workspace / ".litehive" / "config.yaml").write_text("{}", encoding="utf-8")
 
-    config = load_config(workspace)
+    config = _load_config(workspace)
 
     assert config.default_engine == "gemini"
     assert config.pool_stop_on_failure is True
@@ -115,7 +120,7 @@ def test_load_config_applies_workspace_overrides_on_top_of_global_defaults(
         encoding="utf-8",
     )
 
-    config = load_config(workspace)
+    config = _load_config(workspace)
 
     assert config.default_engine == "codex"
     assert config.pool_max_tasks == 2
@@ -137,7 +142,7 @@ def test_load_config_ignores_deprecated_config_home_global_config(
     legacy_path.parent.mkdir(parents=True, exist_ok=True)
     legacy_path.write_text("default_engine: gemini\n", encoding="utf-8")
 
-    config = load_config(workspace)
+    config = _load_config(workspace)
 
     assert config.default_engine != "gemini"
     assert legacy_path.read_text(encoding="utf-8") == "default_engine: gemini\n"
@@ -174,7 +179,7 @@ def test_load_config_deep_merges_global_and_workspace_mappings(tmp_path: Path, m
         encoding="utf-8",
     )
 
-    config = load_config(workspace)
+    config = _load_config(workspace)
 
     assert config.engine_freeze == {
         "gemini": "2099-01-01T00:00:00Z",
@@ -261,7 +266,7 @@ def test_load_config_reads_subagent_inactivity_timeout_override(tmp_path: Path) 
         encoding="utf-8",
     )
 
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
 
     assert config.subagent_inactivity_timeout_seconds == 42.0
 
@@ -275,7 +280,7 @@ def test_load_config_reads_task_time_budget_override(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
 
     assert config.task_time_budget_seconds == 90.0
 
@@ -306,7 +311,7 @@ def test_load_config_rejects_legacy_pre_acceptance_command(tmp_path: Path, legac
     )
 
     with pytest.raises(ValueError, match="unknown config key 'pre_acceptance_command'"):
-        load_config(tmp_path)
+        _load_config(tmp_path)
 
 
 def test_load_config_rejects_legacy_task_engine_routing(tmp_path: Path) -> None:
@@ -319,7 +324,7 @@ def test_load_config_rejects_legacy_task_engine_routing(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ValueError, match="unknown config key 'task_engine_routing'"):
-        load_config(tmp_path)
+        _load_config(tmp_path)
 
 
 def test_load_config_rejects_legacy_engine_fallbacks_key(tmp_path: Path) -> None:
@@ -335,7 +340,7 @@ def test_load_config_rejects_legacy_engine_fallbacks_key(tmp_path: Path) -> None
     )
 
     with pytest.raises(ValueError, match="unknown config key 'engine_fallbacks'"):
-        load_config(tmp_path)
+        _load_config(tmp_path)
 
 
 def test_load_config_rejects_removed_runner_hook_execution_mode_key(tmp_path: Path) -> None:
@@ -348,7 +353,7 @@ def test_load_config_rejects_removed_runner_hook_execution_mode_key(tmp_path: Pa
     )
 
     with pytest.raises(ValueError, match="unknown config key 'runner_hook_execution_mode'"):
-        load_config(tmp_path)
+        _load_config(tmp_path)
 
 
 def test_load_config_rejects_unknown_process_profile(tmp_path: Path) -> None:
@@ -361,7 +366,7 @@ def test_load_config_rejects_unknown_process_profile(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ValueError, match="unknown process_profile 'unknown_profile'"):
-        load_config(tmp_path)
+        _load_config(tmp_path)
 
 
 def test_load_config_still_rejects_unknown_keys(tmp_path: Path) -> None:
@@ -374,4 +379,4 @@ def test_load_config_still_rejects_unknown_keys(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ValueError, match="unknown config key 'unsupported_key'"):
-        load_config(tmp_path)
+        _load_config(tmp_path)
