@@ -90,6 +90,8 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove simple CLI/daemon/recovery presentation root aliases.
 - [x] Add a workspace-native daemon-lock registry key helper.
 - [x] Make the workspace-level flock helper workspace-native internally.
+- [x] Flip remaining runner-lock probe wrappers to delegate to workspace-native helpers.
+- [x] Remove the unused raw-root runner lock manager factory.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

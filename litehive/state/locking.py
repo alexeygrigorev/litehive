@@ -58,16 +58,6 @@ def _pid_is_zombie(pid: int) -> bool:
     return len(fields) > 2 and fields[2] == "Z"
 
 
-def _runner_lock_manager(
-    root: Path,
-    held_in_process: Callable[[], bool] | None = None,
-) -> ProcessLockManager:
-    """
-    Path-based compatibility wrapper for runner lock manager construction.
-    """
-    return _runner_lock_manager_for_workspace(Workspace.from_path(root), held_in_process=held_in_process)
-
-
 def _runner_lock_manager_for_workspace(
     workspace: Workspace,
     held_in_process: Callable[[], bool] | None = None,
@@ -224,14 +214,9 @@ def runner_metadata_present(status: RunnerStatusState) -> bool:
 
 def runner_lock_is_active(root: Path) -> bool:
     """
-    Probe whether any process currently holds the runner flock.
-
-    The in-process check avoids self-deadlock when a runner queries its
-    own status (flock is per-file-descriptor, so a second probe from the
-    same process would otherwise succeed and confuse ownership tracking).
+    Path-based compatibility wrapper for runner flock probes.
     """
-    root = root.resolve()
-    return _runner_lock_manager(root, held_in_process=lambda: root in RUNNER_LOCKS).is_active()
+    return runner_lock_is_active_for_workspace(Workspace.from_path(root))
 
 
 def runner_lock_is_active_for_workspace(workspace: Workspace) -> bool:
@@ -427,17 +412,9 @@ def runner_heartbeat_for_workspace(
 
 def current_thread_owns_runner_guard(root: Path) -> bool:
     """
-    Distinguish reentrant calls from foreign threads.
-
-    Required because the runner uses one thread to acquire the guard and
-    another to read status; nested mutation guards check this before
-    re-locking so a recursive transition does not deadlock against itself.
+    Path-based compatibility wrapper for runner guard ownership checks.
     """
-    root = root.resolve()
-    owner_thread_id = threading.get_ident()
-    with RUNNER_LOCKS_MUTEX:
-        existing = RUNNER_LOCKS.get(root)
-    return existing is not None and existing.owner_thread_id == owner_thread_id
+    return current_thread_owns_runner_guard_for_workspace(Workspace.from_path(root))
 
 
 def current_thread_owns_runner_guard_for_workspace(workspace: Workspace) -> bool:
@@ -496,13 +473,9 @@ def subagent_process_is_stale(task: "TaskRecord") -> bool:
 
 def runner_lock_pid_is_stale(root: Path) -> bool:
     """
-    True when the runner lock records a PID that is no longer alive.
-
-    Used by stale-runner recovery as the unambiguous "previous owner is
-    dead" signal so the new runner can safely take the lock without
-    racing a still-live predecessor.
+    Path-based compatibility wrapper for stale runner PID probes.
     """
-    return _runner_lock_manager(root.resolve()).pid_is_stale()
+    return runner_lock_pid_is_stale_for_workspace(Workspace.from_path(root))
 
 
 def runner_lock_pid_is_stale_for_workspace(workspace: Workspace) -> bool:
@@ -514,14 +487,9 @@ def runner_lock_pid_is_stale_for_workspace(workspace: Workspace) -> bool:
 
 def runner_lock_is_held(root: Path) -> bool:
     """
-    Probe whether this thread or another process holds the runner guard.
-
-    Used by mutation paths that must reject (foreign holder) or fall
-    through (own holder); the same probe answers both cases via the
-    in-process check that ``_runner_lock_manager`` is wired with.
+    Path-based compatibility wrapper for runner guard ownership probes.
     """
-    root = root.resolve()
-    return _runner_lock_manager(root, held_in_process=lambda: current_thread_owns_runner_guard(root)).is_active()
+    return runner_lock_is_held_for_workspace(Workspace.from_path(root))
 
 
 def runner_lock_is_held_for_workspace(workspace: Workspace) -> bool:
