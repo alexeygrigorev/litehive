@@ -11,6 +11,7 @@ runtime store).
 import os
 from dataclasses import asdict
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 
@@ -18,6 +19,9 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.paths import workspace_path
 from litehive.config.workspace_files import config_path, context_path, workspace_dir, workspace_gitignore_path
 from litehive.config.profiles.rendering import render_context_template
+
+if TYPE_CHECKING:
+    from litehive.workspace import Workspace
 
 
 def render_workspace_gitignore() -> str:
@@ -94,16 +98,15 @@ def normalize_workspace_root(root: Path, source: str) -> Path:
     return Path(root).expanduser().resolve()
 
 
-def _task_exists_in_state(root: Path, task_id: str) -> bool:
+def _task_exists_in_workspace(workspace: "Workspace", task_id: str) -> bool:
     """
-    Return whether SQLite task state owns ``task_id`` in ``root``.
+    Return whether SQLite task state owns ``task_id`` in ``workspace``.
     """
-    # inline: state.store and workspace transitively import config.* during
+    # inline: state.store transitively imports config.* during
     # bootstrap, so keep this boundary probe local to avoid import cycles.
     from litehive.state.store import runtime_store_for_workspace  # noqa: PLC0415
-    from litehive.workspace import Workspace  # noqa: PLC0415
 
-    return runtime_store_for_workspace(Workspace.from_path(root)).load_task_intent(task_id) is not None
+    return runtime_store_for_workspace(workspace).load_task_intent(task_id) is not None
 
 
 def resolve_workspace(
@@ -127,8 +130,12 @@ def resolve_workspace(
     else:
         workspace_root = require_existing_workspace(cwd or Path.cwd(), source="cwd")
 
-    if effective_task_id is not None and not _task_exists_in_state(workspace_root, effective_task_id):
-        raise ValueError(f"unable to resolve workspace: task {effective_task_id} is not in {workspace_root}")
+    if effective_task_id is not None:
+        from litehive.workspace import Workspace  # noqa: PLC0415
+
+        workspace = Workspace.from_path(workspace_root)
+        if not _task_exists_in_workspace(workspace, effective_task_id):
+            raise ValueError(f"unable to resolve workspace: task {effective_task_id} is not in {workspace_root}")
     return workspace_root
 
 
