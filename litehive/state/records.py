@@ -961,24 +961,6 @@ def get_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord | N
     return task
 
 
-def task_exists(root: Path, task_id: str) -> bool:
-    """
-    Path-based compatibility wrapper for task-existence checks.
-    """
-    return task_exists_for_workspace(Workspace.from_path(root), task_id)
-
-
-def task_exists_for_workspace(workspace: Workspace, task_id: str) -> bool:
-    """
-    Return whether the SQLite task-intent table owns ``task_id``.
-
-    Workspace resolution uses this to disambiguate task ids across
-    registered workspaces. Directory names under ``.litehive/tasks``
-    are legacy artifacts and must not decide task ownership.
-    """
-    return runtime_store_for_workspace(workspace).load_task_intent(task_id) is not None
-
-
 def get_task_record(root: Path, task_id: str) -> TaskRecord | None:
     """
     Path-based compatibility wrapper for lenient task lookup.

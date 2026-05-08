@@ -98,11 +98,12 @@ def _task_exists_in_state(root: Path, task_id: str) -> bool:
     """
     Return whether SQLite task state owns ``task_id`` in ``root``.
     """
-    # inline: state.records imports workspace helpers, so keep this local
-    # to avoid a config.workspace -> state.records import cycle.
-    from litehive.state.records import task_exists  # noqa: PLC0415
+    # inline: state.store and workspace transitively import config.* during
+    # bootstrap, so keep this boundary probe local to avoid import cycles.
+    from litehive.state.store import runtime_store_for_workspace  # noqa: PLC0415
+    from litehive.workspace import Workspace  # noqa: PLC0415
 
-    return task_exists(root, task_id)
+    return runtime_store_for_workspace(Workspace.from_path(root)).load_task_intent(task_id) is not None
 
 
 def resolve_workspace(
