@@ -82,6 +82,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate read-only worktree rescue git probes to injected workspace.
 - [x] Migrate worktree rescue metadata/stash helpers to injected workspace.
 - [x] Migrate task creation/discard locks to workspace-native lock helper.
+- [x] Migrate pool stop/completion locks to workspace-native lock helper.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

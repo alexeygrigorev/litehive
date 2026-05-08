@@ -9,7 +9,7 @@ from pathlib import Path
 from litehive.config.workspace import require_existing_workspace
 from litehive.domain.common import PipelineState, utcnow
 from litehive.domain.task import TaskRecord, WorkspaceState
-from litehive.state.locking import workspace_lock, workspace_mutation_guard_for_workspace
+from litehive.state.locking import workspace_lock_for_workspace, workspace_mutation_guard_for_workspace
 from litehive.state.store import runtime_store_for_workspace
 from litehive.tasks.audit import TaskAuditEntry
 from litehive.workspace import Workspace
@@ -253,8 +253,7 @@ def record_task_completion_for_workspace(
     gate a misconfigured environment would burn through the whole queue
     before an operator noticed.
     """
-    root = workspace.root
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace)
         if final_stage == PipelineState.DONE:
             state.consecutive_task_failures = 0
@@ -282,8 +281,7 @@ def set_pool_stop_reason_for_workspace(workspace: Workspace, stop_reason: str | 
     leftover counter would re-trigger the same stop after one more
     failure.
     """
-    root = workspace.root
-    with workspace_lock(root):
+    with workspace_lock_for_workspace(workspace):
         state = load_state_for_workspace(workspace)
         if stop_reason is None and state.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
             state.consecutive_task_failures = 0
