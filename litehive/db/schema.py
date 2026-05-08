@@ -356,7 +356,7 @@ def apply_pending_migrations(root: Path, dry_run: bool = False) -> MigrationPlan
         key = _db_cache_key(db_path)
         from litehive.workspace import Workspace  # noqa: PLC0415
 
-        workspace = Workspace.from_path(root)
+        workspace = Workspace(root)
         assert_database_rebuild_safe_for_workspace(
             workspace,
             db_path,

@@ -201,6 +201,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove stale root alias from task pipeline status snapshot.
 - [x] Remove duplicate raw workspace path from daemon executor wiring.
 - [x] Remove unused path-based daemon status snapshot wrapper.
+- [x] Avoid re-running workspace boundary construction inside DB migration rebuild safety.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`
