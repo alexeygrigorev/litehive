@@ -127,6 +127,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate config loading tests to workspace-native config loader helper.
 - [x] Migrate runner hook config tests to workspace-native config loader helper.
 - [x] Migrate Claude config tests to workspace-native config loader helper.
+- [x] Migrate workspace-loading config test to workspace-native config loader.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`
