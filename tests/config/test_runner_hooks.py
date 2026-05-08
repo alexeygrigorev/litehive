@@ -3,9 +3,15 @@ from pathlib import Path
 import pytest
 import yaml
 
-from litehive.config.loading import load_config
+from litehive.config.loading import load_config_for_workspace
+from litehive.config.model import LitehiveConfig
 from litehive.config.model import VALID_RUNNER_HOOK_ENTRY_KEYS, VALID_RUNNER_HOOK_POINTS
 from litehive.config.workspace import create_workspace
+from litehive.workspace import Workspace
+
+
+def _load_config(root: Path) -> LitehiveConfig:
+    return load_config_for_workspace(Workspace.from_path(root))
 
 
 def test_load_config_normalizes_runner_hooks(tmp_path: Path) -> None:
@@ -26,7 +32,7 @@ def test_load_config_normalizes_runner_hooks(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
 
     assert config.runner_hooks == {
         "before_implementing": [{"command": "echo pre"}],
@@ -55,7 +61,7 @@ def test_load_config_rejects_unsupported_runner_hook_entry_keys(tmp_path: Path, 
     )
 
     with pytest.raises(ValueError, match=f"contains unsupported keys: {unsupported_key}"):
-        load_config(tmp_path)
+        _load_config(tmp_path)
 
 
 def test_load_config_preserves_runner_hook_descriptions_and_instructions(tmp_path: Path) -> None:
@@ -78,7 +84,7 @@ def test_load_config_preserves_runner_hook_descriptions_and_instructions(tmp_pat
         encoding="utf-8",
     )
 
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
 
     assert config.runner_hooks["after_implementing"][0]["description"] == "ensures lint passes before acceptance"
     assert config.runner_hooks["after_implementing"][0]["instructions_on_failure"] == "fix lint first"
@@ -95,7 +101,7 @@ def test_configure_rejects_removed_runner_hook_points(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ValueError, match="runner_hooks key must be one of:"):
-        load_config(tmp_path)
+        _load_config(tmp_path)
 
 
 def test_configure_rejects_invalid_runner_hook_point(tmp_path: Path) -> None:
@@ -109,7 +115,7 @@ def test_configure_rejects_invalid_runner_hook_point(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ValueError, match="runner_hooks key must be one of:"):
-        load_config(tmp_path)
+        _load_config(tmp_path)
 
 
 def test_runner_hook_points_keep_all_supported_names() -> None:
