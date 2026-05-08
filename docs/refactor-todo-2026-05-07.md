@@ -98,6 +98,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Use `Workspace.task_dir()` for task artifact paths in workspace-aware callers.
 - [x] Use `Workspace.runtime_path()` inside workspace backup helpers.
 - [x] Use workspace path methods in rebuild safety, event-log replay, and engine monitoring.
+- [x] Use `Workspace.runtime_path()` in managed worktree path helpers.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

@@ -16,7 +16,6 @@ modules; the dataclasses describing managed worktrees live in
 import logging
 from pathlib import Path
 
-from litehive.config.paths import workspace_path
 from litehive.domain.task import TaskRecord
 from litehive.fs_cleanup import remove_tree_logged
 from litehive.workspace import Workspace
@@ -38,7 +37,7 @@ def task_worktree_path_for_workspace(workspace: Workspace, task: TaskRecord) -> 
     worktree on each call. Centralizing the layout here is the only
     place to change it.
     """
-    return workspace_path(workspace.root, "worktrees") / f"{task.id}-{task.slug}"
+    return workspace.runtime_path("worktrees") / f"{task.id}-{task.slug}"
 
 
 def task_worktree_branch(task: TaskRecord) -> str:
@@ -68,7 +67,7 @@ def is_managed_worktree_path_for_workspace(workspace: Workspace, worktree_path: 
     if not path.is_absolute():
         return False
     try:
-        return path.resolve().is_relative_to(workspace_path(workspace.root, "worktrees").resolve())
+        return path.resolve().is_relative_to(workspace.runtime_path("worktrees").resolve())
     except OSError:
         return False
 
