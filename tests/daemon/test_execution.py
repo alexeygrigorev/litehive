@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from litehive.config.workspace import create_workspace
 from litehive.daemon.execution import (
     _daemon_should_continue_for_stop_reason,
-    _daemon_status_snapshot,
+    _daemon_status_snapshot_for_workspace,
     _runner_is_live,
     run_daemon_loop,
 )
@@ -154,7 +154,7 @@ def test_daemon_status_snapshot_uses_shared_status_collector(tmp_path: Path, mon
     monkeypatch.setattr("litehive.daemon.execution.collect_task_pipeline_status_for_workspace", fake_collect)
     monkeypatch.setattr("litehive.daemon.execution.render_task_pipeline_status_lines", fake_render)
 
-    snapshot = _daemon_status_snapshot(tmp_path)
+    snapshot = _daemon_status_snapshot_for_workspace(Workspace.from_path(tmp_path))
 
     assert snapshot.state.active_task_id == "T-0001"
     assert snapshot.state.queue == ["T-0002"]

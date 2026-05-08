@@ -194,17 +194,6 @@ def sleep_with_stop(seconds: float, stop_requested_fn: Callable[[], bool]) -> No
         time.sleep(min(remaining, 1.0))
 
 
-def _daemon_status_snapshot(workspace: Path) -> DaemonStatusSnapshot:
-    """
-    Build a daemon-loop status snapshot from a root path.
-
-    Unit tests and older path-based helper code call this thin wrapper;
-    the daemon loop itself uses `_daemon_status_snapshot_for_workspace`
-    after it has already built a `Workspace`.
-    """
-    return _daemon_status_snapshot_for_workspace(build_workspace(workspace))
-
-
 def _daemon_status_snapshot_for_workspace(workspace: Workspace) -> DaemonStatusSnapshot:
     """
     Capture pool state plus a renderable status block in one read-only pass.
