@@ -74,19 +74,6 @@ def load_effective_config_data_for_workspace(workspace: "Workspace") -> dict[str
     return merge_config_layers(config, _read_config_layer(config_path(workspace.root)))
 
 
-def load_config(root: Path) -> LitehiveConfig:
-    """
-    Public config entrypoint.
-
-    Path-based compatibility wrapper. Callers that already have a
-    :class:`Workspace` should use ``workspace.load_config()`` so
-    config loading does not rebuild workspace dependencies.
-    """
-    from litehive.workspace import Workspace  # noqa: PLC0415
-
-    return load_config_for_workspace(Workspace.from_path(root))
-
-
 def load_config_for_workspace(workspace: "Workspace") -> LitehiveConfig:
     """
     Load config for an injected workspace.

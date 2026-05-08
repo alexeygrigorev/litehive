@@ -26,7 +26,6 @@ from heru.quota import (
     usage_limit_block_reason,
 )
 from heru.quota._shared import UsageStatus
-from litehive.config.loading import load_config
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import litehive_root
 from litehive.config.workspace import create_workspace
@@ -330,7 +329,7 @@ def execute_engine_prompt(
     engine = get_engine(engine_name)
     if max_turns is None and engine_name == "claude":
         max_turns = 1
-    config = load_config(cwd)
+    config = Workspace.from_path(cwd).load_config()
     model = {
         "opencode": config.opencode_model,
         "goz": config.goz_model,
@@ -386,7 +385,6 @@ def execute_engine_prompt(
     sandbox_applied = False
     if sandboxed:
         from litehive.sandbox.launcher import DockerSandboxLauncher
-        from litehive.workspace import Workspace
         from heru.base import CLIInvocation as _HeruCLIInvocation
 
         launcher = DockerSandboxLauncher(Workspace.from_path(cwd), config)

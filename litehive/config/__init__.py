@@ -5,8 +5,8 @@ that owns the symbol you need rather than from this package surface.
 Re-exporting from here would force every caller of one submodule to
 load the rest of the package, hiding real import dependencies.
 
-- ``loading`` — read/merge/effective-config helpers (`load_config`,
-  `load_config_for_workspace`, `load_context_for_workspace`,
+- ``loading`` — read/merge/effective-config helpers
+  (`load_config_for_workspace`, `load_context_for_workspace`,
   `merge_config_layers`, `load_effective_config_data_for_workspace`).
 - ``model`` — pydantic models for litehive config and sandbox/engine
   policy (`LitehiveConfig`, `ExternalEngineSandboxConfig`,
