@@ -80,15 +80,6 @@ def _runner_lock_manager_for_workspace(
 
 
 @contextmanager
-def workspace_lock(root: Path):
-    """
-    Path-based compatibility wrapper for the workspace-level flock.
-    """
-    with workspace_lock_for_workspace(Workspace.from_path(root)):
-        yield
-
-
-@contextmanager
 def workspace_lock_for_workspace(workspace: Workspace):
     """
     Hold the workspace-level flock for short, blocking critical sections.
@@ -115,7 +106,7 @@ def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> Non
 
     Records pid, command, and heartbeat so other processes can diagnose
     who owns the workspace; the metadata is what makes
-    ``runner_conflict_message`` informative instead of just "lock held".
+    ``runner_conflict_message_for_workspace`` informative instead of just "lock held".
     """
     ProcessLockManager(
         process_name="runner",
@@ -155,13 +146,6 @@ def _clear_runner_process_state_for_workspace(workspace: Workspace) -> None:
     runtime_store_for_workspace(workspace).clear_process_state("runner")
 
 
-def read_runner_lock_metadata(root: Path) -> RunnerStatusState:
-    """
-    Path-based compatibility wrapper for runner lock metadata reads.
-    """
-    return read_runner_lock_metadata_for_workspace(Workspace.from_path(root))
-
-
 def read_runner_lock_metadata_for_workspace(workspace: Workspace) -> RunnerStatusState:
     """
     Read recorded runner identity without taking the flock.
@@ -196,13 +180,6 @@ def runner_metadata_present(status: RunnerStatusState) -> bool:
     )
 
 
-def runner_lock_is_active(root: Path) -> bool:
-    """
-    Path-based compatibility wrapper for runner flock probes.
-    """
-    return runner_lock_is_active_for_workspace(Workspace.from_path(root))
-
-
 def runner_lock_is_active_for_workspace(workspace: Workspace) -> bool:
     """
     Probe whether this workspace's runner lock is currently held.
@@ -230,13 +207,6 @@ def runner_status_needs_reconciliation_for_workspace(workspace: Workspace) -> bo
         task.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING
         for task in workspace.list_tasks(strict=False)
     )
-
-
-def clear_runner_lock_metadata(root: Path) -> None:
-    """
-    Path-based compatibility wrapper for clearing stale runner lock metadata.
-    """
-    clear_runner_lock_metadata_for_workspace(Workspace.from_path(root))
 
 
 def clear_runner_lock_metadata_for_workspace(workspace: Workspace) -> None:
@@ -386,13 +356,6 @@ def runner_heartbeat_for_workspace(
         touch_runner_status_for_workspace(workspace, active_task_id=None)
 
 
-def current_thread_owns_runner_guard(root: Path) -> bool:
-    """
-    Path-based compatibility wrapper for runner guard ownership checks.
-    """
-    return current_thread_owns_runner_guard_for_workspace(Workspace.from_path(root))
-
-
 def current_thread_owns_runner_guard_for_workspace(workspace: Workspace) -> bool:
     """
     Distinguish reentrant calls from foreign threads for an injected workspace.
@@ -447,13 +410,6 @@ def subagent_process_is_stale(task: "TaskRecord") -> bool:
     return not runner_pid_is_alive(active.pid)
 
 
-def runner_lock_pid_is_stale(root: Path) -> bool:
-    """
-    Path-based compatibility wrapper for stale runner PID probes.
-    """
-    return runner_lock_pid_is_stale_for_workspace(Workspace.from_path(root))
-
-
 def runner_lock_pid_is_stale_for_workspace(workspace: Workspace) -> bool:
     """
     True when the injected workspace's runner lock records a dead PID.
@@ -471,7 +427,7 @@ def runner_lock_is_held_for_workspace(workspace: Workspace) -> bool:
     ).is_active()
 
 
-def runner_conflict_message(root: Path) -> str:
+def runner_conflict_message_for_workspace(workspace: Workspace) -> str:
     """
     Build the human-readable message attached to ``WorkspaceConflictError``.
 
@@ -479,7 +435,7 @@ def runner_conflict_message(root: Path) -> str:
     decide whether to wait, kill, or repair; consumed by the runner guard
     and by CLI mutation commands when the lock is busy.
     """
-    metadata = read_runner_lock_metadata(root)
+    metadata = read_runner_lock_metadata_for_workspace(workspace)
     pid = metadata.pid
     started_at = metadata.started_at
     heartbeat_at = metadata.heartbeat_at
@@ -548,7 +504,7 @@ def workspace_runner_guard(workspace: Workspace):
         existing = RUNNER_LOCKS.get(lock_key)
         if existing is not None:
             if existing.owner_thread_id != owner_thread_id:
-                raise WorkspaceConflictError(runner_conflict_message(lock_key))
+                raise WorkspaceConflictError(runner_conflict_message_for_workspace(workspace))
             existing.depth += 1
     if existing is not None:
         try:
@@ -572,7 +528,7 @@ def workspace_runner_guard(workspace: Workspace):
         try:
             handle = manager.lock_manager.acquire(nonblocking=True)
         except BlockingIOError as exc:
-            raise WorkspaceConflictError(runner_conflict_message(lock_key)) from exc
+            raise WorkspaceConflictError(runner_conflict_message_for_workspace(workspace)) from exc
         # Auto-repair stale state left by a crashed runner.  We hold the
         # exclusive flock, so no other runner is alive — any active_task_id
         # or "running" execution_status is leftover from a dead process.
@@ -627,15 +583,6 @@ def workspace_mutation_guard_for_workspace(workspace: Workspace):
         yield
         return
     with workspace_runner_guard(workspace):
-        yield
-
-
-@contextmanager
-def workspace_mutation_guard(root: Path):
-    """
-    Path-based wrapper for callers not yet migrated to ``Workspace``.
-    """
-    with workspace_mutation_guard_for_workspace(Workspace.from_path(root)):
         yield
 
 
