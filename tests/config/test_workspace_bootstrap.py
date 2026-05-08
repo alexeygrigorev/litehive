@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from litehive.config.loading import load_config
+from litehive.config.loading import load_config_for_workspace
 from litehive.config.model import (
     ExternalEngineSandboxConfig,
     ExternalEngineSandboxPolicy,
@@ -15,6 +15,11 @@ from litehive.config.profiles.defaults import PROCESS_PROFILE_OVERLAYS, SHARED_P
 from litehive.config.profiles.loader import resolve_process_profile
 from litehive.config.workspace import create_workspace
 from litehive.state.persist import load_state
+from litehive.workspace import Workspace
+
+
+def _load_config(root: Path) -> LitehiveConfig:
+    return load_config_for_workspace(Workspace.from_path(root))
 
 
 def test_create_workspace_creates_layout(tmp_path: Path) -> None:
@@ -151,7 +156,7 @@ def test_deprecated_global_state_in_config_home_is_ignored(
     assert not (canonical_root / "daemons.yaml").exists()
     assert not (canonical_root / "workspaces.db").exists()
     (tmp_path / ".litehive" / "config.yaml").write_text("{}", encoding="utf-8")
-    assert load_config(tmp_path).default_engine != "gemini"
+    assert _load_config(tmp_path).default_engine != "gemini"
 
     create_workspace(tmp_path)
     assert capsys.readouterr().err == ""
@@ -291,7 +296,7 @@ def test_load_config_round_trips_external_engine_sandbox(tmp_path: Path) -> None
         ),
     )
 
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
 
     assert config.external_engine_sandbox.enabled is True
     assert config.external_engine_sandbox.image == "ghcr.io/example/litehive-sandbox:latest"
@@ -324,7 +329,7 @@ def test_load_config_rejects_malformed_external_engine_sandbox_shapes(
     current_config_path.write_text(yaml.safe_dump(raw_config, sort_keys=False), encoding="utf-8")
 
     with pytest.raises(ValueError, match=message):
-        load_config(tmp_path)
+        _load_config(tmp_path)
 
 
 def test_resolve_process_profile_merges_shared_process_with_overlay() -> None:
