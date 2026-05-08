@@ -14,18 +14,23 @@ from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.task import WorkspaceState
 from litehive.main import dispatch_status
 from litehive.sandbox.git_wrapper import main as git_wrapper_main
-from litehive.state.persist import load_state, save_state, set_pool_stop_reason_for_workspace
-from litehive.state.records import create_task, save_task
+from litehive.state.persist import (
+    load_state_for_workspace,
+    save_state_for_workspace,
+    set_pool_stop_reason_for_workspace,
+)
+from litehive.state.records import create_task_for_workspace, save_task_for_workspace
 from litehive.workspace import Workspace
 
 
 def test_status_surfaces_flagged_task_as_operator_needed(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Flagged work")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Flagged work")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
     task.flag_reason = "needs operator review"
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
 
     exit_code = dispatch_status(["--workspace", str(tmp_path)])
     output = capsys.readouterr().out
@@ -35,13 +40,14 @@ def test_status_surfaces_flagged_task_as_operator_needed(tmp_path: Path, capsys)
     assert "operator_needed_tasks: 1" in output
     assert "attention_items:" not in output
 
-    lines = waiting_for_you_lines_for_workspace(Workspace.from_path(tmp_path))
+    lines = waiting_for_you_lines_for_workspace(workspace)
     assert f"operator_needed_task: {task.id} stage=implementing reason=needs operator review" in lines
 
 
 def test_status_surfaces_runner_pool_stop_as_operator_needed(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
-    save_state(tmp_path, WorkspaceState(pool_stop_reason="diverged_from_origin"))
+    workspace = Workspace.from_path(tmp_path)
+    save_state_for_workspace(workspace, WorkspaceState(pool_stop_reason="diverged_from_origin"))
 
     exit_code = dispatch_status(["--workspace", str(tmp_path)])
     output = capsys.readouterr().out
@@ -49,7 +55,7 @@ def test_status_surfaces_runner_pool_stop_as_operator_needed(tmp_path: Path, cap
     assert exit_code == 0
     assert "operator_needed: true" in output
     assert "operator_needed_pool_stop_reason: diverged_from_origin" in output
-    assert collect_operator_needed_state_for_workspace(Workspace.from_path(tmp_path)).pool_stop_reason == "diverged_from_origin"
+    assert collect_operator_needed_state_for_workspace(workspace).pool_stop_reason == "diverged_from_origin"
 
 
 def test_status_reports_no_operator_needed_when_workspace_is_clear(tmp_path: Path, capsys) -> None:
@@ -98,8 +104,9 @@ def test_git_wrapper_block_logs_without_persisting_attention_queue(tmp_path: Pat
 
 def test_runner_stops_before_running_tasks_when_operator_stop_reason_is_set(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    create_task(tmp_path, title="Queued work")
-    set_pool_stop_reason_for_workspace(Workspace.from_path(tmp_path), "attention_required")
+    workspace = Workspace.from_path(tmp_path)
+    create_task_for_workspace(workspace, title="Queued work")
+    set_pool_stop_reason_for_workspace(workspace, "attention_required")
 
     calls: list[tuple[str, ...]] = []
 
@@ -125,18 +132,19 @@ def test_runner_stops_before_running_tasks_when_operator_stop_reason_is_set(tmp_
 
 def test_runner_resumes_after_operator_stop_reason_is_cleared(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    create_task(tmp_path, title="Queued work")
-    set_pool_stop_reason_for_workspace(Workspace.from_path(tmp_path), "attention_required")
+    workspace = Workspace.from_path(tmp_path)
+    create_task_for_workspace(workspace, title="Queued work")
+    set_pool_stop_reason_for_workspace(workspace, "attention_required")
 
     calls: list[tuple[str, ...]] = []
 
     def fake_run_logged_subprocess(command, **kwargs):
         calls.append(tuple(command))
         if any(arg == "run" for arg in command[2:]):
-            state = load_state(tmp_path)
+            state = load_state_for_workspace(workspace)
             state.queue = []
             state.pool_stop_reason = None
-            save_state(tmp_path, state)
+            save_state_for_workspace(workspace, state)
         return 0
 
     monkeypatch.setattr("litehive.daemon.execution.register_daemon", lambda *args, **kwargs: None)
@@ -147,7 +155,7 @@ def test_runner_resumes_after_operator_stop_reason_is_cleared(tmp_path: Path, mo
     first_stream = io.StringIO()
     first_exit_code = run_daemon_loop(tmp_path, output_stream=first_stream, session_dir=tmp_path / "logs-first")
 
-    set_pool_stop_reason_for_workspace(Workspace.from_path(tmp_path), None)
+    set_pool_stop_reason_for_workspace(workspace, None)
     second_stream = io.StringIO()
     second_exit_code = run_daemon_loop(tmp_path, output_stream=second_stream, session_dir=tmp_path / "logs-second")
 
@@ -159,7 +167,8 @@ def test_runner_resumes_after_operator_stop_reason_is_cleared(tmp_path: Path, mo
 
 def test_pool_halts_immediately_when_local_main_diverges_from_origin(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    create_task(tmp_path, title="Queued work")
+    workspace = Workspace.from_path(tmp_path)
+    create_task_for_workspace(workspace, title="Queued work")
 
     calls: list[tuple[str, ...]] = []
 
@@ -193,5 +202,5 @@ def test_pool_halts_immediately_when_local_main_diverges_from_origin(tmp_path: P
     )
     assert "git fetch origin main" in output
     assert "git log --oneline --left-right main...origin/main" in output
-    assert load_state(tmp_path).pool_stop_reason == "diverged_from_origin"
+    assert load_state_for_workspace(workspace).pool_stop_reason == "diverged_from_origin"
     assert workspace_path(tmp_path, "data.db").exists()
