@@ -15,10 +15,10 @@ from litehive.domain.runtime import RuntimeInterruptionState, RuntimeSubagentSta
 from litehive.domain.task import TaskRecord, TaskStateRecord
 from litehive.state.records import (
     TaskStateMissingError,
-    create_task,
-    get_task,
-    list_tasks,
-    save_task,
+    create_task_for_workspace,
+    get_task_for_workspace,
+    list_tasks_for_workspace,
+    save_task_for_workspace,
     save_task_runtime_for_workspace,
 )
 from litehive.state.store import runtime_store_for_workspace
@@ -129,12 +129,13 @@ def test_task_runtime_stage_accessors_hide_nested_current_stage_shape() -> None:
 
 def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="DB runtime")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="DB runtime")
     task.runtime.pipeline.execution_status = "running"
     task.runtime.pipeline.current_stage.stage = "implementing"
-    save_task_runtime_for_workspace(Workspace.from_path(tmp_path), task)
+    save_task_runtime_for_workspace(workspace, task)
 
-    loaded = get_task(tmp_path, task.id)
+    loaded = get_task_for_workspace(workspace, task.id)
 
     assert loaded is not None
     assert loaded.runtime.pipeline.execution_status == "running"
@@ -143,7 +144,8 @@ def test_get_task_reads_runtime_from_database(tmp_path: Path) -> None:
 
 def test_task_runtime_persists_pipeline_and_execution_slices(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Split runtime")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Split runtime")
     task.runtime.pipeline.execution_status = "running"
     task.runtime.pipeline.retry_count = 2
     task.runtime.pipeline.retry_limit = 4
@@ -166,7 +168,7 @@ def test_task_runtime_persists_pipeline_and_execution_slices(tmp_path: Path) -> 
         reason="stale state",
         resume_stage="implementing",
     )
-    save_task_runtime_for_workspace(Workspace.from_path(tmp_path), task)
+    save_task_runtime_for_workspace(workspace, task)
 
     runtime_payload = _task_state_payload(tmp_path, task.id)["runtime"]
 
@@ -180,7 +182,7 @@ def test_task_runtime_persists_pipeline_and_execution_slices(tmp_path: Path) -> 
     assert runtime_payload["execution"]["active_subagent"]["id"] == "sa-1"
     assert runtime_payload["execution"]["interruption"]["resume_stage"] == "implementing"
 
-    loaded = get_task(tmp_path, task.id)
+    loaded = get_task_for_workspace(workspace, task.id)
     assert loaded is not None
     assert loaded.runtime.pipeline.execution_status == "running"
     assert loaded.runtime.pipeline.retry_count == 2
@@ -193,16 +195,18 @@ def test_task_runtime_persists_pipeline_and_execution_slices(tmp_path: Path) -> 
 
 def test_current_storage_contract_uses_sqlite_without_workspace_yaml(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="SQLite contract")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="SQLite contract")
     task.runtime.pipeline.execution_status = "running"
     task.runtime.pipeline.current_stage.stage = "implementing"
-    save_task_runtime_for_workspace(Workspace.from_path(tmp_path), task)
-    subagent_artifacts(Workspace.from_path(tmp_path), task.id, "SA-0001").save(
+    save_task_runtime_for_workspace(workspace, task)
+    subagent_artifacts(workspace, task.id, "SA-0001").save(
         session=SubagentArtifactPayload({"id": "SA-0001", "role": "swe", "status": "completed"}),
         report=SubagentArtifactPayload({"verdict": "pass", "summary": "stored in sqlite"}),
         event_stream=SubagentEventStreamPayload({"events": [{"type": "message", "text": "ok"}]}),
     )
-    report_ref = record_stage_report(Workspace.from_path(tmp_path),
+    report_ref = record_stage_report(
+        workspace,
         task,
         StageReport(
             task_id=task.id,
@@ -259,7 +263,8 @@ def test_task_runtime_outcome_string_mutations_persist_without_pydantic_warnings
     reason_code: str,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title=f"{reason_code} outcome")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title=f"{reason_code} outcome")
     # The string spellings here are valid TaskOutcomeKind / OutcomeReasonCode enum
     # values; this test exercises that pydantic accepts the string form on
     # assignment under validate_assignment=True without emitting warnings.
@@ -271,7 +276,7 @@ def test_task_runtime_outcome_string_mutations_persist_without_pydantic_warnings
 
     with warnings.catch_warnings():
         warnings.filterwarnings("error", message="Pydantic serializer warnings", category=UserWarning)
-        save_task_runtime_for_workspace(Workspace.from_path(tmp_path), task)
+        save_task_runtime_for_workspace(workspace, task)
 
     outcome_payload = _task_state_payload(tmp_path, task.id)["runtime"]["pipeline"]["last_outcome"]
 
@@ -282,13 +287,14 @@ def test_task_runtime_outcome_string_mutations_persist_without_pydantic_warnings
 
 def test_get_task_preserves_commit_sha_when_runtime_copy_is_missing(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Commit SHA fallback")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Commit SHA fallback")
     state = task.to_state_record()
     state.git.commit_sha = "abc123"
     state.runtime.pipeline.git.commit_sha = None
-    runtime_store_for_workspace(Workspace.from_path(tmp_path)).save_task_state(task.id, state)
+    runtime_store_for_workspace(workspace).save_task_state(task.id, state)
 
-    loaded = get_task(tmp_path, task.id)
+    loaded = get_task_for_workspace(workspace, task.id)
 
     assert loaded is not None
     assert loaded.git.commit_sha == "abc123"
@@ -297,7 +303,8 @@ def test_get_task_preserves_commit_sha_when_runtime_copy_is_missing(tmp_path: Pa
 
 def test_task_intent_persists_only_intent_fields_and_runtime_moves_to_db(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Intent only", auto_commit=False)
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Intent only", auto_commit=False)
     task.model = "gpt-5.4"
     task.status = TaskStatus.FLAGGED
     task.flag_reason = "needs-review"
@@ -307,7 +314,7 @@ def test_task_intent_persists_only_intent_fields_and_runtime_moves_to_db(tmp_pat
     task.runtime.pipeline.current_stage.stage = "implementing"
     task.git.commit_sha = "abc123"
     task.git.checkpoint_attempts = 3
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
 
     task_path = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "task.yaml"
     data = _task_intent_payload(tmp_path, task.id)
@@ -330,7 +337,7 @@ def test_task_intent_persists_only_intent_fields_and_runtime_moves_to_db(tmp_pat
     }
     assert set(data["git"]) == {"auto_commit", "commit_message"}
 
-    loaded = get_task(tmp_path, task.id)
+    loaded = get_task_for_workspace(workspace, task.id)
     assert loaded is not None
     assert loaded.model == "gpt-5.4"
     assert loaded.status == "flagged"
@@ -345,6 +352,7 @@ def test_task_intent_persists_only_intent_fields_and_runtime_moves_to_db(tmp_pat
 
 def test_task_intent_canonical_columns_preserve_existing_runtime_status(tmp_path: Path) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     task = TaskRecord(
         id="T-0001",
         slug="state-first",
@@ -358,7 +366,7 @@ def test_task_intent_canonical_columns_preserve_existing_runtime_status(tmp_path
     )
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
-    store = runtime_store_for_workspace(Workspace.from_path(tmp_path))
+    store = runtime_store_for_workspace(workspace)
     store.save_task_state(task.id, task.to_storage_state_record())
     store.save_task_intent(task.id, task.to_intent_record())
 
@@ -379,7 +387,8 @@ def test_task_intent_canonical_columns_preserve_existing_runtime_status(tmp_path
 
 def test_get_task_raises_when_sqlite_runtime_state_row_is_missing(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    runtime_store_for_workspace(Workspace.from_path(tmp_path)).save_task_intent(
+    workspace = Workspace.from_path(tmp_path)
+    runtime_store_for_workspace(workspace).save_task_intent(
         "T-0001",
         TaskRecord(
             id="T-0001",
@@ -395,14 +404,15 @@ def test_get_task_raises_when_sqlite_runtime_state_row_is_missing(tmp_path: Path
     )
 
     with pytest.raises(TaskStateMissingError, match="missing its SQLite runtime state row"):
-        get_task(tmp_path, "T-0001")
+        get_task_for_workspace(workspace, "T-0001")
 
 
 def test_list_tasks_without_runtime_tolerates_missing_runtime_rows(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    present = create_task(tmp_path, title="Has runtime")
+    workspace = Workspace.from_path(tmp_path)
+    present = create_task_for_workspace(workspace, title="Has runtime")
 
-    runtime_store_for_workspace(Workspace.from_path(tmp_path)).save_task_intent(
+    runtime_store_for_workspace(workspace).save_task_intent(
         "T-0002",
         TaskRecord(
             id="T-0002",
@@ -417,14 +427,15 @@ def test_list_tasks_without_runtime_tolerates_missing_runtime_rows(tmp_path: Pat
         ).to_intent_record(),
     )
 
-    tasks = list_tasks(tmp_path, include_runtime=False)
+    tasks = list_tasks_for_workspace(workspace, include_runtime=False)
 
     assert [task.id for task in tasks] == [present.id, "T-0002"]
 
 
 def test_task_record_intent_state_roundtrip_uses_model_helpers(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Roundtrip")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Roundtrip")
     task.model = "gpt-5.4"
     task.status = TaskStatus.FLAGGED
     task.flag_reason = "needs-review"
