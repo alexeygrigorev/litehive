@@ -25,7 +25,7 @@ from litehive.config.engine_models import (
     parse_engine_freeze_until,
     select_engine_for_workspace,
 )
-from litehive.config.loading import load_config
+from litehive.config.loading import load_config_for_workspace
 from litehive.config.model import LitehiveConfig
 from litehive.config.runtime_settings import load_runtime_setting_audit_entries
 from litehive.config.workspace import create_workspace
@@ -49,6 +49,10 @@ def _run_engine(*args: str) -> tuple[int | None, str]:
         result.return_value if result.return_value is not None else result.exit_code,
         result.output,
     )
+
+
+def _load_config(root: Path) -> LitehiveConfig:
+    return load_config_for_workspace(Workspace.from_path(root))
 
 
 def _prepare_runnable_task(root: Path, title: str) -> TaskRecord:
@@ -99,7 +103,7 @@ def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert "engine_frozen: codex" in output
     assert "reason=quota exhausted" in output
 
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
     assert config.engine_freeze["codex"] == "2099-12-31T00:00:00Z"
     assert config_path.read_text(encoding="utf-8") == raw_config_before
 
@@ -114,7 +118,7 @@ def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert exit_code == 0
     assert "engine_unfrozen: codex" in output
 
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
     assert "codex" not in config.engine_freeze
     assert config_path.read_text(encoding="utf-8") == raw_config_before
     entries = load_runtime_setting_audit_entries(Workspace.from_path(tmp_path), key="engine_freeze", limit=10)
@@ -144,7 +148,7 @@ def test_default_engine_cli_persists_to_audited_db_not_config_file(tmp_path: Pat
 
     assert exit_code == 0
     assert "default_engine: codex -> gemini" in output
-    assert load_config(tmp_path).default_engine == "gemini"
+    assert _load_config(tmp_path).default_engine == "gemini"
     assert config_path.read_text(encoding="utf-8") == raw_config_before
 
     entries = load_runtime_setting_audit_entries(Workspace.from_path(tmp_path), key="default_engine", limit=5)
@@ -171,7 +175,7 @@ def test_engine_preference_cli_persists_to_audited_db(tmp_path: Path) -> None:
 
     assert exit_code == 0
     assert "engine_preference: codex,opencode,gemini,copilot,goz -> gemini,codex" in output
-    assert load_config(tmp_path).engine_preference == ["gemini", "codex"]
+    assert _load_config(tmp_path).engine_preference == ["gemini", "codex"]
 
     audit = _run_engine(
         "db",
@@ -207,7 +211,7 @@ def test_engine_freeze_cli_persists_to_audited_db_not_config_file(tmp_path: Path
     assert exit_code == 0
     assert "engine_frozen: codex until 2099-06-15T00:00:00Z reason=Quota exhausted" in output
     assert config_path.read_text(encoding="utf-8") == raw_config_before
-    assert load_config(tmp_path).engine_freeze == {"codex": "2099-06-15T00:00:00Z"}
+    assert _load_config(tmp_path).engine_freeze == {"codex": "2099-06-15T00:00:00Z"}
 
     entries = load_runtime_setting_audit_entries(Workspace.from_path(tmp_path), key="engine_freeze", limit=5)
     assert len(entries) == 1
@@ -225,7 +229,7 @@ def test_engine_freeze_cli_persists_to_audited_db_not_config_file(tmp_path: Path
 
 def test_engine_runtime_settings_treat_config_file_drift_as_bootstrap_only(tmp_path: Path) -> None:
     create_workspace(tmp_path, LitehiveConfig(default_engine="codex", engine_preference=["codex", "gemini"]))
-    first = load_config(tmp_path)
+    first = _load_config(tmp_path)
     assert first.default_engine == "codex"
     assert first.engine_preference == ["codex", "gemini"]
     assert first.engine_freeze == {}
@@ -237,7 +241,7 @@ def test_engine_runtime_settings_treat_config_file_drift_as_bootstrap_only(tmp_p
     raw_config["engine_freeze"] = {"codex": "2099-06-15T00:00:00Z"}
     config_path.write_text(yaml.safe_dump(raw_config, sort_keys=False), encoding="utf-8")
 
-    drifted = load_config(tmp_path)
+    drifted = _load_config(tmp_path)
 
     assert drifted.default_engine == "codex"
     assert drifted.engine_preference == ["codex", "gemini"]
@@ -456,20 +460,20 @@ def test_engine_freeze_helpers_persist_and_clear_workspace_config(tmp_path: Path
     assert parse_engine_freeze_until("2099-06-15 14:30") is None
 
     persist_engine_freeze_iso_for_workspace(workspace, engine_name="codex", freeze_iso="2099-06-15T00:00:00Z")
-    assert load_config(tmp_path).engine_freeze["codex"] == "2099-06-15T00:00:00Z"
+    assert _load_config(tmp_path).engine_freeze["codex"] == "2099-06-15T00:00:00Z"
 
     assert clear_persisted_engine_freeze_for_workspace(workspace, engine_name="gemini") is False
     assert clear_persisted_engine_freeze_for_workspace(workspace, engine_name="codex") is True
-    assert "codex" not in load_config(tmp_path).engine_freeze
+    assert "codex" not in _load_config(tmp_path).engine_freeze
 
     persist_engine_freeze_iso_for_workspace(
         workspace,
         engine_name="gemini",
         freeze_iso="2099-06-15T00:00:00Z",
     )
-    assert load_config(tmp_path).engine_freeze["gemini"] == "2099-06-15T00:00:00Z"
+    assert _load_config(tmp_path).engine_freeze["gemini"] == "2099-06-15T00:00:00Z"
     assert clear_persisted_engine_freeze_for_workspace(workspace, engine_name="gemini") is True
-    assert "gemini" not in load_config(tmp_path).engine_freeze
+    assert "gemini" not in _load_config(tmp_path).engine_freeze
 
 
 def test_frozen_engine_skipped_in_attempt_order(tmp_path: Path) -> None:
@@ -553,7 +557,7 @@ def test_select_engine_records_quota_freeze_and_falls_back(
         LitehiveConfig(default_engine="codex", engine_preference=["codex", "gemini"]),
     )
     task = TaskRecord(id="T-0001", slug="test", title="test", status="queued", pipeline_status="implementing")
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
 
     def fake_quota_block(engine_name: str):
         if engine_name == "codex":
@@ -568,7 +572,7 @@ def test_select_engine_records_quota_freeze_and_falls_back(
     selection = select_engine_for_workspace(Workspace.from_path(tmp_path), task, config)
 
     assert selection.engine_name == "gemini"
-    reloaded = load_config(tmp_path)
+    reloaded = _load_config(tmp_path)
     assert reloaded.engine_freeze["codex"] == freeze_iso
 
 
@@ -583,7 +587,7 @@ def test_select_engine_for_workspace_records_quota_freeze_and_falls_back(
         LitehiveConfig(default_engine="codex", engine_preference=["codex", "gemini"]),
     )
     task = TaskRecord(id="T-0001", slug="test", title="test", status="queued", pipeline_status="implementing")
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
 
     def fake_quota_block(engine_name: str):
         if engine_name == "codex":
@@ -598,7 +602,7 @@ def test_select_engine_for_workspace_records_quota_freeze_and_falls_back(
     selection = select_engine_for_workspace(Workspace.from_path(tmp_path), task, config)
 
     assert selection.engine_name == "gemini"
-    assert load_config(tmp_path).engine_freeze["codex"] == freeze_iso
+    assert _load_config(tmp_path).engine_freeze["codex"] == freeze_iso
 
 
 def test_engine_quota_block_consumes_current_heru_normalized_windows(
@@ -645,7 +649,7 @@ def test_select_engine_skips_current_heru_quota_status_shape(
         LitehiveConfig(default_engine="codex", recovery_engine="claude"),
     )
     task = create_task(tmp_path, title="quota selection repro")
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
     monkeypatch.setattr(engine_quota, "check_codex_quota", lambda: status)
     monkeypatch.setattr(engine_quota, "check_claude_quota", lambda: UsageStatus())
 
@@ -660,7 +664,7 @@ def test_select_engine_skips_current_heru_quota_status_shape(
     assert [(item.engine_name, item.reason) for item in selection.skipped] == [
         ("codex", "codex usage limit reached, resets 2026-04-27T00:00:00Z")
     ]
-    assert load_config(tmp_path).engine_freeze["codex"] == "2026-04-27T00:00:00Z"
+    assert _load_config(tmp_path).engine_freeze["codex"] == "2026-04-27T00:00:00Z"
 
 
 def test_select_engine_skips_active_freeze_without_quota_call(
@@ -679,7 +683,7 @@ def test_select_engine_skips_active_freeze_without_quota_call(
         ),
     )
     task = TaskRecord(id="T-0001", slug="test", title="test", status="queued", pipeline_status="implementing")
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
     quota_calls: list[str] = []
 
     def fake_quota_block(engine_name: str):
@@ -712,7 +716,7 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
         ),
     )
     task = TaskRecord(id="T-0001", slug="test", title="test", status="queued", pipeline_status="implementing")
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
     quota_calls: list[str] = []
 
     def fake_quota_block(engine_name: str):
@@ -730,7 +734,7 @@ def test_select_engine_rechecks_expired_freeze_before_refreshing(
 
     assert selection.engine_name == "gemini"
     assert quota_calls[0] == "codex"
-    assert load_config(tmp_path).engine_freeze["codex"] == refreshed_iso
+    assert _load_config(tmp_path).engine_freeze["codex"] == refreshed_iso
 
 
 def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
@@ -749,7 +753,7 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
         ),
     )
     task = TaskRecord(id="T-0001", slug="test", title="test", status="queued", pipeline_status="implementing")
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
     quota_calls: list[str] = []
 
     def fake_quota_block(engine_name: str):
@@ -762,7 +766,7 @@ def test_select_engine_rechecks_expired_freeze_and_allows_recovered_engine(
 
     assert selection.engine_name == "codex"
     assert quota_calls == ["codex"]
-    assert "codex" not in load_config(tmp_path).engine_freeze
+    assert "codex" not in _load_config(tmp_path).engine_freeze
 
 
 def test_lifecycle_selector_uses_shared_select_engine_when_task_record_missing(
@@ -777,7 +781,7 @@ def test_lifecycle_selector_uses_shared_select_engine_when_task_record_missing(
             engine_preference=["codex", "gemini"],
         ),
     )
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
 
     workspace = Workspace.from_path(tmp_path)
 
@@ -852,7 +856,7 @@ def test_recovery_engine_uses_shared_select_engine(
         ),
     )
     task = create_task(tmp_path, title="Recovery selection")
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
 
     def fake_select_engine(
         workspace: Workspace,
@@ -899,7 +903,7 @@ def test_recovery_auto_engine_respects_shared_selector_blocked_result(tmp_path: 
         ),
     )
     task = create_task(tmp_path, title="Recovery freeze repro")
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
 
     selection = select_engine_for_workspace(
         Workspace.from_path(tmp_path),
@@ -942,7 +946,7 @@ def test_recovery_non_auto_branches_skip_frozen_engines(
         ),
     )
     task = create_task(tmp_path, title=f"Recovery branch {recovery_engine!r}")
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
 
     selection = select_engine_for_workspace(Workspace.from_path(tmp_path), task, config, selector_request)
     engine_name, _model_name = resolve_recovery_engine(Workspace.from_path(tmp_path), task, config)

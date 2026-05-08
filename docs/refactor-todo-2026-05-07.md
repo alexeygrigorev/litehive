@@ -43,6 +43,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Move backup restore daemon check to workspace-native registry helper.
 - [x] Add workspace-native stale daemon metadata helper.
 - [x] Migrate `config.loading.load_config(root)` callers that already hold `Workspace`.
+- [x] Migrate engine-freeze config tests to the workspace-native config loader helper.
 - [x] Add a production guardrail against raw workspace-root constructor regressions.
 - [x] Remove dead raw-root parameter from recovery skip scan helper.
 - [x] Remove duplicate cached root field from `WorktreeService`.
