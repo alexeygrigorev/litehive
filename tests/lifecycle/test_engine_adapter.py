@@ -68,12 +68,13 @@ class _StubManager:
 
 
 def test_heru_engine_adapter_updates_session_from_subagent_result_continuation(tmp_path, monkeypatch) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="resume", goal="keep continuation")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="resume", goal="keep continuation")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=workspace)
 
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
     monkeypatch.setattr(
@@ -88,12 +89,13 @@ def test_heru_engine_adapter_updates_session_from_subagent_result_continuation(t
 
 
 def test_heru_engine_adapter_passes_resume_session_id_to_subagent_manager(tmp_path, monkeypatch) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="resume", goal="reuse continuation")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="resume", goal="reuse continuation")
     session = Session(engine_session_id="codex-thread-123")
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=workspace)
 
     _StubManager.last_kwargs = None
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
@@ -125,12 +127,13 @@ def test_heru_engine_adapter_launches_all_supported_engines(
     engine_name: str,
     continuation: RuntimeEngineContinuation,
 ) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title=f"{engine_name} launch", goal="spawn through Heru")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title=f"{engine_name} launch", goal="spawn through Heru")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter(engine_name, workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter(engine_name, workspace=workspace)
 
     class _EngineSpecificStubManager(_StubManager):
         def run(self, task, **kwargs) -> SubagentResult:
