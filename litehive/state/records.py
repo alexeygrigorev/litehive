@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 from litehive.config.workspace_files import workspace_gitignore_path
-from litehive.config.workspace import create_workspace, render_workspace_gitignore
+from litehive.config.workspace import render_workspace_gitignore
 from litehive.git.ops import default_commit_message
 from litehive.domain.common import PipelineMode, PipelineStatus, TaskStage, TaskStatus, utcnow
 from litehive.domain.reports import FollowUpTaskSpec
@@ -536,7 +536,7 @@ def create_task_for_workspace(
     priority validation, queue insertion, and audit emission all live
     in one place rather than being duplicated across entry points.
     """
-    create_workspace(workspace.root)
+    workspace.create()
     if retry_limit is not None and retry_limit < 0:
         raise ValueError("Retry limit must be 0 or greater")
     try:
@@ -690,7 +690,7 @@ def create_follow_up_tasks_for_workspace(
     if stage not in {TaskStage.GROOMING, TaskStage.TESTING, TaskStage.ACCEPTING}:
         return []
 
-    create_workspace(workspace.root)
+    workspace.create()
     created_tasks: list[TaskRecord] = []
     created_dirs: list[Path] = []
     with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):

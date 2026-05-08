@@ -135,6 +135,31 @@ class Workspace:
         """
         return self.load_config()
 
+    def require_existing(self, source: str) -> Path:
+        """
+        Validate that this workspace exists on disk.
+
+        Method form of ``require_existing_workspace`` so callers already
+        holding a ``Workspace`` do not peel out ``root`` to cross the same
+        boundary again.
+        """
+        # inline: config.workspace imports this module during boundary construction.
+        from litehive.config.workspace import require_existing_workspace  # noqa: PLC0415
+
+        return require_existing_workspace(self.root, source=source)
+
+    def create(self) -> Path:
+        """
+        Bootstrap this workspace's control files and runtime store.
+
+        Method form of ``create_workspace`` for creation flows that already
+        hold an injected ``Workspace``.
+        """
+        # inline: config.workspace imports this module during bootstrap.
+        from litehive.config.workspace import create_workspace  # noqa: PLC0415
+
+        return create_workspace(self.root)
+
     def runtime_dir(self) -> Path:
         """
         Return the workspace's hashed runtime directory under ``litehive_root``.

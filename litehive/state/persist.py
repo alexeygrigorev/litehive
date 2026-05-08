@@ -6,7 +6,6 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 
-from litehive.config.workspace import require_existing_workspace
 from litehive.domain.common import PipelineState, utcnow
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.locking import workspace_lock_for_workspace, workspace_mutation_guard_for_workspace
@@ -57,7 +56,7 @@ def load_state_for_workspace(workspace: Workspace, bootstrap: bool = True) -> Wo
     explicit workspace creation is owned by ``create_workspace``.
     """
     if bootstrap and not _SKIP_BOOTSTRAP_LOAD_STATE.get():
-        require_existing_workspace(workspace.root, source="load_state")
+        workspace.require_existing(source="load_state")
     store = runtime_store_for_workspace(workspace)
     state = store.load_workspace_state()
     if state is None:

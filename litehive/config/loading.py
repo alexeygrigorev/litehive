@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any, Mapping
 import yaml
 from litehive.config.model import LitehiveConfig, parse_litehive_config_data
 from litehive.config.paths import litehive_root
-from litehive.config.workspace import require_existing_workspace
 from litehive.config.workspace_files import config_path, context_path
 
 if TYPE_CHECKING:
@@ -97,7 +96,7 @@ def load_config_for_workspace(workspace: "Workspace") -> LitehiveConfig:
     :class:`LitehiveConfig`. Workspace creation stays explicit through
     ``create_workspace``.
     """
-    root = require_existing_workspace(workspace.root, source="load_config")
+    root = workspace.require_existing(source="load_config")
     # inline: runtime_settings transitively pulls db.schema which loads
     # config.* back through litehive/config/__init__.py during partial init.
     from litehive.config.runtime_settings import apply_runtime_settings_to_config_data  # noqa: PLC0415
@@ -115,5 +114,7 @@ def load_context(root: Path) -> str:
     Requires an existing workspace so reads cannot silently bootstrap a
     new project.
     """
+    from litehive.config.workspace import require_existing_workspace  # noqa: PLC0415
+
     workspace_root = require_existing_workspace(root, source="load_context")
     return context_path(workspace_root).read_text(encoding="utf-8")
