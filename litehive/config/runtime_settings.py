@@ -15,7 +15,7 @@ from typing import Any, Mapping, Sequence, TypeAlias
 
 from pydantic import TypeAdapter, ValidationError
 
-from litehive.config.loading import load_effective_config_data
+from litehive.config.loading import load_effective_config_data_for_workspace
 from litehive.config.model import LitehiveConfig, normalize_engine_sequence
 from litehive.domain.common import StringEnum, utcnow
 from litehive.workspace import Workspace
@@ -80,7 +80,7 @@ def _bootstrap_config_data(workspace: Workspace) -> dict[str, Any]:
     reading the YAML files directly — the operator's mental model
     matches the stored state from day one.
     """
-    return load_effective_config_data(workspace.root)
+    return load_effective_config_data_for_workspace(workspace)
 
 
 def _dump_runtime_value(value: RuntimeSettingValue) -> str:

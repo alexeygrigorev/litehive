@@ -4,7 +4,7 @@ Config loading and merge helpers.
 Owns the layered-config pipeline: defaults from
 :class:`LitehiveConfig`, the user-global layer under the litehive
 root, and the per-workspace layer. Runtime-setting overrides are
-applied last by :func:`load_config` so they always win over
+applied last by :func:`load_config_for_workspace` so they always win over
 file-based values.
 """
 
@@ -59,7 +59,7 @@ def merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> 
     return merged
 
 
-def load_effective_config_data(root: Path) -> dict[str, Any]:
+def load_effective_config_data_for_workspace(workspace: "Workspace") -> dict[str, Any]:
     """
     Materialize the effective config dict from the layered files.
 
@@ -67,11 +67,11 @@ def load_effective_config_data(root: Path) -> dict[str, Any]:
     litehive root, then the per-workspace layer. Runtime-setting
     overrides are *not* applied here because that step requires
     the SQLite store; tests and tools that only want the file
-    layout call this directly.
+    layout call this directly with an injected workspace.
     """
     config = asdict(LitehiveConfig())
     config = merge_config_layers(config, _read_config_layer(litehive_root() / "config.yaml"))
-    return merge_config_layers(config, _read_config_layer(config_path(root)))
+    return merge_config_layers(config, _read_config_layer(config_path(workspace.root)))
 
 
 def load_config(root: Path) -> LitehiveConfig:
@@ -96,16 +96,16 @@ def load_config_for_workspace(workspace: "Workspace") -> LitehiveConfig:
     :class:`LitehiveConfig`. Workspace creation stays explicit through
     ``create_workspace``.
     """
-    root = workspace.require_existing(source="load_config")
+    workspace.require_existing(source="load_config")
     # inline: runtime_settings transitively pulls db.schema which loads
     # config.* back through litehive/config/__init__.py during partial init.
     from litehive.config.runtime_settings import apply_runtime_settings_to_config_data  # noqa: PLC0415
 
-    data = apply_runtime_settings_to_config_data(workspace, load_effective_config_data(root))
+    data = apply_runtime_settings_to_config_data(workspace, load_effective_config_data_for_workspace(workspace))
     return parse_litehive_config_data(data)
 
 
-def load_context(root: Path) -> str:
+def load_context_for_workspace(workspace: "Workspace") -> str:
     """
     Read the workspace context document used as a prompt preamble.
 
@@ -114,7 +114,5 @@ def load_context(root: Path) -> str:
     Requires an existing workspace so reads cannot silently bootstrap a
     new project.
     """
-    from litehive.config.workspace import require_existing_workspace  # noqa: PLC0415
-
-    workspace_root = require_existing_workspace(root, source="load_context")
+    workspace_root = workspace.require_existing(source="load_context")
     return context_path(workspace_root).read_text(encoding="utf-8")
