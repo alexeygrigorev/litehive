@@ -124,6 +124,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate subagent session event tests to workspace-native task creation.
 - [x] Migrate subagent trace/id tests to workspace-native task creation.
 - [x] Migrate pool CLI tests to workspace-native task creation.
+- [x] Migrate task-log support tests to workspace-native task creation.
 - [x] Remove unused runtime gitignore path wrapper.
 - [x] Remove task runtime save path wrapper after migrating tests.
 - [x] Remove runner-lock held path wrapper after migrating tests.
