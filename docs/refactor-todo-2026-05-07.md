@@ -114,6 +114,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove unused lock-module path wrappers and workspace-native conflict message.
 - [x] Remove runner heartbeat/status path wrappers after migrating tests.
 - [x] Remove backup path wrappers after migrating tests.
+- [x] Remove unused runtime store path factory.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

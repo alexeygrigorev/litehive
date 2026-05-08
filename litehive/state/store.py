@@ -4,7 +4,6 @@ import json
 import logging
 import re
 import sqlite3
-from pathlib import Path
 
 from litehive.config.paths import workspace_path
 from litehive.db.schema import consume_rebuilt_database_marker
@@ -820,17 +819,6 @@ class RuntimeStore:
             ("workspace", json.dumps([], sort_keys=True), now),
         )
         connection.commit()
-
-
-def runtime_store(root: Path) -> RuntimeStore:
-    """
-    Module-level factory for ``RuntimeStore``.
-
-    Path-based compatibility wrapper. Callers that already have a
-    :class:`Workspace` should use :func:`runtime_store_for_workspace`
-    so the store does not rebuild workspace dependencies.
-    """
-    return runtime_store_for_workspace(Workspace.from_path(root))
 
 
 def runtime_store_for_workspace(workspace: Workspace) -> RuntimeStore:
