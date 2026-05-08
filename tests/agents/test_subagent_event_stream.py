@@ -12,7 +12,7 @@ from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.recovery.execution_recovery import mark_interrupted_subagent
-from litehive.state.records import create_task, get_task, save_task
+from litehive.state.records import create_task_for_workspace, get_task_for_workspace, save_task_for_workspace
 from litehive.tasks.paths import task_dir
 from litehive.tasks.runtime import mark_subagent_started_for_workspace
 from litehive.workspace import Workspace
@@ -23,7 +23,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
 ) -> None:
     create_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
     workspace = Workspace.from_path(tmp_path)
-    task = create_task(tmp_path, title="Claude live restart summary", auto_commit=False)
+    task = create_task_for_workspace(workspace, title="Claude live restart summary", auto_commit=False)
     manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
 
     ref = SubagentRef(
@@ -35,7 +35,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
     )
     task.subagents.append(ref)
     mark_subagent_started_for_workspace(workspace, task, ref)
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
 
     base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
     base.mkdir(parents=True, exist_ok=False)
@@ -63,7 +63,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
     assert "did not submit verdict" in report["summary"]
     assert report["files_changed"] == []
 
-    refreshed = get_task(tmp_path, task.id)
+    refreshed = get_task_for_workspace(workspace, task.id)
     assert refreshed is not None
     interrupted = mark_interrupted_subagent(
         workspace,
@@ -82,7 +82,8 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
 
 def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Event stream live progress test")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Event stream live progress test")
     manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
 
     partial_stdout = (
@@ -156,7 +157,8 @@ def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monke
 
 def test_subagent_skips_event_stream_when_no_events(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="No event stream test")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="No event stream test")
     manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
 
     class FakeEngine:
@@ -190,7 +192,7 @@ def test_subagent_skips_event_stream_when_no_events(tmp_path: Path, monkeypatch:
 
 def test_subagent_event_stream_ignores_removed_timeline_payload_key(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Current event stream key")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Current event stream key")
     with connect_workspace_db(tmp_path) as connection:
         connection.execute(
             """
