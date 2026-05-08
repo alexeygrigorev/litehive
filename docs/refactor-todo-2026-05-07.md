@@ -122,6 +122,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate remaining Heru engine adapter task setup to workspace-native helpers.
 - [x] Migrate prompt serializer tests to workspace-native task helpers.
 - [x] Migrate subagent session event tests to workspace-native task creation.
+- [x] Migrate subagent trace/id tests to workspace-native task creation.
 - [x] Remove unused runtime gitignore path wrapper.
 - [x] Remove task runtime save path wrapper after migrating tests.
 - [x] Remove runner-lock held path wrapper after migrating tests.

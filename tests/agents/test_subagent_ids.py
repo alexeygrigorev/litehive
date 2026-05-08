@@ -4,14 +4,14 @@ from litehive.agents.session_store import SubagentArtifactPayload, subagent_arti
 from litehive.agents.subagent_ids import SubagentIdRepository
 from litehive.config.workspace import create_workspace
 from litehive.domain.runtime import Subagent
-from litehive.state.records import create_task
+from litehive.state.records import create_task_for_workspace
 from litehive.workspace import Workspace
 
 
 def test_subagent_id_repository_advances_sqlite_counter(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task(tmp_path, title="Allocate subagent ids")
+    task = create_task_for_workspace(workspace, title="Allocate subagent ids")
     repository = SubagentIdRepository(workspace)
 
     first_id = repository.reserve_next_id(task)
@@ -34,7 +34,7 @@ def test_subagent_id_repository_advances_sqlite_counter(tmp_path: Path) -> None:
 def test_subagent_id_repository_seeds_from_persisted_task_refs_and_sessions(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task(tmp_path, title="Seed subagent ids")
+    task = create_task_for_workspace(workspace, title="Seed subagent ids")
     task.subagents.append(
         Subagent(
             id="SA-0007",

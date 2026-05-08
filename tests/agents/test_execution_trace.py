@@ -5,7 +5,7 @@ from heru.types import SubagentRef
 from litehive.agents.execution_trace import load_subagent_execution_trace
 from litehive.agents.session_store import SubagentEventStreamPayload, subagent_artifacts
 from litehive.config.workspace import create_workspace
-from litehive.state.records import create_task
+from litehive.state.records import create_task_for_workspace
 from litehive.tasks.paths import task_dir
 from litehive.workspace import Workspace
 
@@ -13,7 +13,7 @@ from litehive.workspace import Workspace
 def test_load_subagent_execution_trace_prefers_session_event_stream_over_cached_trace(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task(tmp_path, title="Trace source priority")
+    task = create_task_for_workspace(workspace, title="Trace source priority")
     ref = SubagentRef(
         id="SA-0001",
         role="swe",
@@ -48,7 +48,7 @@ def test_load_subagent_execution_trace_prefers_session_event_stream_over_cached_
 def test_load_subagent_execution_trace_keeps_cached_trace_as_legacy_fallback(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task(tmp_path, title="Trace file fallback")
+    task = create_task_for_workspace(workspace, title="Trace file fallback")
     ref = SubagentRef(
         id="SA-0001",
         role="swe",
