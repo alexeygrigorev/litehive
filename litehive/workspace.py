@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Iterator
 
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import normalize_workspace_root
-from litehive.config.workspace_files import workspace_dir
+from litehive.config.workspace_files import WorkspaceControlFiles
 from litehive.db.schema import connect_workspace_db
 
 if TYPE_CHECKING:
@@ -193,7 +193,17 @@ class Workspace:
         machine-managed state outside the repo. Operators edit the
         former; the daemon owns the latter.
         """
-        return workspace_dir(self.root)
+        return self.control_files().directory()
+
+    def control_files(self) -> WorkspaceControlFiles:
+        """
+        Return the bound repo-local ``.litehive`` path object.
+
+        Keeps config, context, and gitignore paths attached to this
+        workspace's validated root so downstream code does not need to
+        thread ``root`` back through scattered path helpers.
+        """
+        return WorkspaceControlFiles(self.root)
 
     def task_dir(self, task: "TaskRecord", bootstrap: bool = True) -> Path:
         """

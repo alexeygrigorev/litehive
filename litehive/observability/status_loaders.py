@@ -17,7 +17,6 @@ from pydantic import ValidationError
 from litehive.config.loading import merge_config_layers
 from litehive.config.model import LitehiveConfig, parse_litehive_config_data, validate_config_data
 from litehive.config.paths import litehive_root
-from litehive.config.workspace_files import config_path
 from litehive.domain.common import RunnerStatus
 from litehive.domain.engine import WorkspaceEngineMonitoring
 from litehive.domain.runtime import RunnerStatusState
@@ -47,7 +46,7 @@ def _load_config_for_status_for_workspace(workspace: Workspace) -> tuple[Litehiv
     """
     issues: list[StatusIssue] = []
     data = asdict(LitehiveConfig())
-    for path, key in ((litehive_root() / "config.yaml", "global_config"), (config_path(workspace.root), "config")):
+    for path, key in ((litehive_root() / "config.yaml", "global_config"), (workspace.control_files().config(), "config")):
         mapping, issue = _safe_yaml_mapping(
             path,
             key=key,

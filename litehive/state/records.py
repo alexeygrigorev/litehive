@@ -4,7 +4,6 @@ import logging
 import os
 from pathlib import Path
 
-from litehive.config.workspace_files import workspace_gitignore_path
 from litehive.config.workspace import render_workspace_gitignore
 from litehive.git.ops import default_commit_message
 from litehive.domain.common import PipelineMode, PipelineStatus, TaskStage, TaskStatus, utcnow
@@ -147,7 +146,7 @@ def ensure_runtime_ignored_for_workspace(workspace: Workspace) -> None:
     every write keeps the ignore rules in sync with whatever the latest
     layout produces.
     """
-    ignore_path = workspace_gitignore_path(workspace.root)
+    ignore_path = workspace.control_files().gitignore()
     expected = render_workspace_gitignore()
     if not ignore_path.exists() or ignore_path.read_text(encoding="utf-8") != expected:
         ignore_path.write_text(expected, encoding="utf-8")

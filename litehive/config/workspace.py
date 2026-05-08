@@ -17,7 +17,7 @@ import yaml
 
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import workspace_path
-from litehive.config.workspace_files import config_path, context_path, workspace_dir, workspace_gitignore_path
+from litehive.config.workspace_files import WorkspaceControlFiles
 from litehive.config.profiles.rendering import render_context_template
 
 if TYPE_CHECKING:
@@ -58,7 +58,7 @@ def require_existing_workspace(root: Path, source: str) -> Path:
     creation remains explicit through ``create_workspace``.
     """
     resolved_root = normalize_workspace_root(root, source=source)
-    if workspace_dir(resolved_root).is_dir():
+    if WorkspaceControlFiles(resolved_root).directory().is_dir():
         return resolved_root
     raise ValueError(
         f"unable to load workspace from {source}: {resolved_root} is not an existing Litehive project; "
@@ -154,28 +154,32 @@ def create_workspace(
     """
     root = normalize_workspace_root(root, source="create_workspace")
     _reject_litehive_control_paths(root, source="create_workspace")
-    base = workspace_dir(root)
+    control_files = WorkspaceControlFiles(root)
+    base = control_files.directory()
     tasks = base / "tasks"
     tasks.mkdir(parents=True, exist_ok=True)
 
     cfg = config or LitehiveConfig()
-    if not config_path(root).exists():
+    config_file = control_files.config()
+    if not config_file.exists():
         if config is None:
-            config_path(root).write_text(
+            config_file.write_text(
                 _workspace_config_template_path().read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
         else:
-            config_path(root).write_text(
+            config_file.write_text(
                 yaml.safe_dump(asdict(cfg), sort_keys=False),
                 encoding="utf-8",
             )
 
-    if not context_path(root).exists():
-        context_path(root).write_text(render_context_template(cfg.process_profile), encoding="utf-8")
+    context_file = control_files.context()
+    if not context_file.exists():
+        context_file.write_text(render_context_template(cfg.process_profile), encoding="utf-8")
 
-    if not workspace_gitignore_path(root).exists():
-        workspace_gitignore_path(root).write_text(
+    gitignore_file = control_files.gitignore()
+    if not gitignore_file.exists():
+        gitignore_file.write_text(
             render_workspace_gitignore(),
             encoding="utf-8",
         )

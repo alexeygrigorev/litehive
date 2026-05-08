@@ -345,6 +345,12 @@ hoist the wiring out of `__init__` into the container.
   function is a holdover from the file-based era; SQLite is now
   the source of truth and the workspace identity should be
   explicit.
+- Repo-local `.litehive` paths belong behind the workspace-owned
+  control-files object. Code that already has a `Workspace` should
+  use `workspace.control_files().config()`,
+  `workspace.control_files().context()`, or
+  `workspace.control_files().gitignore()` instead of calling
+  root-threaded path helpers.
 - During the remaining migration, treat any `root: Path`
   parameter below the CLI/process boundary as temporary debt. Do
   not add new internal `root` parameters. If a helper needs

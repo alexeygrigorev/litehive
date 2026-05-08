@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any, Mapping
 import yaml
 from litehive.config.model import LitehiveConfig, parse_litehive_config_data
 from litehive.config.paths import litehive_root
-from litehive.config.workspace_files import config_path, context_path
 
 if TYPE_CHECKING:
     from litehive.workspace import Workspace
@@ -71,7 +70,7 @@ def load_effective_config_data_for_workspace(workspace: "Workspace") -> dict[str
     """
     config = asdict(LitehiveConfig())
     config = merge_config_layers(config, _read_config_layer(litehive_root() / "config.yaml"))
-    return merge_config_layers(config, _read_config_layer(config_path(workspace.root)))
+    return merge_config_layers(config, _read_config_layer(workspace.control_files().config()))
 
 
 def load_config_for_workspace(workspace: "Workspace") -> LitehiveConfig:
@@ -101,5 +100,5 @@ def load_context_for_workspace(workspace: "Workspace") -> str:
     Requires an existing workspace so reads cannot silently bootstrap a
     new project.
     """
-    workspace_root = workspace.require_existing(source="load_context")
-    return context_path(workspace_root).read_text(encoding="utf-8")
+    workspace.require_existing(source="load_context")
+    return workspace.control_files().context().read_text(encoding="utf-8")
