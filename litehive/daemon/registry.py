@@ -18,7 +18,6 @@ from pathlib import Path
 import threading
 from typing import Literal, TextIO
 
-from litehive.config.paths import workspace_path
 from litehive.state.lock_manager import WorkspaceLockManager
 from litehive.state.locking import runner_pid_is_alive
 from litehive.state.process_lock import ProcessLockManager
@@ -83,7 +82,7 @@ def _optional_text_field(metadata: dict[str, object], key: str) -> str | None:
     return None
 
 
-def daemon_lock_path(workspace: Path) -> Path:
+def _daemon_lock_path_for_workspace(workspace: Workspace) -> Path:
     """
     Canonical daemon-lockfile path for ``workspace``.
 
@@ -92,7 +91,7 @@ def daemon_lock_path(workspace: Path) -> Path:
     paths independently is exactly how ".daemon.lock" and
     ".daemon-lock" diverge in practice.
     """
-    return workspace_path(workspace.resolve(), "runtime", ".daemon.lock")
+    return workspace.runtime_path("runtime", ".daemon.lock")
 
 
 def _daemon_lock_is_held_in_process(workspace: Path) -> bool:
@@ -123,7 +122,7 @@ def _daemon_lock_manager_for_workspace(workspace: Workspace) -> ProcessLockManag
     return ProcessLockManager(
         process_name="daemon",
         lock_manager=WorkspaceLockManager(
-            path=daemon_lock_path(lock_key),
+            path=_daemon_lock_path_for_workspace(workspace),
             pid_is_alive=runner_pid_is_alive,
             held_in_process=lambda: _daemon_lock_is_held_in_process(lock_key),
             fsync_writes=True,

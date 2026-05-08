@@ -14,7 +14,6 @@ from litehive.daemon.execution import start_background_daemon, stop_workspace_da
 from litehive.daemon.registry import (
     DaemonRegistryEntry,
     daemon_lock_is_active_for_workspace,
-    daemon_lock_path,
     daemon_metadata_for_workspace,
     get_workspace_daemon_for_workspace,
     register_daemon_for_workspace,
@@ -27,7 +26,7 @@ def _spawn_locked_daemon_like_process(
     workspace: Path,
     metadata: dict[str, object],
 ) -> subprocess.Popen[str]:
-    lock_path = daemon_lock_path(workspace)
+    lock_path = Workspace.from_path(workspace).runtime_path("runtime", ".daemon.lock")
     return subprocess.Popen(
         [
             sys.executable,
@@ -103,14 +102,14 @@ def test_register_and_unregister_daemon_uses_shared_lock_manager(tmp_path: Path,
     assert daemon_metadata_for_workspace(workspace_obj) is None
     assert daemon_lock_is_active_for_workspace(workspace_obj) is False
     assert get_workspace_daemon_for_workspace(workspace_obj) is None
-    assert daemon_lock_path(workspace).read_text(encoding="utf-8") == ""
+    assert workspace_obj.runtime_path("runtime", ".daemon.lock").read_text(encoding="utf-8") == ""
 
 
 def test_unregister_daemon_clears_stale_metadata_without_daemon_registry_yaml(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
     workspace = tmp_path / "workspace"
     create_workspace(workspace)
-    lock_path = daemon_lock_path(workspace)
+    lock_path = Workspace.from_path(workspace).runtime_path("runtime", ".daemon.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.write_text(
         json.dumps(
@@ -189,7 +188,7 @@ def test_stop_workspace_daemon_escalates_to_sigkill_when_sigterm_ignored(tmp_pat
             )
         ),
     )
-    lock_path = daemon_lock_path(workspace)
+    lock_path = Workspace.from_path(workspace).runtime_path("runtime", ".daemon.lock")
     sleeper = _spawn_locked_daemon_like_process(
         workspace,
         {"heartbeat_at": "2026-04-12T00:00:00+00:00"},
@@ -240,7 +239,7 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
             )
         ),
     )
-    lock_path = daemon_lock_path(workspace)
+    lock_path = Workspace.from_path(workspace).runtime_path("runtime", ".daemon.lock")
     sleeper = _spawn_locked_daemon_like_process(workspace, dict(lock_metadata))
     try:
         entry = _wait_for_daemon_metadata(workspace)
@@ -282,7 +281,7 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
 def test_start_background_daemon_does_not_kill_live_pid_from_stale_metadata(tmp_path: Path, monkeypatch) -> None:
     workspace = tmp_path / "workspace"
     create_workspace(workspace)
-    lock_path = daemon_lock_path(workspace)
+    lock_path = Workspace.from_path(workspace).runtime_path("runtime", ".daemon.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     sleeper = subprocess.Popen(
         [sys.executable, "-c", "import time; time.sleep(60)\n"],
