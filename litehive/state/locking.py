@@ -10,7 +10,6 @@ from pathlib import Path
 from collections.abc import Callable
 from typing import TYPE_CHECKING, TextIO, cast
 
-from litehive.config.workspace_files import workspace_dir
 from litehive.domain.common import RunnerStatus, TaskExecutionStatus, utcnow
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
@@ -26,7 +25,6 @@ from litehive.tasks.constants import (
     RUNNER_LOCKS_MUTEX,
 )
 from litehive.domain.task_ops import WorkspaceConflictError, RunnerLockState
-from litehive.tasks.paths import runner_lock_path
 
 if TYPE_CHECKING:
     from litehive.tasks.audit import TaskAuditEntry
@@ -73,7 +71,7 @@ def _runner_lock_manager_for_workspace(
     return ProcessLockManager(
         process_name="runner",
         lock_manager=WorkspaceLockManager(
-            path=runner_lock_path(workspace.root),
+            path=workspace.runtime_path("runtime", ".runner.lock"),
             pid_is_alive=runner_pid_is_alive,
             held_in_process=held_in_process,
         ),
@@ -100,7 +98,7 @@ def workspace_lock_for_workspace(workspace: Workspace):
     repair); blocking acquisition is intentional so a second writer waits
     rather than failing.
     """
-    lock_path = workspace_dir(workspace.root) / ".lock"
+    lock_path = workspace.control_dir() / ".lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("w", encoding="utf-8") as handle:
         manager = WorkspaceLockManager(lock_path, pid_is_alive=runner_pid_is_alive)
