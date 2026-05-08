@@ -14,7 +14,7 @@ from litehive.agents.session_store import load_subagent_event_stream
 from litehive.domain.common import SubagentStatus
 from litehive.domain.runtime import RuntimeSubagentState, Subagent
 from litehive.domain.task import TaskRecord
-from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
+from litehive.tasks.paths import read_text_artifact, resolve_artifact_path
 from litehive.workspace import Workspace
 
 logger = logging.getLogger(__name__)
@@ -240,7 +240,7 @@ def load_subagent_execution_trace(
     diagnostics.
     """
 
-    base = task_dir(workspace.root, task) / ref.path
+    base = workspace.task_dir(task) / ref.path
     stderr = _read_stream_artifact(base, "stderr", active=active)
     if stderr is None:
         stderr_text = ""

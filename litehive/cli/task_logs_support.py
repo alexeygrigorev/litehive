@@ -16,7 +16,7 @@ from litehive.cli.task_debug_support import render_task_evidence_for_workspace
 from litehive.daemon.logs import latest_run_all_log_dir_for_workspace
 from litehive.domain.task import TaskRecord
 from litehive.tasks.journal import render_task_journal
-from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
+from litehive.tasks.paths import read_text_artifact, resolve_artifact_path
 from litehive.workspace import Workspace
 
 _DEFAULT_TAIL_LINES = 40
@@ -160,7 +160,7 @@ def follow_active_subagent_for_workspace(workspace: Workspace, task_id: str | No
     active_task_id = task.id
     active_subagent_id = ref.id
     active_path = ref.path
-    base = task_dir(workspace.root, task) / active_path
+    base = workspace.task_dir(task) / active_path
     stdout_path = _artifact_for_kind(base, "stdout", active=is_active)
     if stdout_path is None:
         print("Active subagent stdout not found.")
