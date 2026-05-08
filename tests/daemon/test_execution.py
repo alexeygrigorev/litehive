@@ -15,20 +15,21 @@ from litehive.domain.common import RunnerExecutionStatus
 from litehive.domain.pool import PoolStopReason
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import WorkspaceState
-from litehive.state.persist import load_state, save_state
-from litehive.state.records import create_task
+from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
+from litehive.state.records import create_task_for_workspace
 from litehive.workspace import Workspace
 
 
 def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    active = create_task(tmp_path, title="Active runner task")
-    queued = create_task(tmp_path, title="Queued follow-up task")
+    workspace = Workspace.from_path(tmp_path)
+    active = create_task_for_workspace(workspace, title="Active runner task")
+    queued = create_task_for_workspace(workspace, title="Queued follow-up task")
 
-    state = load_state(tmp_path)
+    state = load_state_for_workspace(workspace)
     state.active_task_id = active.id
     state.queue = [queued.id]
-    save_state(tmp_path, state)
+    save_state_for_workspace(workspace, state)
 
     runner_checks = 0
     subprocess_calls: list[tuple[str, ...]] = []
@@ -53,18 +54,18 @@ def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monke
         nonlocal sleep_calls
         sleep_calls += 1
         assert seconds == 1.0
-        state = load_state(tmp_path)
+        state = load_state_for_workspace(workspace)
         state.active_task_id = None
-        save_state(tmp_path, state)
+        save_state_for_workspace(workspace, state)
 
     def fake_run_logged_subprocess(command: list[str], **kwargs) -> int:
         subprocess_calls.append(tuple(command))
         subprocess_cwds.append(kwargs["cwd"])
         if "repair" not in command and "run" in command:
-            state = load_state(tmp_path)
+            state = load_state_for_workspace(workspace)
             state.queue = []
             state.active_task_id = None
-            save_state(tmp_path, state)
+            save_state_for_workspace(workspace, state)
         return 0
 
     monkeypatch.setattr("litehive.daemon.execution.runner_status_for_workspace", fake_runner_status)
@@ -90,18 +91,19 @@ def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monke
 
 def test_daemon_processes_queued_tasks_sequentially(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    first = create_task(tmp_path, title="First queued task")
-    second = create_task(tmp_path, title="Second queued task")
+    workspace = Workspace.from_path(tmp_path)
+    first = create_task_for_workspace(workspace, title="First queued task")
+    second = create_task_for_workspace(workspace, title="Second queued task")
 
     subprocess_calls: list[tuple[str, ...]] = []
 
     def fake_run_logged_subprocess(command: list[str], **kwargs) -> int:
         del kwargs
         subprocess_calls.append(tuple(command))
-        state = load_state(tmp_path)
+        state = load_state_for_workspace(workspace)
         state.active_task_id = None
         state.queue = state.queue[1:]
-        save_state(tmp_path, state)
+        save_state_for_workspace(workspace, state)
         return 0
 
     monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
@@ -118,7 +120,7 @@ def test_daemon_processes_queued_tasks_sequentially(tmp_path: Path, monkeypatch)
     assert all("run" in call for call in subprocess_calls)
     assert first.id in stream.getvalue()
     assert second.id in stream.getvalue()
-    assert load_state(tmp_path).queue == []
+    assert load_state_for_workspace(workspace).queue == []
 
 
 def test_daemon_status_snapshot_uses_shared_status_collector(tmp_path: Path, monkeypatch) -> None:
@@ -179,10 +181,11 @@ def test_daemon_continues_only_for_absent_or_transient_stop_reasons() -> None:
 
 def test_daemon_stops_for_unknown_persisted_pool_stop_reason(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    create_task(tmp_path, title="Queued work")
-    state = load_state(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
+    create_task_for_workspace(workspace, title="Queued work")
+    state = load_state_for_workspace(workspace)
     state.pool_stop_reason = "None"
-    save_state(tmp_path, state)
+    save_state_for_workspace(workspace, state)
 
     subprocess_calls = 0
 
