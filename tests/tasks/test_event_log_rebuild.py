@@ -8,8 +8,14 @@ from litehive.config.paths import workspace_path
 from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.reports import StageReport
-from litehive.state.persist import load_state, save_state
-from litehive.state.records import create_task, discard_created_task_for_workspace, get_task, require_task, save_task
+from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
+from litehive.state.records import (
+    create_task_for_workspace,
+    discard_created_task_for_workspace,
+    get_task_for_workspace,
+    require_task_for_workspace,
+    save_task_for_workspace,
+)
 from litehive.tasks.audit import load_task_audit_entries
 from litehive.workspace import Workspace
 from litehive.tasks.event_log import (
@@ -51,9 +57,10 @@ def _clear_task_tables(root: Path) -> None:
 def test_task_event_log_records_lifecycle_transition_types_outside_sqlite(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Eventful task")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Eventful task")
 
-    update_task_for_workspace(Workspace.from_path(tmp_path), task.id, title="Updated eventful task")
+    update_task_for_workspace(workspace, task.id, title="Updated eventful task")
     report = CliRunner().invoke(
         app,
         [
@@ -73,22 +80,22 @@ def test_task_event_log_records_lifecycle_transition_types_outside_sqlite(tmp_pa
     )
     assert report.exit_code == 0, report.output
 
-    close_task_for_workspace(Workspace.from_path(tmp_path), task.id, outcome="duplicate", reason="same work")
-    requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id, force=True)
-    task = require_task(tmp_path, task.id)
+    close_task_for_workspace(workspace, task.id, outcome="duplicate", reason="same work")
+    requeue_task_for_workspace(workspace, task.id, force=True)
+    task = require_task_for_workspace(workspace, task.id)
     task.status = TaskStatus.DONE
     task.pipeline_status = PipelineStatus.DONE
-    save_task(tmp_path, task)
-    state = load_state(tmp_path)
+    save_task_for_workspace(workspace, task)
+    state = load_state_for_workspace(workspace)
     state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
-    save_state(tmp_path, state)
+    save_state_for_workspace(workspace, state)
 
-    events, invalid = read_task_events(Workspace.from_path(tmp_path))
+    events, invalid = read_task_events(workspace)
     event_types = {str(event["event_type"]) for event in events if event.get("task_id") == task.id}
 
     assert invalid == 0
-    assert task_event_log_path(Workspace.from_path(tmp_path)).exists()
-    assert task_event_log_path(Workspace.from_path(tmp_path)) != workspace_path(tmp_path, "data.db")
+    assert task_event_log_path(workspace).exists()
+    assert task_event_log_path(workspace) != workspace_path(tmp_path, "data.db")
     assert {
         "task_created",
         "task_updated",
@@ -100,7 +107,8 @@ def test_task_event_log_records_lifecycle_transition_types_outside_sqlite(tmp_pa
 
 
 def test_task_event_log_has_events_short_circuits_without_full_decode(tmp_path: Path) -> None:
-    path = task_event_log_path(Workspace.from_path(tmp_path))
+    workspace = Workspace.from_path(tmp_path)
+    path = task_event_log_path(workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "\n".join(
@@ -121,16 +129,17 @@ def test_task_event_log_has_events_short_circuits_without_full_decode(tmp_path: 
         encoding="utf-8",
     )
 
-    assert task_event_log_has_events(Workspace.from_path(tmp_path)) is True
+    assert task_event_log_has_events(workspace) is True
 
 
 def test_db_rebuild_from_events_reconstructs_tasks_queue_activity_and_audit(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     create_workspace(tmp_path)
-    done = create_task(tmp_path, title="Replay done", goal="old goal")
-    queued = create_task(tmp_path, title="Replay queued")
+    workspace = Workspace.from_path(tmp_path)
+    done = create_task_for_workspace(workspace, title="Replay done", goal="old goal")
+    queued = create_task_for_workspace(workspace, title="Replay queued")
     update_task_for_workspace(
-        Workspace.from_path(tmp_path),
+        workspace,
         done.id,
         title="Replay updated",
         priority="high",
@@ -155,7 +164,8 @@ def test_db_rebuild_from_events_reconstructs_tasks_queue_activity_and_audit(tmp_
         standalone_mode=False,
     )
     assert report.exit_code == 0, report.output
-    record_stage_report(Workspace.from_path(tmp_path),
+    record_stage_report(
+        workspace,
         done,
         StageReport(
             task_id=done.id,
@@ -165,7 +175,7 @@ def test_db_rebuild_from_events_reconstructs_tasks_queue_activity_and_audit(tmp_
             duration_seconds=12,
         ),
     )
-    close_task_for_workspace(Workspace.from_path(tmp_path), done.id, outcome="done", reason="verified")
+    close_task_for_workspace(workspace, done.id, outcome="done", reason="verified")
 
     _clear_task_tables(tmp_path)
 
@@ -180,9 +190,9 @@ def test_db_rebuild_from_events_reconstructs_tasks_queue_activity_and_audit(tmp_
     assert "tasks_rebuilt: 2" in result.output
     assert "queue_length: 1" in result.output
 
-    rebuilt_done = get_task(tmp_path, done.id)
-    rebuilt_queued = get_task(tmp_path, queued.id)
-    rebuilt_state = load_state(tmp_path)
+    rebuilt_done = get_task_for_workspace(workspace, done.id)
+    rebuilt_queued = get_task_for_workspace(workspace, queued.id)
+    rebuilt_state = load_state_for_workspace(workspace)
     assert rebuilt_done is not None
     assert rebuilt_done.title == "Replay updated"
     assert rebuilt_done.priority == "high"
@@ -192,19 +202,20 @@ def test_db_rebuild_from_events_reconstructs_tasks_queue_activity_and_audit(tmp_
     assert rebuilt_queued is not None
     assert rebuilt_queued.status == "queued"
     assert rebuilt_state.queue == [queued.id]
-    assert [entry.message for entry in Workspace.from_path(tmp_path).task_activity(rebuilt_done).load()] == ["ready to close"]
-    replayed_stage_reports = load_stage_reports(Workspace.from_path(tmp_path), rebuilt_done)
+    assert [entry.message for entry in workspace.task_activity(rebuilt_done).load()] == ["ready to close"]
+    replayed_stage_reports = load_stage_reports(workspace, rebuilt_done)
     assert len(replayed_stage_reports) == 1
     assert replayed_stage_reports[0].summary == "stage report replay"
     assert {"created", "metadata_updated", "closed"} <= {
-        entry.action for entry in load_task_audit_entries(Workspace.from_path(tmp_path), task_id=done.id, limit=10)
+        entry.action for entry in load_task_audit_entries(workspace, task_id=done.id, limit=10)
     }
 
 
 def test_db_rebuild_from_events_refuses_incomplete_replay_source(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Do not silently drop me")
-    task_event_log_path(Workspace.from_path(tmp_path)).unlink()
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Do not silently drop me")
+    task_event_log_path(workspace).unlink()
 
     result = CliRunner().invoke(
         app,
@@ -214,18 +225,19 @@ def test_db_rebuild_from_events_refuses_incomplete_replay_source(tmp_path: Path)
 
     assert result.return_value == 1
     assert "db rebuild-from-events failed: refusing event-log replay" in result.output
-    assert get_task(tmp_path, task.id) is not None
+    assert get_task_for_workspace(workspace, task.id) is not None
 
 
 def test_replay_skips_truncated_partial_log_record(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Partial replay")
-    task_event_log_path(Workspace.from_path(tmp_path)).open("ab").write(b'{"schema_version":1,"event_type":')
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Partial replay")
+    task_event_log_path(workspace).open("ab").write(b'{"schema_version":1,"event_type":')
 
     _clear_task_tables(tmp_path)
-    summary = rebuild_sqlite_from_task_event_log(Workspace.from_path(tmp_path))
+    summary = rebuild_sqlite_from_task_event_log(workspace)
 
-    rebuilt = get_task(tmp_path, task.id)
+    rebuilt = get_task_for_workspace(workspace, task.id)
     assert summary.invalid_events == 1
     assert rebuilt is not None
     assert rebuilt.title == "Partial replay"
@@ -234,10 +246,10 @@ def test_replay_skips_truncated_partial_log_record(tmp_path: Path) -> None:
 def test_replay_keeps_discarded_created_task_removed(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task(tmp_path, title="Temporary import task")
+    task = create_task_for_workspace(workspace, title="Temporary import task")
     discard_created_task_for_workspace(workspace, task.id)
 
-    assert get_task(tmp_path, task.id) is None
+    assert get_task_for_workspace(workspace, task.id) is None
 
     _clear_task_tables(tmp_path)
     summary = rebuild_sqlite_from_task_event_log(workspace)
@@ -249,8 +261,8 @@ def test_replay_keeps_discarded_created_task_removed(tmp_path: Path) -> None:
         "task_removed",
     ]
     assert summary.tasks_rebuilt == 0
-    assert get_task(tmp_path, task.id) is None
-    assert [entry.action for entry in load_task_audit_entries(Workspace.from_path(tmp_path), task_id=task.id, limit=10)] == [
+    assert get_task_for_workspace(workspace, task.id) is None
+    assert [entry.action for entry in load_task_audit_entries(workspace, task_id=task.id, limit=10)] == [
         "removed",
         "created",
     ]
@@ -258,15 +270,16 @@ def test_replay_keeps_discarded_created_task_removed(tmp_path: Path) -> None:
 
 def test_create_workspace_rebuilds_after_database_loss_from_task_event_log(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="DB loss replay", acceptance_criteria=["restored from log"])
-    event_log = task_event_log_path(Workspace.from_path(tmp_path))
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="DB loss replay", acceptance_criteria=["restored from log"])
+    event_log = task_event_log_path(workspace)
     first_event = json.loads(event_log.read_text(encoding="utf-8").splitlines()[0])
 
     _delete_workspace_db(tmp_path)
     create_workspace(tmp_path)
 
-    rebuilt = get_task(tmp_path, task.id)
-    rebuilt_state = load_state(tmp_path)
+    rebuilt = get_task_for_workspace(workspace, task.id)
+    rebuilt_state = load_state_for_workspace(workspace)
     assert event_log.exists()
     assert first_event["event_type"] == "task_created"
     assert rebuilt is not None
