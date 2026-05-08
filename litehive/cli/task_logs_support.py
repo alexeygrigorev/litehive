@@ -142,7 +142,6 @@ def follow_active_subagent_for_workspace(workspace: Workspace, task_id: str | No
     own writer is not synchronous-flushed; a tighter poll just
     burns CPU.
     """
-    root = workspace.root
     task = resolve_follow_task_for_workspace(workspace, task_id=task_id)
     if task is None:
         ref = None
@@ -161,13 +160,13 @@ def follow_active_subagent_for_workspace(workspace: Workspace, task_id: str | No
     active_task_id = task.id
     active_subagent_id = ref.id
     active_path = ref.path
-    base = task_dir(root, task) / active_path
+    base = task_dir(workspace.root, task) / active_path
     stdout_path = _artifact_for_kind(base, "stdout", active=is_active)
     if stdout_path is None:
         print("Active subagent stdout not found.")
         return 0
 
-    print(f"following: {stdout_path.relative_to(root)}")
+    print(f"following: {stdout_path.relative_to(workspace.root)}")
     position = 0
     if not is_active:
         _print_follow_chunk(stdout_path, position)

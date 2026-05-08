@@ -87,6 +87,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove state loading root alias at the workspace existence boundary.
 - [x] Add a workspace-native runner-lock registry key helper.
 - [x] Move merge-resolver subagent assembly to the workspace-native container builder.
+- [x] Remove simple CLI/daemon/recovery presentation root aliases.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

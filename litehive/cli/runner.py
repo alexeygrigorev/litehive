@@ -428,10 +428,9 @@ def _run_drain(
     would have to guess from the printed banner alone.
     """
     workspace = container.workspace
-    root = workspace.root
     tasks_run = 0
     while True:
-        if stop_on_dirty_git and _workspace_has_dirty_non_litehive_changes(root):
+        if stop_on_dirty_git and _workspace_has_dirty_non_litehive_changes(workspace.root):
             set_pool_stop_reason_for_workspace(workspace, "dirty_git_state")
             print("Pool stopped: dirty_git_state")
             return 0

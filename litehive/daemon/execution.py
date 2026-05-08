@@ -701,9 +701,8 @@ def daemon_status_lines_for_workspace(workspace: Workspace) -> list[str]:
     the workspace tree. Failing to surface the latest log dir here
     is the difference between "I can debug" and "I have to grep".
     """
-    root = workspace.root
     entry = daemon_metadata_for_workspace(workspace)
-    lines = [f"workspace: {root}"]
+    lines = [f"workspace: {workspace.root}"]
     if entry is None or entry.status != "running":
         lines.append("daemon_status: stopped")
     else:

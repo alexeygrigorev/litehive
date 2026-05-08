@@ -298,13 +298,12 @@ def _recovery_source_checkout(workspace: Workspace) -> tuple[str | None, str | N
     should treat as its execution root.
     """
     config = workspace.load_config()
-    root = workspace.root
     raw_source = str(config.litehive_source_path or "").strip() or None
     if raw_source is None:
-        return None, str(root)
+        return None, str(workspace.root)
     candidate = Path(raw_source).expanduser()
     if not candidate.is_absolute():
-        candidate = root / candidate
+        candidate = workspace.root / candidate
     try:
         resolved = candidate.resolve()
     except OSError:
@@ -312,7 +311,7 @@ def _recovery_source_checkout(workspace: Workspace) -> tuple[str | None, str | N
     if resolved.is_dir():
         execution_root = resolved
     else:
-        execution_root = root
+        execution_root = workspace.root
     return raw_source, str(execution_root)
 
 
