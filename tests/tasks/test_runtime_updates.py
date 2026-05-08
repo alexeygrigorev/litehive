@@ -7,7 +7,7 @@ from litehive.domain.outcomes import OutcomeReasonCode, TaskOutcomeKind
 from litehive.domain.failure_diagnostics import FailureDiagnostics
 from litehive.domain.reports import StageReport
 from litehive.domain.runtime import RuntimeInterruptionState, RuntimeStageState
-from litehive.state.records import create_task, require_task, save_task
+from litehive.state.records import create_task_for_workspace, require_task_for_workspace, save_task_for_workspace
 from litehive.tasks.runtime import (
     mark_stage_finished_for_workspace,
     mark_stage_started_for_workspace,
@@ -45,21 +45,21 @@ def test_runtime_stage_model_copy_does_not_resurrect_removed_fields() -> None:
 
 def test_mark_task_run_started_resets_stage_and_active_subagent(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Reset runtime")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Reset runtime")
 
     workspace = Workspace.from_path(tmp_path)
 
     mark_stage_started_for_workspace(workspace, task, "implementing")
-    task = require_task(tmp_path, task.id)
+    task = require_task_for_workspace(Workspace.from_path(tmp_path), task.id)
     mark_subagent_started_for_workspace(workspace, task, _subagent_ref())
 
-    task = require_task(tmp_path, task.id)
+    task = require_task_for_workspace(Workspace.from_path(tmp_path), task.id)
     task.runtime.execution.interruption = RuntimeInterruptionState(source="runner", reason="stale state")
-    save_task(tmp_path, task)
+    save_task_for_workspace(Workspace.from_path(tmp_path), task)
 
     mark_task_run_started_for_workspace(workspace, task)
 
-    refreshed = require_task(tmp_path, task.id)
+    refreshed = require_task_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert refreshed.runtime.pipeline.execution_status == "running"
     assert refreshed.runtime.pipeline.current_stage.stage is None
     assert refreshed.runtime.pipeline.current_stage.status == "idle"
@@ -70,12 +70,12 @@ def test_mark_task_run_started_resets_stage_and_active_subagent(tmp_path: Path) 
 
 def test_mark_stage_finished_uses_shared_idle_and_completed_stage_shapes(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Finish stage")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Finish stage")
 
     workspace = Workspace.from_path(tmp_path)
 
     mark_stage_started_for_workspace(workspace, task, "implementing")
-    task = require_task(tmp_path, task.id)
+    task = require_task_for_workspace(Workspace.from_path(tmp_path), task.id)
     report = StageReport(
         task_id=task.id,
         pipeline_state="implementing",
@@ -85,7 +85,7 @@ def test_mark_stage_finished_uses_shared_idle_and_completed_stage_shapes(tmp_pat
 
     mark_stage_finished_for_workspace(workspace, task, report)
 
-    refreshed = require_task(tmp_path, task.id)
+    refreshed = require_task_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert refreshed.runtime.pipeline.current_stage.stage is None
     assert refreshed.runtime.pipeline.current_stage.status == "idle"
     assert "last" + "_stage" not in refreshed.runtime.model_dump()["pipeline"]
@@ -94,7 +94,7 @@ def test_mark_stage_finished_uses_shared_idle_and_completed_stage_shapes(tmp_pat
 
 def test_task_outcome_failure_diagnostics_are_typed_and_persist_as_object(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Typed outcome diagnostics")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Typed outcome diagnostics")
 
     workspace = Workspace.from_path(tmp_path)
 
@@ -111,7 +111,7 @@ def test_task_outcome_failure_diagnostics_are_typed_and_persist_as_object(tmp_pa
         failure_diagnostics={"phase": "after_commit", "consecutive_same_hook_rejects": 2},
     )
 
-    refreshed = require_task(tmp_path, task.id)
+    refreshed = require_task_for_workspace(Workspace.from_path(tmp_path), task.id)
     diagnostics = refreshed.runtime.pipeline.last_outcome.failure_diagnostics
 
     assert isinstance(diagnostics, FailureDiagnostics)
@@ -126,13 +126,13 @@ def test_task_outcome_failure_diagnostics_are_typed_and_persist_as_object(tmp_pa
 def test_mark_subagent_finished_clears_active_subagent_without_completed_runtime_copy(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task(tmp_path, title="Finish subagent")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Finish subagent")
     ref = _subagent_ref()
 
     mark_subagent_started_for_workspace(workspace, task, ref)
 
     mark_subagent_finished_for_workspace(workspace, task, ref, "SUMMARY: partial output", exit_code=0)
 
-    refreshed = require_task(tmp_path, task.id)
+    refreshed = require_task_for_workspace(Workspace.from_path(tmp_path), task.id)
     assert refreshed.runtime.execution.active_subagent is None
     assert "last" + "_subagent" not in refreshed.runtime.model_dump()["execution"]
