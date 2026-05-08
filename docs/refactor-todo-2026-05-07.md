@@ -105,6 +105,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove the unused task-existence compatibility wrapper.
 - [x] Remove unused private state.records path wrappers.
 - [x] Remove unused private backup path wrapper.
+- [x] Remove unused rebuild-safety path wrappers.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

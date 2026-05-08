@@ -70,15 +70,6 @@ def sqlite_task_ids(db_path: Path) -> set[str]:
         return set()
 
 
-def task_artifact_dir_ids(root: Path) -> set[str]:
-    """
-    Path-based compatibility wrapper for task artifact discovery.
-    """
-    from litehive.workspace import Workspace  # noqa: PLC0415
-
-    return task_artifact_dir_ids_for_workspace(Workspace.from_path(root))
-
-
 def task_artifact_dir_ids_for_workspace(workspace: "Workspace") -> set[str]:
     """
     Discover task ids that have on-disk artifact directories.
@@ -104,15 +95,6 @@ def task_artifact_dir_ids_for_workspace(workspace: "Workspace") -> set[str]:
         if match is not None:
             task_ids.add(match.group(1))
     return task_ids
-
-
-def event_log_replay_task_ids(root: Path) -> set[str]:
-    """
-    Path-based compatibility wrapper for event-log replay coverage.
-    """
-    from litehive.workspace import Workspace  # noqa: PLC0415
-
-    return event_log_replay_task_ids_for_workspace(Workspace.from_path(root))
 
 
 def event_log_replay_task_ids_for_workspace(workspace: "Workspace") -> set[str]:
