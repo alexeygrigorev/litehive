@@ -463,6 +463,29 @@ def test_production_constructors_do_not_take_raw_workspace_roots() -> None:
     assert found_cached_workspace_roots == []
 
 
+def test_workspace_from_path_is_only_called_by_container_boundary() -> None:
+    """
+    Keep raw Path -> Workspace conversion at the DI boundary.
+    """
+    allowed = {
+        "litehive/container.py:build_workspace",
+    }
+    found: list[str] = []
+    for path in _python_files():
+        tree = _tree(path)
+        parents = _parent_map(tree)
+        rel = path.relative_to(REPO_ROOT)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if _name_of(node.func) != "Workspace.from_path":
+                continue
+            owner = _enclosing_definition_name(node, parents)
+            found.append(f"{rel}:{owner}")
+
+    assert sorted(found) == sorted(allowed)
+
+
 def test_production_getattr_calls_stay_explicitly_allowlisted() -> None:
     """
     Block new dynamic attribute access in production code.
