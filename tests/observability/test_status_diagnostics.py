@@ -26,8 +26,8 @@ from litehive.observability.status_diagnostics import (
     collect_status_snapshot_for_workspace,
 )
 from litehive.observability.status_loaders import _load_runner_status_for_status_for_workspace
-from litehive.state.records import create_task, save_task
-from litehive.state.persist import save_state
+from litehive.state.records import create_task_for_workspace, save_task_for_workspace
+from litehive.state.persist import save_state_for_workspace
 from litehive.workspace import Workspace
 
 from tests.support.helpers import _cmd_status
@@ -219,7 +219,8 @@ def test_status_reports_never_started_runner_without_lock(tmp_path: Path, capsys
 
 def test_status_reports_stale_runner_lock(tmp_path: Path, capsys, monkeypatch) -> None:
     create_workspace(tmp_path)
-    save_state(tmp_path, WorkspaceState(active_task_id="T-0001"))
+    workspace = Workspace.from_path(tmp_path)
+    save_state_for_workspace(workspace, WorkspaceState(active_task_id="T-0001"))
     workspace_path(tmp_path, "runtime", ".runner.lock").parent.mkdir(parents=True, exist_ok=True)
     workspace_path(tmp_path, "runtime", ".runner.lock").write_text(
         json.dumps(
@@ -300,8 +301,9 @@ def test_status_reports_stopped_runner_for_empty_lock_file(tmp_path: Path, capsy
 
 def test_status_reports_queued_task_missing_from_sqlite_index(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Still queued")
-    save_state(tmp_path, WorkspaceState(queue=[task.id]))
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Still queued")
+    save_state_for_workspace(workspace, WorkspaceState(queue=[task.id]))
     with connect_workspace_db(tmp_path) as connection:
         connection.execute("DELETE FROM task_state WHERE task_id = ?", (task.id,))
         connection.execute("DELETE FROM task_intent WHERE task_id = ?", (task.id,))
@@ -438,7 +440,8 @@ heru = { path = "../heru", editable = true }
 
 def test_status_reports_origin_divergence_as_attention_required(tmp_path: Path, capsys, monkeypatch) -> None:
     create_workspace(tmp_path)
-    save_state(tmp_path, WorkspaceState(pool_stop_reason="diverged_from_origin"))
+    workspace = Workspace.from_path(tmp_path)
+    save_state_for_workspace(workspace, WorkspaceState(pool_stop_reason="diverged_from_origin"))
     monkeypatch.setattr(
         "litehive.observability.status_probes.check_origin_divergence",
         lambda workspace: (
@@ -460,8 +463,9 @@ def test_status_reports_origin_divergence_as_attention_required(tmp_path: Path, 
 
 def test_full_status_reports_consecutive_task_failures_as_critical(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
-    save_state(
-        tmp_path,
+    workspace = Workspace.from_path(tmp_path)
+    save_state_for_workspace(
+        workspace,
         WorkspaceState(
             pool_stop_reason="consecutive_task_failures",
             consecutive_task_failures=3,
@@ -478,13 +482,14 @@ def test_full_status_reports_consecutive_task_failures_as_critical(tmp_path: Pat
 
 def test_status_omits_recovery_failure_repair_guidance_from_default_path(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Recovery failed task")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Recovery failed task")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.FLAGGED
     task.flag_reason = "recovery_failed"
     task.runtime.pipeline.last_outcome.stage = PipelineState.IMPLEMENTING
     task.runtime.pipeline.last_outcome.reason = "recovery crashed while repairing the task"
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
 
     exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
@@ -497,12 +502,13 @@ def test_status_omits_recovery_failure_repair_guidance_from_default_path(tmp_pat
 
 def test_full_status_reports_terminal_recovery_failure_from_lifecycle_state(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Terminal lifecycle recovery failure")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Terminal lifecycle recovery failure")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.FLAGGED
     task.flag_reason = "needs_operator_review"
-    save_task(tmp_path, task)
-    SqlitePersistence(Workspace.from_path(tmp_path)).save(
+    save_task_for_workspace(workspace, task)
+    SqlitePersistence(workspace).save(
         TaskState(
             task_id=task.id,
             stage=PipelineState.FAILED,
@@ -535,12 +541,13 @@ def test_full_status_reports_terminal_recovery_failure_from_lifecycle_state(tmp_
 
 def test_status_reports_queued_backlog_task_with_resumable_runtime_stage(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Backlog damaged task")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Backlog damaged task")
     task.status = TaskStatus.QUEUED
     task.pipeline_status = PipelineStatus.BACKLOG
     task.runtime.pipeline.current_stage.stage = PipelineState.TESTING
     task.runtime.pipeline.current_stage.status = "idle"
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
 
     exit_code, output = _run_full_status(tmp_path, capsys)
 
@@ -553,13 +560,14 @@ def test_status_reports_queued_backlog_task_with_resumable_runtime_stage(tmp_pat
 
 def test_status_omits_backlog_runtime_stage_repair_guidance_from_default_path(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Backlog damaged task missing from queue")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Backlog damaged task missing from queue")
     task.status = TaskStatus.QUEUED
     task.pipeline_status = PipelineStatus.BACKLOG
     task.runtime.pipeline.current_stage.stage = PipelineState.TESTING
     task.runtime.pipeline.current_stage.status = "idle"
-    save_task(tmp_path, task)
-    save_state(tmp_path, WorkspaceState(queue=[]))
+    save_task_for_workspace(workspace, task)
+    save_state_for_workspace(workspace, WorkspaceState(queue=[]))
 
     exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
@@ -573,12 +581,13 @@ def test_status_omits_backlog_runtime_stage_repair_guidance_from_default_path(tm
 
 def test_status_omits_queued_stage_normalization_warning_from_default_path(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Stale queued stage")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Stale queued stage")
     task.status = TaskStatus.QUEUED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
     task.runtime.pipeline.current_stage.stage = None
     task.runtime.pipeline.current_stage.status = "idle"
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
 
     exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
@@ -590,7 +599,8 @@ def test_status_omits_queued_stage_normalization_warning_from_default_path(tmp_p
 
 def test_full_status_tolerates_missing_active_task_record(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
-    save_state(tmp_path, WorkspaceState(active_task_id="T-9999"))
+    workspace = Workspace.from_path(tmp_path)
+    save_state_for_workspace(workspace, WorkspaceState(active_task_id="T-9999"))
 
     exit_code, output = _run_full_status(tmp_path, capsys)
 
