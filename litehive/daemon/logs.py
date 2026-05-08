@@ -61,18 +61,6 @@ class DaemonLogs:
         return latest_matching(self.latest_run_all_dir(), pattern)
 
 
-def latest_run_all_log_dir(workspace: Path) -> Path | None:
-    """
-    Return the most recent ``run-all`` session log directory.
-
-    Path-based boundary wrapper for callers that have not yet built a
-    ``Workspace``. Internal callers should use
-    :func:`latest_run_all_log_dir_for_workspace` so runtime path
-    composition stays on the workspace object.
-    """
-    return latest_run_all_log_dir_for_workspace(Workspace.from_path(workspace))
-
-
 def latest_run_all_log_dir_for_workspace(workspace: Workspace) -> Path | None:
     """
     Return the most recent ``run-all`` session log directory.

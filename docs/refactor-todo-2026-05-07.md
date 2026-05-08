@@ -116,6 +116,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove backup path wrappers after migrating tests.
 - [x] Remove unused runtime store path factory.
 - [x] Remove daemon registry path wrappers after migrating tests.
+- [x] Remove unused daemon log path wrapper.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`
