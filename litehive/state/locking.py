@@ -94,6 +94,15 @@ def _runner_lock_manager_for_workspace(
 @contextmanager
 def workspace_lock(root: Path):
     """
+    Path-based compatibility wrapper for the workspace-level flock.
+    """
+    with workspace_lock_for_workspace(Workspace.from_path(root)):
+        yield
+
+
+@contextmanager
+def workspace_lock_for_workspace(workspace: Workspace):
+    """
     Hold the workspace-level flock for short, blocking critical sections.
 
     Used by callers that mutate workspace state without owning the
@@ -101,7 +110,7 @@ def workspace_lock(root: Path):
     repair); blocking acquisition is intentional so a second writer waits
     rather than failing.
     """
-    lock_path = workspace_dir(root) / ".lock"
+    lock_path = workspace_dir(workspace.root) / ".lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("w", encoding="utf-8") as handle:
         manager = WorkspaceLockManager(lock_path, pid_is_alive=runner_pid_is_alive)
@@ -110,15 +119,6 @@ def workspace_lock(root: Path):
             yield
         finally:
             manager.unlock(handle)
-
-
-@contextmanager
-def workspace_lock_for_workspace(workspace: Workspace):
-    """
-    Hold the workspace-level flock for an injected workspace.
-    """
-    with workspace_lock(workspace.root):
-        yield
 
 
 def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> None:
