@@ -83,6 +83,8 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate worktree rescue metadata/stash helpers to injected workspace.
 - [x] Migrate task creation/discard locks to workspace-native lock helper.
 - [x] Migrate pool stop/completion locks to workspace-native lock helper.
+- [x] Remove state task creation/discard root aliases at path-boundary calls.
+- [x] Remove state loading root alias at the workspace existence boundary.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

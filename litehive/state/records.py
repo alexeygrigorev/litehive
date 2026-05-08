@@ -529,8 +529,7 @@ def create_task_for_workspace(
     priority validation, queue insertion, and audit emission all live
     in one place rather than being duplicated across entry points.
     """
-    root = workspace.root
-    create_workspace(root)
+    create_workspace(workspace.root)
     if retry_limit is not None and retry_limit < 0:
         raise ValueError("Retry limit must be 0 or greater")
     try:
@@ -566,7 +565,7 @@ def create_task_for_workspace(
             },
         )
 
-        base = task_dir(root, task, bootstrap=False)
+        base = task_dir(workspace.root, task, bootstrap=False)
         _create_task_runtime_dirs(base)
         state.queue.append(task.id)
         actor = "operator"
@@ -604,7 +603,7 @@ def create_task_for_workspace(
                 )
             ],
         )
-        ensure_runtime_ignored(root)
+        ensure_runtime_ignored(workspace.root)
         return task
 
 
@@ -684,8 +683,7 @@ def create_follow_up_tasks_for_workspace(
     if stage not in {TaskStage.GROOMING, TaskStage.TESTING, TaskStage.ACCEPTING}:
         return []
 
-    root = workspace.root
-    create_workspace(root)
+    create_workspace(workspace.root)
     created_tasks: list[TaskRecord] = []
     created_dirs: list[Path] = []
     with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
@@ -714,7 +712,7 @@ def create_follow_up_tasks_for_workspace(
                 },
             )
 
-            base = task_dir(root, task, bootstrap=False)
+            base = task_dir(workspace.root, task, bootstrap=False)
             _create_task_runtime_dirs(base)
             created_dirs.append(base)
             state.queue.append(task.id)
@@ -735,7 +733,7 @@ def create_follow_up_tasks_for_workspace(
             cleanup_dirs=created_dirs,
             audit_entries=audit_entries,
         )
-        ensure_runtime_ignored(root)
+        ensure_runtime_ignored(workspace.root)
     return created_tasks
 
 
@@ -756,7 +754,6 @@ def discard_created_task_for_workspace(workspace: Workspace, task_id: str) -> No
     of the initial persist so the workspace is left in the
     pre-creation shape.
     """
-    root = workspace.root
     with workspace_lock_for_workspace(workspace):
         task = get_task_for_workspace(workspace, task_id)
         state = load_state_for_workspace(workspace)
@@ -767,7 +764,7 @@ def discard_created_task_for_workspace(workspace: Workspace, task_id: str) -> No
         state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
         save_state_without_runner_guard_for_workspace(workspace, state)
         if task is not None:
-            td = task_dir(root, task)
+            td = task_dir(workspace.root, task)
             if td.exists():
                 remove_tree_logged(td, logger=logger, target_label="task directory")
         runtime_store_for_workspace(workspace).delete_task_records(

@@ -56,9 +56,8 @@ def load_state_for_workspace(workspace: Workspace, bootstrap: bool = True) -> Wo
     before loading so a read path cannot silently create a new project;
     explicit workspace creation is owned by ``create_workspace``.
     """
-    root = workspace.root
     if bootstrap and not _SKIP_BOOTSTRAP_LOAD_STATE.get():
-        require_existing_workspace(root, source="load_state")
+        require_existing_workspace(workspace.root, source="load_state")
     store = runtime_store_for_workspace(workspace)
     state = store.load_workspace_state()
     if state is None:
