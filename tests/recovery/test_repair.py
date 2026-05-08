@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 from litehive.cli.app import app
 from litehive.config.workspace import create_workspace
 from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
-from litehive.state.records import create_task
+from litehive.state.records import create_task_for_workspace
 from litehive.workspace import Workspace
 
 
@@ -23,8 +23,9 @@ def test_recover_stale_runner_state_skips_task_scan_for_clean_queue(tmp_path: Pa
 
 def test_repair_clean_workspace_with_100_tasks_skips_task_scan(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     for index in range(100):
-        create_task(tmp_path, title=f"Task {index}")
+        create_task_for_workspace(workspace, title=f"Task {index}")
     monkeypatch.setattr("litehive.state.records.list_tasks", _boom)
     start = time.perf_counter()
     result = CliRunner().invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)

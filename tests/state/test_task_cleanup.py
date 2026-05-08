@@ -6,14 +6,14 @@ from unittest.mock import patch
 import pytest
 
 from litehive.config.workspace import create_workspace
-from litehive.state.records import create_task, discard_created_task_for_workspace
+from litehive.state.records import create_task_for_workspace, discard_created_task_for_workspace
 from litehive.tasks.paths import task_dir
 from litehive.workspace import Workspace
 
 
 def test_discard_created_task_missing_dir_no_error(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Ephemeral")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Ephemeral")
     td = task_dir(tmp_path, task)
     shutil.rmtree(td)
     assert not td.exists()
@@ -23,7 +23,7 @@ def test_discard_created_task_missing_dir_no_error(tmp_path: Path) -> None:
 
 def test_discard_created_task_existing_dir_removed(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Removable")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Removable")
     td = task_dir(tmp_path, task)
     assert td.exists()
 
@@ -37,7 +37,7 @@ def test_discard_created_task_logs_target_and_raises_on_cleanup_failure(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Cleanup failure")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Cleanup failure")
     td = task_dir(tmp_path, task)
 
     with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
