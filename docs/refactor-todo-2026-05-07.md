@@ -157,6 +157,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate hook reject circuit-breaker tests to workspace-native state/task helpers.
 - [x] Migrate daemon execution tests to workspace-native state/task helpers.
 - [x] Migrate audit log tests to workspace-native state/task helpers.
+- [x] Migrate queue invariant tests to workspace-native state/task helpers.
 - [x] Remove unused runtime gitignore path wrapper.
 - [x] Remove task runtime save path wrapper after migrating tests.
 - [x] Remove runner-lock held path wrapper after migrating tests.
