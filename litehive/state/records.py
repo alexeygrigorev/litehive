@@ -175,13 +175,6 @@ def task_state_for_storage(task: TaskRecord) -> TaskStateRecord:
     return task.to_storage_state_record()
 
 
-def write_task_runtime(root: Path, task: TaskRecord) -> None:
-    """
-    Path-based compatibility wrapper for raw task runtime persistence.
-    """
-    write_task_runtime_for_workspace(Workspace.from_path(root), task)
-
-
 def write_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
     """
     Persist a task's runtime row without entering the workspace mutation guard.
@@ -707,13 +700,6 @@ def create_follow_up_tasks_for_workspace(
         )
         ensure_runtime_ignored_for_workspace(workspace)
     return created_tasks
-
-
-def discard_created_task(root: Path, task_id: str) -> None:
-    """
-    Path-based compatibility wrapper for task creation rollback.
-    """
-    discard_created_task_for_workspace(Workspace.from_path(root), task_id)
 
 
 def discard_created_task_for_workspace(workspace: Workspace, task_id: str) -> None:
