@@ -133,7 +133,7 @@ def resolve_workspace(
     if effective_task_id is not None:
         from litehive.workspace import Workspace  # noqa: PLC0415
 
-        workspace = Workspace.from_path(workspace_root)
+        workspace = Workspace(workspace_root)
         if not _task_exists_in_workspace(workspace, effective_task_id):
             raise ValueError(f"unable to resolve workspace: task {effective_task_id} is not in {workspace_root}")
     return workspace_root
@@ -186,6 +186,6 @@ def create_workspace(
     from litehive.state.store import runtime_store_for_workspace  # noqa: PLC0415
     from litehive.workspace import Workspace  # noqa: PLC0415
 
-    runtime_store_for_workspace(Workspace.from_path(root)).bootstrap()
+    runtime_store_for_workspace(Workspace(root)).bootstrap()
 
     return base

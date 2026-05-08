@@ -197,6 +197,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Move Heru factory display path rendering to injected workspace.
 - [x] Move config effective-data and context loading to injected workspace.
 - [x] Remove the remaining config-loading root compatibility wrapper.
+- [x] Avoid re-running workspace boundary construction inside config workspace helpers.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`
