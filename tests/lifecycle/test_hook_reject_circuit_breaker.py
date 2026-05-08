@@ -15,8 +15,8 @@ from litehive.lifecycle.nodes.agent import AgentVerdict, UnrecoverableError
 from litehive.lifecycle.orchestration import run_task as run_pipeline_task
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.workspace import Workspace
-from litehive.state.persist import load_state
-from litehive.state.records import create_task, get_task, get_task_worktree_path
+from litehive.state.persist import load_state_for_workspace
+from litehive.state.records import create_task_for_workspace, get_task_for_workspace, get_task_worktree_path
 from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace, task_worktree_path_for_workspace
 
 pytestmark = pytest.mark.integration
@@ -27,7 +27,7 @@ class _RecoveryScenarioEngine:
         self,
         name: str,
         *,
-        workspace: Path,
+        workspace: Workspace,
         recovery_mode: str,
         recovery_calls: list[str],
     ) -> None:
@@ -96,17 +96,17 @@ class _CrashUntilLitehiveFixEngine:
         return AgentVerdict(outcome="pass")
 
 
-def _task_execution_root(workspace: Path, task_id: str) -> Path:
-    task = get_task(workspace, task_id)
+def _task_execution_root(workspace: Workspace, task_id: str) -> Path:
+    task = get_task_for_workspace(workspace, task_id)
     if task is None:
-        return workspace
+        return workspace.root
     recorded = get_task_worktree_path(task)
     if recorded:
-        resolved = resolve_recorded_worktree_path_for_workspace(Workspace.from_path(workspace), recorded)
+        resolved = resolve_recorded_worktree_path_for_workspace(workspace, recorded)
         if resolved is not None and resolved.exists():
             return resolved
-    expected = task_worktree_path_for_workspace(Workspace.from_path(workspace), task)
-    return expected if expected.exists() else workspace
+    expected = task_worktree_path_for_workspace(workspace, task)
+    return expected if expected.exists() else workspace.root
 
 
 def _init_workspace_git_repo(root: Path, *, config: LitehiveConfig | None = None) -> None:
@@ -149,7 +149,8 @@ def _fail_twice_then_pass_command(task_id: str) -> str:
 
 def test_crash_routes_to_recovery_and_resumes(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path)
-    task = create_task(tmp_path, title="Recover implementing crash", pipeline_mode="single")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Recover implementing crash", pipeline_mode="single")
 
     crashed_tasks: set[str] = set()
     recovery_calls: list[str] = []
@@ -162,8 +163,8 @@ def test_crash_routes_to_recovery_and_resumes(tmp_path: Path) -> None:
             crashed_tasks=crashed_tasks,
         ),
     )
-    refreshed = get_task(tmp_path, task.id)
-    pipeline_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(task.id)
+    refreshed = get_task_for_workspace(workspace, task.id)
+    pipeline_state = SqlitePersistence(workspace).load(task.id)
 
     assert result.final_stage == "done"
     assert recovery_calls == [task.id]
@@ -181,7 +182,8 @@ def test_recovery_fix_retries_failed_stage_automatically(tmp_path: Path) -> None
     source_repo = tmp_path / "litehive-src"
     source_repo.mkdir()
     _init_workspace_git_repo(workspace, config=LitehiveConfig(litehive_source_path=str(source_repo)))
-    task = create_task(workspace, title="Retry failed stage after recovery fix", pipeline_mode="single")
+    workspace_obj = Workspace.from_path(workspace)
+    task = create_task_for_workspace(workspace_obj, title="Retry failed stage after recovery fix", pipeline_mode="single")
 
     recovery_calls: list[str] = []
     implementing_attempts: list[str] = []
@@ -195,8 +197,8 @@ def test_recovery_fix_retries_failed_stage_automatically(tmp_path: Path) -> None
             implementing_attempts=implementing_attempts,
         ),
     )
-    refreshed = get_task(workspace, task.id)
-    pipeline_state = SqlitePersistence(Workspace.from_path(workspace)).load(task.id)
+    refreshed = get_task_for_workspace(workspace_obj, task.id)
+    pipeline_state = SqlitePersistence(workspace_obj).load(task.id)
 
     assert result.final_stage == "done"
     assert recovery_calls == [task.id]
@@ -210,8 +212,9 @@ def test_recovery_fix_retries_failed_stage_automatically(tmp_path: Path) -> None
 
 def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
-    broken = create_task(tmp_path, title="Broken hook loop")
-    runnable = create_task(tmp_path, title="Runnable next task")
+    workspace = Workspace.from_path(tmp_path)
+    broken = create_task_for_workspace(workspace, title="Broken hook loop")
+    runnable = create_task_for_workspace(workspace, title="Runnable next task")
     _init_workspace_git_repo(
         tmp_path,
         config=LitehiveConfig(
@@ -234,7 +237,7 @@ def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_p
             task,
             engine_factory=lambda engine_name: _RecoveryScenarioEngine(
                 engine_name,
-                workspace=tmp_path,
+                workspace=container.workspace,
                 recovery_mode="fail",
                 recovery_calls=recovery_calls,
             ),
@@ -243,9 +246,9 @@ def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_p
 
     container = build_container(tmp_path)
     first = run_once(container)
-    broken_refreshed = get_task(tmp_path, broken.id)
-    pipeline_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(broken.id)
-    state_after_first = load_state(tmp_path)
+    broken_refreshed = get_task_for_workspace(workspace, broken.id)
+    pipeline_state = SqlitePersistence(workspace).load(broken.id)
+    state_after_first = load_state_for_workspace(workspace)
 
     assert first.exit_code == 0
     assert first.ran_task is True
@@ -261,12 +264,12 @@ def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_p
         broken.id
     )
     assert broken_refreshed.runtime.pipeline.hook_reject_recovery_invoked is False
-    assert _task_execution_root(tmp_path, broken.id).exists()
+    assert _task_execution_root(workspace, broken.id).exists()
     assert broken.id not in state_after_first.queue
     assert runnable.id in state_after_first.queue
 
     second = run_once(container)
-    runnable_refreshed = get_task(tmp_path, runnable.id)
+    runnable_refreshed = get_task_for_workspace(workspace, runnable.id)
 
     assert second.exit_code == 0
     assert second.ran_task is True
@@ -279,7 +282,8 @@ def test_same_hook_reject_circuit_breaker_flags_task_and_next_run_skips_it(tmp_p
 
 def test_successful_stage_progress_resets_same_hook_reject_tracking(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Reset hook reject counter")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Reset hook reject counter")
     _init_workspace_git_repo(
         tmp_path,
         config=LitehiveConfig(
@@ -296,21 +300,21 @@ def test_successful_stage_progress_resets_same_hook_reject_tracking(tmp_path: Pa
 
     result = run_pipeline_task(
         tmp_path,
-        task,
-        engine_factory=lambda engine_name: _RecoveryScenarioEngine(
-            engine_name,
-            workspace=tmp_path,
-            recovery_mode="fix",
-            recovery_calls=[],
-        ),
+            task,
+            engine_factory=lambda engine_name: _RecoveryScenarioEngine(
+                engine_name,
+                workspace=workspace,
+                recovery_mode="fix",
+                recovery_calls=[],
+            ),
     )
-    refreshed = get_task(tmp_path, task.id)
-    pipeline_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(task.id)
+    refreshed = get_task_for_workspace(workspace, task.id)
+    pipeline_state = SqlitePersistence(workspace).load(task.id)
 
     assert result.final_stage == "done"
     assert refreshed is not None
     assert refreshed.status == "done"
-    assert _task_execution_root(tmp_path, task.id).joinpath(".hook_reject_count").read_text(encoding="utf-8") == "3"
+    assert _task_execution_root(workspace, task.id).joinpath(".hook_reject_count").read_text(encoding="utf-8") == "3"
     assert pipeline_state.consecutive_same_hook_rejects == 0
     assert pipeline_state.last_hook_reject_fingerprint is None
     assert pipeline_state.hook_reject_recovery_invoked is False
