@@ -5,8 +5,9 @@ import pytest
 from typer.testing import CliRunner
 
 from litehive.config.workspace import create_workspace
-from litehive.state.persist import load_state
-from litehive.state.records import create_task
+from litehive.state.persist import load_state_for_workspace
+from litehive.state.records import create_task_for_workspace
+from litehive.workspace import Workspace
 
 modern_cli = importlib.import_module("litehive.cli.app")
 
@@ -197,6 +198,7 @@ def test_run_drain_runs_until_queue_is_empty(tmp_path, monkeypatch) -> None:
 
 def test_run_drain_stops_after_three_consecutive_task_failures(tmp_path, monkeypatch) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
 
     class Task:
         def __init__(self, tid: str, title: str) -> None:
@@ -246,7 +248,7 @@ def test_run_drain_stops_after_three_consecutive_task_failures(tmp_path, monkeyp
         catch_exceptions=False,
     )
 
-    state = load_state(tmp_path)
+    state = load_state_for_workspace(workspace)
     assert result.exit_code == 0, result.output
     assert calls == ["T-1", "T-2", "T-3", "T-4", "T-5", "T-6"]
     assert "critical_status: stopped after 3 consecutive task failures" in result.output
@@ -257,7 +259,8 @@ def test_run_drain_stops_after_three_consecutive_task_failures(tmp_path, monkeyp
 
 def test_run_dry_run_previews_next_task_without_mutating_queue(tmp_path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Preview task")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Preview task")
 
     result = CliRunner().invoke(
         modern_cli.app,
@@ -265,7 +268,7 @@ def test_run_dry_run_previews_next_task_without_mutating_queue(tmp_path) -> None
         catch_exceptions=False,
     )
 
-    state = load_state(tmp_path)
+    state = load_state_for_workspace(workspace)
     assert result.exit_code == 0, result.output
     assert f"task: {task.id} Preview task" in result.output
     assert "engine: codex" in result.output
