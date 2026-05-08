@@ -75,13 +75,6 @@ def _parse_backup_path(path: Path) -> WorkspaceBackup | None:
     )
 
 
-def list_workspace_backups(root: Path) -> list[WorkspaceBackup]:
-    """
-    Path-based compatibility wrapper for workspace backup listing.
-    """
-    return list_workspace_backups_for_workspace(Workspace.from_path(root))
-
-
 def list_workspace_backups_for_workspace(workspace: Workspace) -> list[WorkspaceBackup]:
     """
     Enumerate persisted DB snapshots, newest first.
@@ -100,13 +93,6 @@ def list_workspace_backups_for_workspace(workspace: Workspace) -> list[Workspace
         key=lambda backup: backup.created_at,
         reverse=True,
     )
-
-
-def prune_workspace_backups(root: Path) -> list[Path]:
-    """
-    Path-based compatibility wrapper for backup retention pruning.
-    """
-    return prune_workspace_backups_for_workspace(Workspace.from_path(root))
 
 
 def prune_workspace_backups_for_workspace(workspace: Workspace) -> list[Path]:
@@ -145,13 +131,6 @@ def prune_workspace_backups_for_workspace(workspace: Workspace) -> list[Path]:
         backup.path.unlink(missing_ok=True)
         deleted.append(backup.path)
     return deleted
-
-
-def create_workspace_backup(root: Path, when: datetime | None = None) -> WorkspaceBackup:
-    """
-    Path-based compatibility wrapper for creating a workspace backup.
-    """
-    return create_workspace_backup_for_workspace(Workspace.from_path(root), when=when)
 
 
 def create_workspace_backup_for_workspace(
@@ -213,16 +192,6 @@ def create_workspace_backup_for_workspace(
     return backup
 
 
-def create_scheduled_workspace_backup(
-    root: Path,
-    now: datetime | None = None,
-) -> WorkspaceBackup | None:
-    """
-    Path-based compatibility wrapper for scheduled workspace backups.
-    """
-    return create_scheduled_workspace_backup_for_workspace(Workspace.from_path(root), now=now)
-
-
 def create_scheduled_workspace_backup_for_workspace(
     workspace: Workspace,
     now: datetime | None = None,
@@ -239,13 +208,6 @@ def create_scheduled_workspace_backup_for_workspace(
     if backups and backups[0].created_at.date() == now.date():
         return None
     return create_workspace_backup_for_workspace(workspace, when=now)
-
-
-def restore_workspace_backup(root: Path, timestamp: str) -> WorkspaceBackup:
-    """
-    Path-based compatibility wrapper for restoring a workspace backup.
-    """
-    return restore_workspace_backup_for_workspace(Workspace.from_path(root), timestamp)
 
 
 def restore_workspace_backup_for_workspace(workspace: Workspace, timestamp: str) -> WorkspaceBackup:

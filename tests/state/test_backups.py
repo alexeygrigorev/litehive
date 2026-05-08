@@ -9,7 +9,8 @@ from litehive.cli.app import app
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import create_workspace
 from litehive.domain.runtime import RunnerStatusState
-from litehive.state.backup import create_workspace_backup, list_workspace_backups
+from litehive.state.backup import create_workspace_backup_for_workspace, list_workspace_backups_for_workspace
+from litehive.workspace import Workspace
 
 
 def _seed_workspace_db(root: Path, values: list[str]) -> None:
@@ -31,8 +32,9 @@ def _read_workspace_db_values(root: Path) -> list[str]:
 
 def test_create_backup_and_restore_backup_cli(tmp_path: Path) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     _seed_workspace_db(tmp_path, ["before"])
-    backup = create_workspace_backup(tmp_path, when=datetime(2026, 4, 11, 2, tzinfo=UTC))
+    backup = create_workspace_backup_for_workspace(workspace, when=datetime(2026, 4, 11, 2, tzinfo=UTC))
     _seed_workspace_db(tmp_path, ["after"])
 
     result = CliRunner().invoke(
@@ -89,6 +91,7 @@ def test_restore_command_refuses_when_runner_active(
 
 def test_backup_rotation_keeps_seven_daily_and_four_weekly(tmp_path: Path) -> None:
     create_workspace(tmp_path)
+    workspace = Workspace.from_path(tmp_path)
     _seed_workspace_db(tmp_path, ["one"])
     timestamps = [
         "2026-04-11T02",
@@ -107,9 +110,12 @@ def test_backup_rotation_keeps_seven_daily_and_four_weekly(tmp_path: Path) -> No
     ]
 
     for timestamp in reversed(timestamps):
-        create_workspace_backup(tmp_path, when=datetime.strptime(timestamp, "%Y-%m-%dT%H").replace(tzinfo=UTC))
+        create_workspace_backup_for_workspace(
+            workspace,
+            when=datetime.strptime(timestamp, "%Y-%m-%dT%H").replace(tzinfo=UTC),
+        )
 
-    backups = list_workspace_backups(tmp_path)
+    backups = list_workspace_backups_for_workspace(workspace)
 
     assert [backup.timestamp for backup in backups] == [
         "2026-04-11T02",
@@ -136,6 +142,6 @@ def test_daemon_loop_creates_scheduled_backup(tmp_path: Path) -> None:
     exit_code = run_daemon_loop(workspace, output_stream=None)
 
     assert exit_code == 0
-    backups = list_workspace_backups(workspace)
+    backups = list_workspace_backups_for_workspace(Workspace.from_path(workspace))
     assert len(backups) == 1
     assert backups[0].path.parent == workspace_path(workspace, "backups")
