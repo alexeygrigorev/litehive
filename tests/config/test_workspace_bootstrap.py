@@ -178,10 +178,11 @@ def test_create_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
     tmp_path: Path,
 ) -> None:
     from litehive.db.schema import connect_workspace_db
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Current runtime state")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Current runtime state")
 
     with connect_workspace_db(tmp_path) as connection:
         connection.execute("DELETE FROM task_state WHERE task_id = ?", (task.id,))
@@ -197,13 +198,13 @@ def test_create_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
 def test_create_workspace_rebuilds_fresh_database_from_task_event_log(tmp_path: Path) -> None:
     from litehive.config.paths import workspace_path
     from litehive.db.schema import connect_workspace_db
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
     from litehive.tasks.event_log import task_event_log_path
-    from litehive.workspace import Workspace
 
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Recovered from event log")
-    assert task_event_log_path(Workspace.from_path(tmp_path)).exists()
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Recovered from event log")
+    assert task_event_log_path(workspace).exists()
 
     db_path = workspace_path(tmp_path, "data.db")
     for path in (db_path, db_path.with_name(db_path.name + "-wal"), db_path.with_name(db_path.name + "-shm")):
