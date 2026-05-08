@@ -300,16 +300,17 @@ def test_heru_engine_adapter_runs_recovery_from_litehive_source_checkout(tmp_pat
     from litehive.config.loading import load_config_for_workspace
     from litehive.config.model import LitehiveConfig
     from litehive.config.workspace import create_workspace
-    from litehive.state.records import create_task, save_task, set_task_worktree_path
+    from litehive.state.records import create_task_for_workspace, save_task_for_workspace, set_task_worktree_path
 
     source_repo = tmp_path / "litehive-src"
     source_repo.mkdir()
     create_workspace(tmp_path, LitehiveConfig(litehive_source_path=str(source_repo)))
-    task = create_task(tmp_path, title="recovery source checkout", goal="recover from source repo")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="recovery source checkout", goal="recover from source repo")
     worktree = tmp_path / "task-checkout"
     worktree.mkdir()
     set_task_worktree_path(task, str(worktree.relative_to(tmp_path)))
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
 
     session = Session()
     state = TaskState(
@@ -319,8 +320,8 @@ def test_heru_engine_adapter_runs_recovery_from_litehive_source_checkout(tmp_pat
     )
     adapter = HeruEngineAdapter(
         "codex",
-        workspace=Workspace.from_path(tmp_path),
-        config=load_config_for_workspace(Workspace.from_path(tmp_path)),
+        workspace=workspace,
+        config=load_config_for_workspace(workspace),
     )
 
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
@@ -339,12 +340,13 @@ def test_heru_engine_adapter_launches_direct_recovery_turn_on_pre_start_subagent
     tmp_path,
     monkeypatch,
 ) -> None:
-    from litehive.state.records import create_task
+    from litehive.state.records import create_task_for_workspace
 
-    task = create_task(tmp_path, title="direct recovery handoff", goal="recover startup failures")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="direct recovery handoff", goal="recover startup failures")
     session = Session()
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
-    adapter = HeruEngineAdapter("codex", workspace=Workspace.from_path(tmp_path))
+    adapter = HeruEngineAdapter("codex", workspace=workspace)
     captured: dict[str, Any] = {}
 
     class FakeCodexAdapter:

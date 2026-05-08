@@ -118,6 +118,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate engine-freeze tests to workspace-native state/task helpers.
 - [x] Migrate remaining lifecycle tests off path-based config loading.
 - [x] Migrate initial Heru engine adapter continuation tests to workspace-native task creation.
+- [x] Migrate Heru engine adapter recovery handoff setup to workspace-native task helpers.
 - [x] Remove unused runtime gitignore path wrapper.
 - [x] Remove task runtime save path wrapper after migrating tests.
 - [x] Remove runner-lock held path wrapper after migrating tests.
