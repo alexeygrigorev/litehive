@@ -13,7 +13,7 @@ from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.orchestration import run_task as run_pipeline_task
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.workspace import Workspace
-from litehive.state.records import create_task, get_task, save_task
+from litehive.state.records import create_task_for_workspace, get_task_for_workspace, save_task_for_workspace
 from litehive.tasks.status import requeue_task_for_workspace
 from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace, task_worktree_branch
 
@@ -53,12 +53,13 @@ def _init_workspace_git_repo(root: Path, *, config: LitehiveConfig | None = None
 
 def test_rejection_loop_flags_task_preserves_worktree_and_branch(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path)
-    task = create_task(tmp_path, title="Looping QA task")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Looping QA task")
     engine = _StageScriptEngine({"testing": ["reject", "reject", "reject"]})
 
     result = run_pipeline_task(tmp_path, task, engine_factory=lambda _: engine)
-    refreshed = get_task(tmp_path, task.id)
-    pipeline_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(task.id)
+    refreshed = get_task_for_workspace(workspace, task.id)
+    pipeline_state = SqlitePersistence(workspace).load(task.id)
 
     assert result.final_stage == "failed"
     assert refreshed is not None
@@ -70,7 +71,7 @@ def test_rejection_loop_flags_task_preserves_worktree_and_branch(tmp_path: Path)
     assert refreshed.runtime.pipeline.git.worktree_path is not None
 
     worktree = resolve_recorded_worktree_path_for_workspace(
-        Workspace.from_path(tmp_path),
+        workspace,
         refreshed.runtime.pipeline.git.worktree_path,
     )
     assert worktree is not None
@@ -89,7 +90,8 @@ def test_rejection_loop_flags_task_preserves_worktree_and_branch(tmp_path: Path)
 
 def test_rejection_loop_counter_resets_after_testing_pass(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path)
-    task = create_task(tmp_path, title="Reset QA loop after progress")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Reset QA loop after progress")
     engine = _StageScriptEngine(
         {
             "testing": ["reject", "reject", "pass", "reject", "pass"],
@@ -98,7 +100,7 @@ def test_rejection_loop_counter_resets_after_testing_pass(tmp_path: Path) -> Non
     )
 
     result = run_pipeline_task(tmp_path, task, engine_factory=lambda _: engine)
-    refreshed = get_task(tmp_path, task.id)
+    refreshed = get_task_for_workspace(workspace, task.id)
 
     assert result.final_stage == "done"
     assert refreshed is not None
@@ -108,14 +110,15 @@ def test_rejection_loop_counter_resets_after_testing_pass(tmp_path: Path) -> Non
 
 def test_task_rejection_loop_limit_overrides_workspace_default(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path, config=LitehiveConfig(default_rejection_loop_limit=5))
-    task = create_task(tmp_path, title="Task-specific loop cap")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Task-specific loop cap")
     task.retry_policy.rejection_loop_limit = 2
-    save_task(tmp_path, task)
+    save_task_for_workspace(workspace, task)
     engine = _StageScriptEngine({"testing": ["reject", "reject"]})
 
     result = run_pipeline_task(tmp_path, task, engine_factory=lambda _: engine)
-    refreshed = get_task(tmp_path, task.id)
-    pipeline_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(task.id)
+    refreshed = get_task_for_workspace(workspace, task.id)
+    pipeline_state = SqlitePersistence(workspace).load(task.id)
 
     assert result.final_stage == "failed"
     assert refreshed is not None
@@ -130,12 +133,13 @@ def test_repeated_stage_retry_exhaustion_survives_requeue_and_blocks_blind_reque
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     _init_workspace_git_repo(tmp_path)
-    task = create_task(tmp_path, title="Repeated implementing reject", pipeline_mode="single")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Repeated implementing reject", pipeline_mode="single")
     first_engine = _StageScriptEngine({"implementing": ["reject", "reject", "reject", "reject"]})
 
     first = run_pipeline_task(tmp_path, task, engine_factory=lambda _: first_engine)
-    first_refreshed = get_task(tmp_path, task.id)
-    first_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(task.id)
+    first_refreshed = get_task_for_workspace(workspace, task.id)
+    first_state = SqlitePersistence(workspace).load(task.id)
 
     assert first.final_stage == "failed"
     assert first_refreshed is not None
@@ -147,11 +151,11 @@ def test_repeated_stage_retry_exhaustion_survives_requeue_and_blocks_blind_reque
     assert first_record.count == 1
     assert first_refreshed.runtime.pipeline.failed_run_history[first_record.key].count == 1
 
-    requeued = requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id)
+    requeued = requeue_task_for_workspace(workspace, task.id)
     second_engine = _StageScriptEngine({"implementing": ["reject", "reject", "reject", "reject"]})
     second = run_pipeline_task(tmp_path, requeued, engine_factory=lambda _: second_engine)
-    second_refreshed = get_task(tmp_path, task.id)
-    second_state = SqlitePersistence(Workspace.from_path(tmp_path)).load(task.id)
+    second_refreshed = get_task_for_workspace(workspace, task.id)
+    second_state = SqlitePersistence(workspace).load(task.id)
 
     assert second.final_stage == "failed"
     assert second_refreshed is not None
@@ -162,9 +166,9 @@ def test_repeated_stage_retry_exhaustion_survives_requeue_and_blocks_blind_reque
     assert second_refreshed.runtime.pipeline.failed_run_history[second_record.key].count == 2
 
     with pytest.raises(ValueError, match="repeatedly exhausted the same stage retry budget"):
-        requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id)
+        requeue_task_for_workspace(workspace, task.id)
 
-    forced = requeue_task_for_workspace(Workspace.from_path(tmp_path), task.id, force=True)
+    forced = requeue_task_for_workspace(workspace, task.id, force=True)
     forced_record = next(iter(forced.runtime.pipeline.failed_run_history.values()))
     assert forced.status == "queued"
     assert forced_record.count == 2
