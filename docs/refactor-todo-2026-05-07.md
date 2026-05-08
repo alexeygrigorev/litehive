@@ -108,6 +108,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Remove unused rebuild-safety path wrappers.
 - [x] Remove unused read-only runner status path helper.
 - [x] Remove unused task runtime/creation rollback path wrappers.
+- [x] Remove unused runtime gitignore path wrapper.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

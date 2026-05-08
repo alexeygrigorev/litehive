@@ -138,13 +138,6 @@ def _default_task_creation_source_for_workspace(workspace: Workspace) -> TaskCre
     )
 
 
-def ensure_runtime_ignored(root: Path) -> None:
-    """
-    Path-based compatibility wrapper for workspace gitignore refreshes.
-    """
-    ensure_runtime_ignored_for_workspace(Workspace.from_path(root))
-
-
 def ensure_runtime_ignored_for_workspace(workspace: Workspace) -> None:
     """
     Refresh the workspace ``.gitignore`` after any persistence write.
