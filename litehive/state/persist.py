@@ -232,13 +232,6 @@ def save_state_without_runner_guard_for_workspace(
     store.save_workspace_state(state)
 
 
-def record_task_completion(root: Path, final_stage: PipelineState | None) -> tuple[int, str | None]:
-    """
-    Path-based compatibility wrapper for runner completion bookkeeping.
-    """
-    return record_task_completion_for_workspace(Workspace.from_path(root), final_stage)
-
-
 def record_task_completion_for_workspace(
     workspace: Workspace,
     final_stage: PipelineState | None,
@@ -377,27 +370,6 @@ def merged_state_for_runner_owned_write_for_workspace(
     return merged_state
 
 
-def persist_task_and_state(
-    root: Path,
-    task: TaskRecord,
-    state: WorkspaceState,
-    journal_message: str | None = None,
-    protected_task_ids: list[str] | tuple[str, ...] = (),
-    audit_entries: list[TaskAuditEntry] | None = None,
-) -> None:
-    """
-    Path-based compatibility wrapper for single-task state persistence.
-    """
-    persist_task_and_state_for_workspace(
-        Workspace.from_path(root),
-        task=task,
-        state=state,
-        journal_message=journal_message,
-        protected_task_ids=protected_task_ids,
-        audit_entries=audit_entries,
-    )
-
-
 def persist_task_and_state_for_workspace(
     workspace: Workspace,
     task: TaskRecord,
@@ -421,27 +393,6 @@ def persist_task_and_state_for_workspace(
     persist_tasks_and_state_for_workspace(
         workspace,
         tasks=[task],
-        state=state,
-        journal_messages=journal_messages,
-        protected_task_ids=protected_task_ids,
-        audit_entries=audit_entries,
-    )
-
-
-def persist_tasks_and_state(
-    root: Path,
-    tasks: list[TaskRecord] | tuple[TaskRecord, ...],
-    state: WorkspaceState,
-    journal_messages: dict[str, str] | None = None,
-    protected_task_ids: list[str] | tuple[str, ...] = (),
-    audit_entries: list[TaskAuditEntry] | None = None,
-) -> None:
-    """
-    Path-based compatibility wrapper for task plus workspace state persistence.
-    """
-    persist_tasks_and_state_for_workspace(
-        Workspace.from_path(root),
-        tasks=tasks,
         state=state,
         journal_messages=journal_messages,
         protected_task_ids=protected_task_ids,
@@ -484,27 +435,6 @@ def persist_tasks_and_state_for_workspace(
             audit_entries=audit_entries,
         )
         ensure_runtime_ignored_for_workspace(workspace)
-
-
-def persist_tasks_and_state_without_runner_guard(
-    root: Path,
-    tasks: list[TaskRecord] | tuple[TaskRecord, ...],
-    state: WorkspaceState,
-    journal_messages: dict[str, str] | None = None,
-    protected_task_ids: list[str] | tuple[str, ...] = (),
-    audit_entries: list[TaskAuditEntry] | None = None,
-) -> None:
-    """
-    Path-based compatibility wrapper for unguarded task plus state persistence.
-    """
-    persist_tasks_and_state_without_runner_guard_for_workspace(
-        Workspace.from_path(root),
-        tasks=tasks,
-        state=state,
-        journal_messages=journal_messages,
-        protected_task_ids=protected_task_ids,
-        audit_entries=audit_entries,
-    )
 
 
 def persist_tasks_and_state_without_runner_guard_for_workspace(
