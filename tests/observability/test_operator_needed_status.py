@@ -14,7 +14,7 @@ from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.task import WorkspaceState
 from litehive.main import dispatch_status
 from litehive.sandbox.git_wrapper import main as git_wrapper_main
-from litehive.state.persist import load_state, save_state, set_pool_stop_reason
+from litehive.state.persist import load_state, save_state, set_pool_stop_reason_for_workspace
 from litehive.state.records import create_task, save_task
 from litehive.workspace import Workspace
 
@@ -99,7 +99,7 @@ def test_git_wrapper_block_logs_without_persisting_attention_queue(tmp_path: Pat
 def test_runner_stops_before_running_tasks_when_operator_stop_reason_is_set(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
     create_task(tmp_path, title="Queued work")
-    set_pool_stop_reason(tmp_path, "attention_required")
+    set_pool_stop_reason_for_workspace(Workspace.from_path(tmp_path), "attention_required")
 
     calls: list[tuple[str, ...]] = []
 
@@ -126,7 +126,7 @@ def test_runner_stops_before_running_tasks_when_operator_stop_reason_is_set(tmp_
 def test_runner_resumes_after_operator_stop_reason_is_cleared(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
     create_task(tmp_path, title="Queued work")
-    set_pool_stop_reason(tmp_path, "attention_required")
+    set_pool_stop_reason_for_workspace(Workspace.from_path(tmp_path), "attention_required")
 
     calls: list[tuple[str, ...]] = []
 
@@ -147,7 +147,7 @@ def test_runner_resumes_after_operator_stop_reason_is_cleared(tmp_path: Path, mo
     first_stream = io.StringIO()
     first_exit_code = run_daemon_loop(tmp_path, output_stream=first_stream, session_dir=tmp_path / "logs-first")
 
-    set_pool_stop_reason(tmp_path, None)
+    set_pool_stop_reason_for_workspace(Workspace.from_path(tmp_path), None)
     second_stream = io.StringIO()
     second_exit_code = run_daemon_loop(tmp_path, output_stream=second_stream, session_dir=tmp_path / "logs-second")
 

@@ -256,13 +256,6 @@ def record_task_completion_for_workspace(
         return state.consecutive_task_failures, state.pool_stop_reason
 
 
-def set_pool_stop_reason(root: Path, stop_reason: str | None) -> WorkspaceState:
-    """
-    Path-based compatibility wrapper for pool stop reason updates.
-    """
-    return set_pool_stop_reason_for_workspace(Workspace.from_path(root), stop_reason)
-
-
 def set_pool_stop_reason_for_workspace(workspace: Workspace, stop_reason: str | None) -> WorkspaceState:
     """
     Set or clear the pool's stop reason.
