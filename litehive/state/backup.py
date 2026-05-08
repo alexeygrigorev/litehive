@@ -42,13 +42,6 @@ def _backup_timestamp(when: datetime) -> str:
     return when.astimezone(UTC).strftime("%Y-%m-%dT%H")
 
 
-def _backup_path(root: Path, when: datetime) -> Path:
-    """
-    Path-based compatibility wrapper for backup snapshot paths.
-    """
-    return _backup_path_for_workspace(Workspace.from_path(root), when)
-
-
 def _backup_path_for_workspace(workspace: Workspace, when: datetime) -> Path:
     """
     Compute the canonical ``backups/data-<timestamp>.db.gz`` path.
