@@ -204,6 +204,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Avoid re-running workspace boundary construction inside DB migration rebuild safety.
 - [x] Guard production `Workspace.from_path` calls to the DI container boundary.
 - [x] Remove path-based daemon lock path helper.
+- [x] Move dirty-git drain guard to injected workspace.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

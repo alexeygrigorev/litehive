@@ -393,7 +393,7 @@ def _preview_single(
     return 0
 
 
-def _workspace_has_dirty_non_litehive_changes(workspace: Path) -> bool:
+def _workspace_has_dirty_non_litehive_changes(workspace: Workspace) -> bool:
     """
     Detect uncommitted user-owned changes in the workspace tree.
 
@@ -404,9 +404,9 @@ def _workspace_has_dirty_non_litehive_changes(workspace: Path) -> bool:
     top of in-flight operator edits, which would otherwise be
     swept into a checkpoint commit.
     """
-    if not is_git_repo(workspace):
+    if not is_git_repo(workspace.root):
         return False
-    return has_non_litehive_changes(workspace)
+    return has_non_litehive_changes(workspace.root)
 
 
 def _run_drain(
@@ -430,7 +430,7 @@ def _run_drain(
     workspace = container.workspace
     tasks_run = 0
     while True:
-        if stop_on_dirty_git and _workspace_has_dirty_non_litehive_changes(workspace.root):
+        if stop_on_dirty_git and _workspace_has_dirty_non_litehive_changes(workspace):
             set_pool_stop_reason_for_workspace(workspace, "dirty_git_state")
             print("Pool stopped: dirty_git_state")
             return 0
