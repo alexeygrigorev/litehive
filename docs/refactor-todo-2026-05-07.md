@@ -92,6 +92,8 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Make the workspace-level flock helper workspace-native internally.
 - [x] Flip remaining runner-lock probe wrappers to delegate to workspace-native helpers.
 - [x] Remove the unused raw-root runner lock manager factory.
+- [x] Make runner heartbeat/status updates workspace-native internally.
+- [x] Remove unused private raw-root runner process-state wrappers.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

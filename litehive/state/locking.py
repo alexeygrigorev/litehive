@@ -131,13 +131,6 @@ def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> Non
     )
 
 
-def _save_runner_process_state(root: Path, status: RunnerStatusState) -> None:
-    """
-    Path-based compatibility wrapper for runner status mirroring.
-    """
-    _save_runner_process_state_for_workspace(Workspace.from_path(root), status)
-
-
 def _save_runner_process_state_for_workspace(workspace: Workspace, status: RunnerStatusState) -> None:
     """
     Mirror runner status into the SQLite runtime store.
@@ -151,13 +144,6 @@ def _save_runner_process_state_for_workspace(workspace: Workspace, status: Runne
         status=status.status or RunnerStatus.RUNNING,
         payload=status.model_dump(mode="json"),
     )
-
-
-def _clear_runner_process_state(root: Path) -> None:
-    """
-    Path-based compatibility wrapper for clearing runner status mirrors.
-    """
-    _clear_runner_process_state_for_workspace(Workspace.from_path(root))
 
 
 def _clear_runner_process_state_for_workspace(workspace: Workspace) -> None:
@@ -338,6 +324,16 @@ def touch_runner_status(
     active_task_id: str | None | object = MISSING,
 ) -> None:
     """
+    Path-based compatibility wrapper for runner heartbeat/status updates.
+    """
+    touch_runner_status_for_workspace(Workspace.from_path(root), active_task_id=active_task_id)
+
+
+def touch_runner_status_for_workspace(
+    workspace: Workspace,
+    active_task_id: str | None | object = MISSING,
+) -> None:
+    """
     Refresh heartbeat (and optionally active task pointer) under the metadata mutex.
 
     Used by the heartbeat thread and by stage transitions that change
@@ -345,8 +341,8 @@ def touch_runner_status(
     the background heartbeat from racing the foreground stage transition
     when both write the lockfile.
     """
-    root = root.resolve()
-    lock_state = RUNNER_LOCKS.get(root)
+    lock_key = _runner_lock_key_for_workspace(workspace)
+    lock_state = RUNNER_LOCKS.get(lock_key)
     if lock_state is None:
         return
     with lock_state.metadata_lock:
@@ -355,12 +351,29 @@ def touch_runner_status(
         if active_task_id is not MISSING:
             lock_state.status.active_task_id = cast(str | None, active_task_id)
         write_runner_lock_metadata(lock_state.handle, lock_state.status)
-        _save_runner_process_state(root, lock_state.status)
+        _save_runner_process_state_for_workspace(workspace, lock_state.status)
 
 
 @contextmanager
 def runner_heartbeat(
     root: Path,
+    active_task_id: str | None = None,
+    interval_seconds: float = 1.0,
+):
+    """
+    Path-based compatibility wrapper for runner heartbeat updates.
+    """
+    with runner_heartbeat_for_workspace(
+        Workspace.from_path(root),
+        active_task_id=active_task_id,
+        interval_seconds=interval_seconds,
+    ):
+        yield
+
+
+@contextmanager
+def runner_heartbeat_for_workspace(
+    workspace: Workspace,
     active_task_id: str | None = None,
     interval_seconds: float = 1.0,
 ):
@@ -384,9 +397,9 @@ def runner_heartbeat(
         explicit rather than implicit lambdas.
         """
         while not stop_event.wait(interval_seconds):
-            touch_runner_status(root, active_task_id=active_task_id)
+            touch_runner_status_for_workspace(workspace, active_task_id=active_task_id)
 
-    touch_runner_status(root, active_task_id=active_task_id)
+    touch_runner_status_for_workspace(workspace, active_task_id=active_task_id)
     thread = threading.Thread(target=_heartbeat_loop, name="litehive-runner-heartbeat", daemon=True)
     thread.start()
     try:
@@ -394,20 +407,7 @@ def runner_heartbeat(
     finally:
         stop_event.set()
         thread.join(timeout=max(interval_seconds, 0.1) * 2)
-        touch_runner_status(root, active_task_id=None)
-
-
-@contextmanager
-def runner_heartbeat_for_workspace(
-    workspace: Workspace,
-    active_task_id: str | None = None,
-    interval_seconds: float = 1.0,
-):
-    """
-    Run runner heartbeat updates for an injected workspace.
-    """
-    with runner_heartbeat(workspace.root, active_task_id=active_task_id, interval_seconds=interval_seconds):
-        yield
+        touch_runner_status_for_workspace(workspace, active_task_id=None)
 
 
 def current_thread_owns_runner_guard(root: Path) -> bool:
