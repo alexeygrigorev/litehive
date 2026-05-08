@@ -3,7 +3,7 @@ from pathlib import Path
 
 from litehive.config.workspace import create_workspace
 from litehive.daemon.registry import register_daemon, unregister_daemon
-from litehive.state.locking import touch_runner_status, workspace_runner_guard
+from litehive.state.locking import touch_runner_status_for_workspace, workspace_runner_guard
 from litehive.state.store import runtime_store_for_workspace
 from litehive.workspace import Workspace
 
@@ -21,7 +21,7 @@ def test_runner_process_state_is_persisted_in_sqlite(tmp_path: Path, monkeypatch
         assert payload["pid"] == os.getpid()
         assert payload["status"] == "running"
 
-        touch_runner_status(workspace, active_task_id="T-0001")
+        touch_runner_status_for_workspace(workspace_obj, active_task_id="T-0001")
         refreshed = store.load_process_state("runner")
         assert refreshed is not None
         assert refreshed["active_task_id"] == "T-0001"

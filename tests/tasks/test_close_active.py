@@ -64,20 +64,21 @@ import threading
 import time
 from pathlib import Path
 
-from litehive.state.locking import runner_heartbeat, workspace_runner_guard
+from litehive.state.locking import runner_heartbeat_for_workspace, workspace_runner_guard
 from litehive.workspace import Workspace
 
 root = Path(sys.argv[1])
 task_id = sys.argv[2]
 ready = Path(sys.argv[3])
+workspace = Workspace.from_path(root)
 stop = threading.Event()
 
 def _handle_signal(signum, frame):
     stop.set()
 
 signal.signal(signal.SIGINT, _handle_signal)
-with workspace_runner_guard(Workspace.from_path(root)):
-    with runner_heartbeat(root, active_task_id=task_id, interval_seconds=0.05):
+with workspace_runner_guard(workspace):
+    with runner_heartbeat_for_workspace(workspace, active_task_id=task_id, interval_seconds=0.05):
         ready.write_text("ready\\n", encoding="utf-8")
         while not stop.wait(0.05):
             pass

@@ -265,16 +265,6 @@ def runner_status_for_workspace(workspace: Workspace) -> RunnerStatusState:
     return RunnerStatusState()
 
 
-def touch_runner_status(
-    root: Path,
-    active_task_id: str | None | object = MISSING,
-) -> None:
-    """
-    Path-based compatibility wrapper for runner heartbeat/status updates.
-    """
-    touch_runner_status_for_workspace(Workspace.from_path(root), active_task_id=active_task_id)
-
-
 def touch_runner_status_for_workspace(
     workspace: Workspace,
     active_task_id: str | None | object = MISSING,
@@ -298,23 +288,6 @@ def touch_runner_status_for_workspace(
             lock_state.status.active_task_id = cast(str | None, active_task_id)
         write_runner_lock_metadata(lock_state.handle, lock_state.status)
         _save_runner_process_state_for_workspace(workspace, lock_state.status)
-
-
-@contextmanager
-def runner_heartbeat(
-    root: Path,
-    active_task_id: str | None = None,
-    interval_seconds: float = 1.0,
-):
-    """
-    Path-based compatibility wrapper for runner heartbeat updates.
-    """
-    with runner_heartbeat_for_workspace(
-        Workspace.from_path(root),
-        active_task_id=active_task_id,
-        interval_seconds=interval_seconds,
-    ):
-        yield
 
 
 @contextmanager
