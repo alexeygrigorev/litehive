@@ -319,28 +319,6 @@ def _cleanup_created_task_dirs(paths: list[Path]) -> list[OSError]:
     return errors
 
 
-def _persist_created_tasks(
-    root: Path,
-    *,
-    tasks: list[TaskRecord],
-    state: WorkspaceState,
-    task_journal_messages: dict[str, str] | None = None,
-    cleanup_dirs: list[Path],
-    audit_entries: list[TaskAuditEntry] | None = None,
-) -> None:
-    """
-    Path-based compatibility wrapper for newly-created task persistence.
-    """
-    _persist_created_tasks_for_workspace(
-        Workspace.from_path(root),
-        tasks=tasks,
-        state=state,
-        task_journal_messages=task_journal_messages,
-        cleanup_dirs=cleanup_dirs,
-        audit_entries=audit_entries,
-    )
-
-
 def _persist_created_tasks_for_workspace(
     workspace: Workspace,
     *,
@@ -727,21 +705,6 @@ def discard_created_task_for_workspace(workspace: Workspace, task_id: str) -> No
                 )
             ],
         )
-
-
-def _load_tasks_from_store(
-    root: Path,
-    include_runtime: bool,
-    strict: bool,
-) -> list[TaskRecord]:
-    """
-    Path-based compatibility wrapper for task listing.
-    """
-    return _load_tasks_from_store_for_workspace(
-        Workspace.from_path(root),
-        include_runtime=include_runtime,
-        strict=strict,
-    )
 
 
 def _load_tasks_from_store_for_workspace(
