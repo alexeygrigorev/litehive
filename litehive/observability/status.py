@@ -106,7 +106,6 @@ StatusRenderMode = Literal["summary", "detailed"]
 
 @dataclass(slots=True)
 class TaskPipelineStatusData:
-    root: Path
     config: LitehiveConfig
     state: WorkspaceState
     runner: RunnerStatusState
@@ -155,7 +154,6 @@ def collect_task_pipeline_status_for_workspace(
     if not diagnostics:
         waiting_lines = _operational_attention_lines(waiting_lines)
     return TaskPipelineStatusData(
-        root=workspace.root,
         config=snapshot.config,
         state=snapshot.state,
         runner=snapshot.runner,

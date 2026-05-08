@@ -198,6 +198,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Move config effective-data and context loading to injected workspace.
 - [x] Remove the remaining config-loading root compatibility wrapper.
 - [x] Avoid re-running workspace boundary construction inside config workspace helpers.
+- [x] Remove stale root alias from task pipeline status snapshot.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`
