@@ -12,7 +12,7 @@ from litehive.agents.session_store import SubagentArtifactPayload, subagent_arti
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import create_workspace
 from litehive.domain.runtime import RuntimeSubagentState
-from litehive.state.records import create_task, save_task, save_task_runtime_for_workspace
+from litehive.state.records import create_task_for_workspace, save_task_for_workspace, save_task_runtime_for_workspace
 from litehive.tasks.paths import task_dir
 from litehive.workspace import Workspace
 
@@ -40,7 +40,7 @@ def _ns(
 
 def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Logs test task", auto_commit=False)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Logs test task", auto_commit=False)
     ref = SubagentRef(
         id="SA-0001",
         role="swe",
@@ -74,7 +74,7 @@ def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
                 "exit_code": 0,
             }),
         )
-    save_task(tmp_path, task)
+    save_task_for_workspace(Workspace.from_path(tmp_path), task)
     save_task_runtime_for_workspace(Workspace.from_path(tmp_path), task)
 
     base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
@@ -125,7 +125,7 @@ def test_logs_daemon_lists_latest_sessions_with_outcomes(tmp_path: Path, capsys:
 
 def test_logs_task_journal_prints_journal(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Journal task", auto_commit=False)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Journal task", auto_commit=False)
 
     exit_code = _cmd_logs(_ns(tmp_path, task.id))
     output = capsys.readouterr().out
@@ -140,7 +140,7 @@ def test_logs_task_journal_tolerates_unrelated_missing_runtime_rows(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Journal task", auto_commit=False)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Journal task", auto_commit=False)
 
     missing_dir = tmp_path / ".litehive" / "tasks" / "T-0002-missing-runtime"
     missing_dir.mkdir(parents=True)
@@ -216,7 +216,7 @@ def test_logs_agent_reads_compressed_completed_artifacts(tmp_path: Path, capsys:
 
 def test_logs_agent_all_lists_all_subagents_with_duration(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="All subagents", auto_commit=False)
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="All subagents", auto_commit=False)
     task.subagents = [
         SubagentRef(
             id="SA-0001",
@@ -233,7 +233,7 @@ def test_logs_agent_all_lists_all_subagents_with_duration(tmp_path: Path, capsys
             path="subagents/SA-0002-swe",
         ),
     ]
-    save_task(tmp_path, task)
+    save_task_for_workspace(Workspace.from_path(tmp_path), task)
 
     planner_dir = task_dir(tmp_path, task) / "subagents" / "SA-0001-planner"
     planner_dir.mkdir(parents=True, exist_ok=True)
