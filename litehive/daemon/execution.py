@@ -340,7 +340,7 @@ def create_workspace_venvs_ready_for_workspace(
 
 
 def maybe_run_workspace_backup(
-    workspace: Path,
+    workspace: Workspace,
     *,
     now: datetime | None = None,
 ) -> str | None:
@@ -356,7 +356,7 @@ def maybe_run_workspace_backup(
     mutation. Returns the created backup timestamp so the loop can
     decide whether and where to render it.
     """
-    backup = create_scheduled_workspace_backup_for_workspace(build_workspace(workspace), now=now)
+    backup = create_scheduled_workspace_backup_for_workspace(workspace, now=now)
     if backup is None:
         return None
     return backup.timestamp
@@ -411,8 +411,7 @@ class DaemonExecutor:
     process is created inside ``run`` for a single invocation.
     """
 
-    workspace: Path
-    daemon_workspace: Workspace
+    workspace: Workspace
     daemon_config: DaemonConfig
     attention_repository: AttentionRepository
     output: DaemonOutput
@@ -421,9 +420,10 @@ class DaemonExecutor:
     session_dir: Path | None
 
     def run(self) -> int:
-        apply_pending_migrations(self.workspace)
+        workspace_root = self.workspace.root
+        apply_pending_migrations(workspace_root)
         log_root = self.logs.prepare_session(self.session_dir)
-        register_daemon(self.daemon_workspace, pid=os.getpid(), log_dir=log_root)
+        register_daemon(self.workspace, pid=os.getpid(), log_dir=log_root)
         stop_requested = False
         current_child: dict[str, subprocess.Popen[str] | None] = {"process": None}
         heartbeat_stop = threading.Event()
@@ -431,7 +431,7 @@ class DaemonExecutor:
             target=_daemon_heartbeat_loop,
             name="litehive-daemon-heartbeat",
             args=(
-                self.daemon_workspace,
+                self.workspace,
                 os.getpid(),
                 heartbeat_stop,
                 self.daemon_config.heartbeat_interval_seconds,
@@ -461,7 +461,7 @@ class DaemonExecutor:
         previous_term = signal.signal(signal.SIGTERM, _handle_signal)
         previous_int = signal.signal(signal.SIGINT, _handle_signal)
         try:
-            self.output.line(f"workspace: {self.workspace}")
+            self.output.line(f"workspace: {workspace_root}")
             self.output.line(f"logs: {log_root}")
             iteration = 0
             while True:
@@ -476,13 +476,13 @@ class DaemonExecutor:
                 self.output.line()
                 self.output.line(f"== iteration {iteration} ==")
 
-                live_runner = runner_status_for_workspace(self.daemon_workspace)
+                live_runner = runner_status_for_workspace(self.workspace)
                 if _runner_is_live(live_runner):
                     self.output.runner_wait(live_runner)
                     sleep_with_stop(1.0, stop_requested_fn=lambda: stop_requested)
                     continue
 
-                divergence_reason = _halt_for_origin_divergence(self.daemon_workspace, self.attention_repository)
+                divergence_reason = _halt_for_origin_divergence(self.workspace, self.attention_repository)
                 if divergence_reason is not None:
                     self.output.line(
                         "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. "
@@ -502,7 +502,7 @@ class DaemonExecutor:
                         self.output.line(f"backup_created: {backup_timestamp}")
 
                 try:
-                    pre_snapshot = _daemon_status_snapshot_for_workspace(self.daemon_workspace)
+                    pre_snapshot = _daemon_status_snapshot_for_workspace(self.workspace)
                 except (OSError, RuntimeError, ValueError) as exc:
                     logger.exception("status snapshot raised")
                     self.output.line(f"status raised: {exc}")
@@ -513,8 +513,8 @@ class DaemonExecutor:
 
                 try:
                     run_rc = run_logged_subprocess(
-                        [*self.command_prefix, "run", "--workspace", str(self.workspace)],
-                        cwd=self.workspace,
+                        [*self.command_prefix, "run", "--workspace", str(workspace_root)],
+                        cwd=workspace_root,
                         log_path=run_file,
                         output=self.output,
                         current_child=current_child,
@@ -528,7 +528,7 @@ class DaemonExecutor:
                     return run_rc
 
                 try:
-                    post_snapshot = _daemon_status_snapshot_for_workspace(self.daemon_workspace)
+                    post_snapshot = _daemon_status_snapshot_for_workspace(self.workspace)
                 except (OSError, RuntimeError, ValueError) as exc:
                     logger.exception("post-status snapshot raised")
                     self.output.line(f"post-status raised: {exc}")
@@ -541,7 +541,7 @@ class DaemonExecutor:
             signal.signal(signal.SIGINT, previous_int)
             heartbeat_stop.set()
             heartbeat_thread.join(timeout=max(self.daemon_config.heartbeat_interval_seconds, 0.1) * 2)
-            unregister_daemon(self.daemon_workspace, pid=os.getpid())
+            unregister_daemon(self.workspace, pid=os.getpid())
 
 
 def run_daemon_loop(
@@ -564,8 +564,7 @@ def run_daemon_loop(
     create_workspace(workspace)
     daemon_container = build_daemon_container(workspace)
     executor = DaemonExecutor(
-        workspace=workspace,
-        daemon_workspace=daemon_container.workspace,
+        workspace=daemon_container.workspace,
         daemon_config=daemon_container.config.daemon,
         attention_repository=daemon_container.attention_repository,
         output=DaemonOutput(output_stream),
