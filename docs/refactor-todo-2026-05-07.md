@@ -113,6 +113,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate agent task mutation tests to workspace-native state/task helpers.
 - [x] Migrate Claude config tests to workspace-native task creation.
 - [x] Migrate workspace-resolution config tests to workspace-native task creation.
+- [x] Migrate engine-model config tests to workspace-native task creation.
 - [x] Remove unused runtime gitignore path wrapper.
 - [x] Remove task runtime save path wrapper after migrating tests.
 - [x] Remove runner-lock held path wrapper after migrating tests.
