@@ -11,7 +11,7 @@ from litehive.config.paths import workspace_path
 from litehive.config.workspace import create_workspace
 from litehive.domain.task import TaskStateRecord, WorkspaceState
 from litehive.recovery.detection import TaskLaunchFailure
-from litehive.state.records import create_task, get_task, list_tasks
+from litehive.state.records import create_task_for_workspace, get_task_for_workspace, list_tasks_for_workspace
 from litehive.state.store import runtime_store_for_workspace
 from litehive.tasks.queue import peek_next_task
 from litehive.workspace import Workspace
@@ -221,10 +221,11 @@ def test_migration_0005_does_not_import_deprecated_task_yaml(tmp_path: Path) -> 
             row[0] for row in connection.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
         ]
 
-    loaded = get_task(tmp_path, "T-0001")
-    listed = list_tasks(tmp_path, strict=False)
+    workspace = Workspace.from_path(tmp_path)
+    loaded = get_task_for_workspace(workspace, "T-0001")
+    listed = list_tasks_for_workspace(workspace, strict=False)
     with pytest.raises(TaskLaunchFailure, match="missing from SQLite task_intent"):
-        peek_next_task(Workspace.from_path(tmp_path))
+        peek_next_task(workspace)
 
     assert applied_versions == _migration_versions()
     assert intent_rows == []
@@ -280,7 +281,7 @@ def test_daemon_run_reports_broken_worktree_venv_before_start(
     tmp_path: Path,
 ) -> None:
     create_workspace(tmp_path)
-    create_task(tmp_path, title="Queued work")
+    create_task_for_workspace(Workspace.from_path(tmp_path), title="Queued work")
     broken_worktree = workspace_path(tmp_path, "worktrees") / "T-0001-demo"
     _create_broken_venv_binary(broken_worktree, "ruff", tmp_path / "fake-home" / ".cache" / "uv")
 
@@ -299,7 +300,8 @@ def test_daemon_run_reports_broken_worktree_venv_before_start(
 
 def test_legacy_workspace_db_rebuild_replays_task_event_log_without_task_yaml_rescan(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Keep me")
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Keep me")
     db_path = workspace_path(tmp_path, "data.db")
     db_path.unlink()
 
@@ -342,8 +344,9 @@ def test_legacy_workspace_db_rebuild_replays_task_event_log_without_task_yaml_re
 
 def test_migration_rebuild_refuses_to_drop_tasks_missing_from_event_log(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Historical task before event log")
-    task_event_log_path(Workspace.from_path(tmp_path)).unlink()
+    workspace = Workspace.from_path(tmp_path)
+    task = create_task_for_workspace(workspace, title="Historical task before event log")
+    task_event_log_path(workspace).unlink()
     db_path = workspace_path(tmp_path, "data.db")
 
     with sqlite3.connect(db_path) as connection:
