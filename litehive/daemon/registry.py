@@ -109,13 +109,6 @@ def _daemon_lock_is_held_in_process(workspace: Path) -> bool:
         return workspace in _DAEMON_LOCKS
 
 
-def _daemon_lock_manager(workspace: Path) -> ProcessLockManager:
-    """
-    Path-based compatibility wrapper for daemon lock manager construction.
-    """
-    return _daemon_lock_manager_for_workspace(Workspace.from_path(workspace))
-
-
 def _daemon_lock_manager_for_workspace(workspace: Workspace) -> ProcessLockManager:
     """
     Build a per-call ``ProcessLockManager`` bound to this workspace.
@@ -139,7 +132,7 @@ def _daemon_lock_manager_for_workspace(workspace: Workspace) -> ProcessLockManag
     )
 
 
-def daemon_lock_is_active(workspace: Path) -> bool:
+def daemon_lock_is_active_for_workspace(workspace: Workspace) -> bool:
     """
     Whether a live daemon currently holds the workspace's daemon lock.
 
@@ -148,15 +141,7 @@ def daemon_lock_is_active(workspace: Path) -> bool:
     by also confirming the recorded pid is alive — a leftover lock
     file from a crashed daemon is not an active daemon.
     """
-    workspace = workspace.resolve()
-    return _daemon_lock_manager(workspace).is_active()
-
-
-def _clear_stale_daemon_metadata(workspace: Path, pid: int | None = None) -> None:
-    """
-    Path-based compatibility wrapper for stale daemon metadata cleanup.
-    """
-    _clear_stale_daemon_metadata_for_workspace(Workspace.from_path(workspace), pid=pid)
+    return _daemon_lock_manager_for_workspace(workspace).is_active()
 
 
 def _clear_stale_daemon_metadata_for_workspace(workspace: Workspace, pid: int | None = None) -> None:
@@ -171,13 +156,6 @@ def _clear_stale_daemon_metadata_for_workspace(workspace: Workspace, pid: int | 
     """
     manager = _daemon_lock_manager_for_workspace(workspace)
     manager.clear_stale_state(expected_pid=pid)
-
-
-def daemon_metadata(workspace: Path) -> DaemonRegistryEntry | None:
-    """
-    Path-based compatibility wrapper for daemon metadata reads.
-    """
-    return daemon_metadata_for_workspace(Workspace.from_path(workspace))
 
 
 def daemon_metadata_for_workspace(workspace: Workspace) -> DaemonRegistryEntry | None:
@@ -201,13 +179,6 @@ def daemon_metadata_for_workspace(workspace: Workspace) -> DaemonRegistryEntry |
     return DaemonRegistryEntry.from_metadata(metadata, status=status)
 
 
-def get_workspace_daemon(workspace: Path) -> DaemonRegistryEntry | None:
-    """
-    Path-based compatibility wrapper for live daemon lookup.
-    """
-    return get_workspace_daemon_for_workspace(Workspace.from_path(workspace))
-
-
 def get_workspace_daemon_for_workspace(workspace: Workspace) -> DaemonRegistryEntry | None:
     """
     Return the daemon row only when a live daemon is registered.
@@ -223,13 +194,6 @@ def get_workspace_daemon_for_workspace(workspace: Workspace) -> DaemonRegistryEn
     if metadata.status == "running":
         return metadata
     return None
-
-
-def register_daemon(workspace: Path, pid: int, log_dir: Path) -> None:
-    """
-    Path-based compatibility wrapper for daemon registration.
-    """
-    register_daemon_for_workspace(Workspace.from_path(workspace), pid=pid, log_dir=log_dir)
 
 
 def register_daemon_for_workspace(workspace: Workspace, pid: int, log_dir: Path) -> None:
@@ -282,13 +246,6 @@ def register_daemon_for_workspace(workspace: Workspace, pid: int, log_dir: Path)
         raise
 
 
-def unregister_daemon(workspace: Path, pid: int | None = None) -> None:
-    """
-    Path-based compatibility wrapper for daemon unregistration.
-    """
-    unregister_daemon_for_workspace(Workspace.from_path(workspace), pid=pid)
-
-
 def unregister_daemon_for_workspace(workspace: Workspace, pid: int | None = None) -> None:
     """
     Release the daemon lock on shutdown.
@@ -313,13 +270,6 @@ def unregister_daemon_for_workspace(workspace: Workspace, pid: int | None = None
     finally:
         manager.lock_manager.release(handle, clear_metadata=True)
     manager.clear_process_state()
-
-
-def touch_daemon(workspace: Path, pid: int | None = None) -> bool:
-    """
-    Path-based compatibility wrapper for daemon heartbeat updates.
-    """
-    return touch_daemon_for_workspace(Workspace.from_path(workspace), pid=pid)
 
 
 def touch_daemon_for_workspace(workspace: Workspace, pid: int | None = None) -> bool:
@@ -347,15 +297,6 @@ def touch_daemon_for_workspace(workspace: Workspace, pid: int | None = None) -> 
         metadata = manager.read_locked_metadata(handle)
         manager.save_process_state(metadata)
     return True
-
-
-@contextmanager
-def stale_daemon_metadata(workspace: Path):
-    """
-    Path-based compatibility wrapper for stale daemon metadata reads.
-    """
-    with stale_daemon_metadata_for_workspace(Workspace.from_path(workspace)) as metadata:
-        yield metadata
 
 
 @contextmanager

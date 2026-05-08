@@ -13,13 +13,14 @@ from litehive.config.workspace import create_workspace
 from litehive.daemon.execution import start_background_daemon, stop_workspace_daemon
 from litehive.daemon.registry import (
     DaemonRegistryEntry,
-    daemon_lock_is_active,
+    daemon_lock_is_active_for_workspace,
     daemon_lock_path,
-    daemon_metadata,
-    get_workspace_daemon,
-    register_daemon,
-    unregister_daemon,
+    daemon_metadata_for_workspace,
+    get_workspace_daemon_for_workspace,
+    register_daemon_for_workspace,
+    unregister_daemon_for_workspace,
 )
+from litehive.workspace import Workspace
 
 
 def _spawn_locked_daemon_like_process(
@@ -69,37 +70,39 @@ def _wait_for_daemon_metadata(
     timeout_seconds: float = 2.0,
     poll_interval_seconds: float = 0.02,
 ) -> DaemonRegistryEntry | None:
+    workspace_obj = Workspace.from_path(workspace)
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        entry = daemon_metadata(workspace)
+        entry = daemon_metadata_for_workspace(workspace_obj)
         if entry is not None:
             return entry
         time.sleep(poll_interval_seconds)
-    return daemon_metadata(workspace)
+    return daemon_metadata_for_workspace(workspace_obj)
 
 
 def test_register_and_unregister_daemon_uses_shared_lock_manager(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data-home"))
     workspace = tmp_path / "workspace"
     create_workspace(workspace)
+    workspace_obj = Workspace.from_path(workspace)
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
 
-    register_daemon(workspace, pid=os.getpid(), log_dir=log_dir)
+    register_daemon_for_workspace(workspace_obj, pid=os.getpid(), log_dir=log_dir)
 
-    entry = daemon_metadata(workspace)
+    entry = daemon_metadata_for_workspace(workspace_obj)
     assert entry is not None
     assert entry.status == "running"
     assert entry.pid == os.getpid()
     assert entry.log_dir == str(log_dir)
-    assert daemon_lock_is_active(workspace) is True
-    assert get_workspace_daemon(workspace) == entry
+    assert daemon_lock_is_active_for_workspace(workspace_obj) is True
+    assert get_workspace_daemon_for_workspace(workspace_obj) == entry
 
-    unregister_daemon(workspace, pid=os.getpid())
+    unregister_daemon_for_workspace(workspace_obj, pid=os.getpid())
 
-    assert daemon_metadata(workspace) is None
-    assert daemon_lock_is_active(workspace) is False
-    assert get_workspace_daemon(workspace) is None
+    assert daemon_metadata_for_workspace(workspace_obj) is None
+    assert daemon_lock_is_active_for_workspace(workspace_obj) is False
+    assert get_workspace_daemon_for_workspace(workspace_obj) is None
     assert daemon_lock_path(workspace).read_text(encoding="utf-8") == ""
 
 
@@ -121,7 +124,7 @@ def test_unregister_daemon_clears_stale_metadata_without_daemon_registry_yaml(tm
     )
     monkeypatch.setattr("litehive.daemon.registry.runner_pid_is_alive", lambda pid: False)
 
-    unregister_daemon(workspace, pid=424242)
+    unregister_daemon_for_workspace(Workspace.from_path(workspace), pid=424242)
 
     assert lock_path.read_text(encoding="utf-8") == ""
     assert not list((tmp_path / "data-home" / "litehive").glob("daemons.y*ml"))
@@ -193,7 +196,7 @@ def test_stop_workspace_daemon_escalates_to_sigkill_when_sigterm_ignored(tmp_pat
     )
     try:
         entry = _wait_for_daemon_metadata(workspace)
-        assert daemon_lock_is_active(workspace) is True
+        assert daemon_lock_is_active_for_workspace(Workspace.from_path(workspace)) is True
         assert entry is not None
         assert entry.status == "running"
         assert entry.pid == sleeper.pid
@@ -206,7 +209,7 @@ def test_stop_workspace_daemon_escalates_to_sigkill_when_sigterm_ignored(tmp_pat
         sleeper.wait(timeout=5)
         assert sleeper.returncode == -signal.SIGKILL
         assert elapsed < 3.0
-        assert daemon_metadata(workspace) is None
+        assert daemon_metadata_for_workspace(Workspace.from_path(workspace)) is None
         assert lock_path.read_text(encoding="utf-8") == ""
     finally:
         if sleeper.poll() is None:
@@ -300,8 +303,9 @@ def test_start_background_daemon_does_not_kill_live_pid_from_stale_metadata(tmp_
             ),
             encoding="utf-8",
         )
-        assert daemon_lock_is_active(workspace) is False
-        entry = daemon_metadata(workspace)
+        workspace_obj = Workspace.from_path(workspace)
+        assert daemon_lock_is_active_for_workspace(workspace_obj) is False
+        entry = daemon_metadata_for_workspace(workspace_obj)
         assert entry is not None
         assert entry.status == "stale"
         assert entry.pid == sleeper.pid
