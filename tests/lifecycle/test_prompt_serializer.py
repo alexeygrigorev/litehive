@@ -18,7 +18,7 @@ from litehive.roles.recovery import RecoveryAgent
 from litehive.roles.reviewer import ReviewerAgent
 from litehive.roles.swe import SWEAgent
 from litehive.roles.base import PromptContext
-from litehive.config.loading import load_config
+from litehive.config.loading import load_config_for_workspace
 from litehive.config.workspace import create_workspace
 from litehive.config.workspace_files import config_path
 from litehive.domain.lifecycle_deltas import StateDelta
@@ -704,7 +704,10 @@ def test_swe_prompt_lists_after_stage_hooks_with_descriptions(workspace: Path) -
     agent = SWEAgent(
         _NullSelector(),
         _NullSessions(),
-        prompt_context=PromptContext(workspace=Workspace.from_path(workspace), config=load_config(workspace)),
+        prompt_context=PromptContext(
+            workspace=Workspace.from_path(workspace),
+            config=load_config_for_workspace(Workspace.from_path(workspace)),
+        ),
     )
     prompt = agent.build_prompt(make_state(task.id))
     text = serialize_prompt(prompt, task_record=task, workspace=Workspace.from_path(workspace))

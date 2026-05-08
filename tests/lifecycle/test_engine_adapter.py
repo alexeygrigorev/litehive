@@ -294,7 +294,7 @@ def _reset_stub_manager_state() -> None:
 
 
 def test_heru_engine_adapter_runs_recovery_from_litehive_source_checkout(tmp_path, monkeypatch) -> None:
-    from litehive.config.loading import load_config
+    from litehive.config.loading import load_config_for_workspace
     from litehive.config.model import LitehiveConfig
     from litehive.config.workspace import create_workspace
     from litehive.state.records import create_task, save_task, set_task_worktree_path
@@ -317,7 +317,7 @@ def test_heru_engine_adapter_runs_recovery_from_litehive_source_checkout(tmp_pat
     adapter = HeruEngineAdapter(
         "codex",
         workspace=Workspace.from_path(tmp_path),
-        config=load_config(tmp_path),
+        config=load_config_for_workspace(Workspace.from_path(tmp_path)),
     )
 
     monkeypatch.setattr("litehive.lifecycle.heru_factory.SubagentManager", _StubManager)
