@@ -13,7 +13,7 @@ from litehive.domain.agent import EngineFailure, ExecutionTrace, SubagentResult
 from litehive.domain.common import TaskStage
 from litehive.feedback import FEEDBACK_CAP
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport, TaskActivityEntry
-from litehive.state.records import create_task
+from litehive.state.records import create_task_for_workspace
 from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
 from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.workspace import Workspace
@@ -53,7 +53,7 @@ def _subagent_result(
 
 def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Keep CLI summary untouched")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Keep CLI summary untouched")
     message = "summary line\n\n" + ("y" * (FEEDBACK_CAP + 250))
 
     append_activity_entry(
@@ -82,7 +82,7 @@ def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Pat
 
 def test_stage_report_from_subagent_preserves_semantic_reject_classification(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Classified reviewer reject")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Classified reviewer reject")
 
     append_activity_entry(
         Workspace.from_path(tmp_path),
@@ -169,7 +169,7 @@ def test_subagent_manager_keeps_full_transcript_artifacts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task(tmp_path, title="Keep full transcript artifacts")
+    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Keep full transcript artifacts")
     manager = build_subagent_manager(tmp_path, execution_root=tmp_path)
     transcript = "full transcript\n" + ("z" * (FEEDBACK_CAP + 400))
 
