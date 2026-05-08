@@ -295,28 +295,6 @@ def runner_status_for_workspace(workspace: Workspace) -> RunnerStatusState:
     return RunnerStatusState()
 
 
-def runner_status_readonly(root: Path) -> RunnerStatusState:
-    """
-    Return runner status using only file reads and PID checks.
-
-    No ``fcntl.flock`` calls so it is safe for read-only consumers like
-    the web dashboard that must never contend with the runner lock; the
-    tradeoff is that "stale but flock-held" cannot be distinguished from
-    "actively running".
-    """
-    root = root.resolve()
-    status = read_runner_lock_metadata(root)
-    if not runner_metadata_present(status):
-        return RunnerStatusState()
-    # If the recorded PID is alive, the runner is (or was recently) active.
-    if runner_pid_is_alive(status.pid):
-        if heartbeat_is_late(status.heartbeat_at):
-            return status.model_copy(update={"status": RunnerStatus.LATE})
-        return status.model_copy(update={"status": RunnerStatus.RUNNING})
-    # PID is gone — metadata is stale.
-    return status.model_copy(update={"status": RunnerStatus.STALE})
-
-
 def touch_runner_status(
     root: Path,
     active_task_id: str | None | object = MISSING,
