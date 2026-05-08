@@ -134,26 +134,6 @@ def event_log_replay_task_ids_for_workspace(workspace: "Workspace") -> set[str]:
     return task_ids
 
 
-def assert_database_rebuild_safe(
-    root: Path,
-    db_path: Path,
-    *,
-    replay_task_ids: Iterable[str] | None = None,
-    operation: str,
-) -> RebuildSafetyReport:
-    """
-    Path-based compatibility wrapper for database rebuild safety checks.
-    """
-    from litehive.workspace import Workspace  # noqa: PLC0415
-
-    return assert_database_rebuild_safe_for_workspace(
-        Workspace.from_path(root),
-        db_path,
-        replay_task_ids=replay_task_ids,
-        operation=operation,
-    )
-
-
 def assert_database_rebuild_safe_for_workspace(
     workspace: "Workspace",
     db_path: Path,
@@ -200,15 +180,6 @@ def assert_database_rebuild_safe_for_workspace(
             f"missing from replay: {sample}{suffix}"
         )
     return report
-
-
-def backup_database_before_rebuild(root: Path, db_path: Path, label: str) -> Path | None:
-    """
-    Path-based compatibility wrapper for pre-rebuild DB backups.
-    """
-    from litehive.workspace import Workspace  # noqa: PLC0415
-
-    return backup_database_before_rebuild_for_workspace(Workspace.from_path(root), db_path, label)
 
 
 def backup_database_before_rebuild_for_workspace(
