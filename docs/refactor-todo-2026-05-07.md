@@ -194,6 +194,7 @@ Active goal: keep burning down internal `root: Path` and path-based factory wrap
 - [x] Migrate workspace-loading config test to workspace-native config loader.
 - [x] Migrate engine model config tests to workspace-native config loader helper.
 - [x] Migrate workspace bootstrap config tests to workspace-native config loader helper.
+- [x] Move Heru factory display path rendering to injected workspace.
 - [ ] Leave true boundary/path modules alone unless a clear service boundary exists:
   - `git/ops.py`
   - `config/paths.py`

@@ -197,11 +197,11 @@ def execution_checkout_status(workspace: Workspace, task) -> tuple[Path, list[st
         return checkout, None
 
 
-def _display_path(root: Path, path: Path) -> str:
+def _display_path(workspace: Workspace, path: Path) -> str:
     """Render a path for human-facing journal/report text relative to the
     workspace, so messages don't leak the operator's home directory."""
     try:
-        relative = path.relative_to(root)
+        relative = path.relative_to(workspace.root)
     except ValueError:
         return str(path)
     if str(relative) == "":
@@ -221,7 +221,7 @@ def _rewrite_hallucinated_implementing_pass(
     stage report with a reject, and journals the hallucination so downstream
     routing treats it as a real reject. Called by the implementing-pass guard
     inside ``latest_verdict_after``."""
-    checkout_display = _display_path(workspace.root, checkout)
+    checkout_display = _display_path(workspace, checkout)
     claimed = ", ".join(claimed_files)
     reason_code = OutcomeReasonCode.HALLUCINATED_COMPLETION.value
     reason = (
