@@ -309,10 +309,8 @@ def _recovery_source_checkout(workspace: Workspace) -> tuple[str | None, str | N
     except OSError:
         resolved = candidate
     if resolved.is_dir():
-        execution_root = resolved
-    else:
-        execution_root = workspace.root
-    return raw_source, str(execution_root)
+        return raw_source, str(resolved)
+    return raw_source, str(workspace.root)
 
 
 def _recovery_source_checkout_diagnostic(workspace: Workspace, exc: OSError | ValueError) -> dict[str, str]:

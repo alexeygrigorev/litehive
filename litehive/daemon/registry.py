@@ -31,6 +31,13 @@ _DAEMON_LOCKS: dict[Path, TextIO] = {}
 _DAEMON_LOCKS_MUTEX = threading.Lock()
 
 
+def _daemon_lock_key_for_workspace(workspace: Workspace) -> Path:
+    """
+    Return the normalized key for the in-process daemon-lock registry.
+    """
+    return workspace.root.resolve()
+
+
 @dataclass(frozen=True, slots=True)
 class DaemonRegistryEntry:
     """
@@ -119,13 +126,13 @@ def _daemon_lock_manager_for_workspace(workspace: Workspace) -> ProcessLockManag
     manager itself is the shared primitive; this helper only wires
     up the daemon-specific liveness predicate.
     """
-    root = workspace.root.resolve()
+    lock_key = _daemon_lock_key_for_workspace(workspace)
     return ProcessLockManager(
         process_name="daemon",
         lock_manager=WorkspaceLockManager(
-            path=daemon_lock_path(root),
+            path=daemon_lock_path(lock_key),
             pid_is_alive=runner_pid_is_alive,
-            held_in_process=lambda: _daemon_lock_is_held_in_process(root),
+            held_in_process=lambda: _daemon_lock_is_held_in_process(lock_key),
             fsync_writes=True,
         ),
         runtime_store=runtime_store_for_workspace(workspace),
@@ -237,7 +244,7 @@ def register_daemon_for_workspace(workspace: Workspace, pid: int, log_dir: Path)
     inherited fd from a dead process can keep the flock alive on the
     old inode.
     """
-    root = workspace.root.resolve()
+    lock_key = _daemon_lock_key_for_workspace(workspace)
     manager = _daemon_lock_manager_for_workspace(workspace)
     # Remove stale lock file before opening — inherited FDs from dead
     # processes can hold flocks on the old inode indefinitely.
@@ -250,21 +257,21 @@ def register_daemon_for_workspace(workspace: Workspace, pid: int, log_dir: Path)
             existing = manager.read_locked_metadata(handle)
             existing_pid = existing.get("pid")
             if isinstance(existing_pid, int) and runner_pid_is_alive(existing_pid):
-                raise RuntimeError(f"daemon already running for {root}: pid={existing_pid}") from None
-            raise RuntimeError(f"daemon already running for {root}: pid={existing_pid}") from None
+                raise RuntimeError(f"daemon already running for {lock_key}: pid={existing_pid}") from None
+            raise RuntimeError(f"daemon already running for {lock_key}: pid={existing_pid}") from None
         payload = manager.create_base_metadata(
             pid,
             {
-                "workspace": str(root),
+                "workspace": str(lock_key),
                 "log_dir": str(log_dir),
             },
         )
         manager.write_locked_metadata(handle, payload)
         with _DAEMON_LOCKS_MUTEX:
-            existing_handle = _DAEMON_LOCKS.get(root)
+            existing_handle = _DAEMON_LOCKS.get(lock_key)
             if existing_handle is not None:
-                raise RuntimeError(f"daemon already registered in-process for {root}")
-            _DAEMON_LOCKS[root] = handle
+                raise RuntimeError(f"daemon already registered in-process for {lock_key}")
+            _DAEMON_LOCKS[lock_key] = handle
         manager.save_process_state(payload)
     except (OSError, RuntimeError):
         try:
@@ -292,10 +299,10 @@ def unregister_daemon_for_workspace(workspace: Workspace, pid: int | None = None
     workspace path; without it, a slow ``unregister_daemon`` could
     silently delete an unrelated daemon's registration.
     """
-    root = workspace.root.resolve()
+    lock_key = _daemon_lock_key_for_workspace(workspace)
     manager = _daemon_lock_manager_for_workspace(workspace)
     with _DAEMON_LOCKS_MUTEX:
-        handle = _DAEMON_LOCKS.pop(root, None)
+        handle = _DAEMON_LOCKS.pop(lock_key, None)
     if handle is None:
         _clear_stale_daemon_metadata_for_workspace(workspace, pid=pid)
         return
@@ -327,10 +334,10 @@ def touch_daemon_for_workspace(workspace: Workspace, pid: int | None = None) -> 
     gone (so the heartbeat thread can stop trying after shutdown
     began).
     """
-    root = workspace.root.resolve()
+    lock_key = _daemon_lock_key_for_workspace(workspace)
     manager = _daemon_lock_manager_for_workspace(workspace)
     with _DAEMON_LOCKS_MUTEX:
-        handle = _DAEMON_LOCKS.get(root)
+        handle = _DAEMON_LOCKS.get(lock_key)
         if handle is None:
             return False
         metadata = manager.read_locked_metadata(handle)
