@@ -3,10 +3,15 @@ from pathlib import Path
 import yaml
 
 from litehive.config.engine_models import resolve_engine_name
-from litehive.config.loading import load_config
+from litehive.config.loading import load_config_for_workspace
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import create_workspace
 from litehive.state.records import create_task
+from litehive.workspace import Workspace
+
+
+def _load_config(root: Path) -> LitehiveConfig:
+    return load_config_for_workspace(Workspace.from_path(root))
 
 
 def test_resolve_engine_name_allows_claude_task_when_workspace_defaults_to_claude(
@@ -14,14 +19,14 @@ def test_resolve_engine_name_allows_claude_task_when_workspace_defaults_to_claud
 ) -> None:
     create_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
     task = create_task(tmp_path, title="Claude task")
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
 
     assert resolve_engine_name(task, config) == "claude"
 
 
 def test_resolve_engine_name_allows_workspace_default_claude(tmp_path: Path) -> None:
     create_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
 
     task = create_task(tmp_path, title="Claude default task")
     assert config.default_engine == "claude"
@@ -53,7 +58,7 @@ def test_configure_persists_claude_settings(tmp_path: Path) -> None:
         yaml.safe_dump(raw, sort_keys=False),
         encoding="utf-8",
     )
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
     assert config.claude_model == "claude-sonnet-4-20250514"
     assert config.claude_max_turns == 20
 
@@ -68,7 +73,7 @@ def test_configure_updates_existing_workspace_process_profile(tmp_path: Path) ->
         encoding="utf-8",
     )
 
-    config = load_config(tmp_path)
+    config = _load_config(tmp_path)
     assert config.process_profile == "python"
     assert config.claude_max_turns == 20
 
