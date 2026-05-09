@@ -7,9 +7,10 @@ from litehive.config.workspace import create_workspace
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.lifecycle.nodes.agent import AgentVerdict, UnrecoverableError
-from litehive.lifecycle.orchestration import ExecutionResult, run_task_for_workspace
-from litehive.state.records import create_task_for_workspace, get_task_for_workspace
-from litehive.tasks.status import requeue_task_for_workspace
+from litehive.lifecycle.orchestration import ExecutionResult, TaskOrchestrator
+from litehive.state.records import WorkspaceTasks
+from litehive.tasks.activity import task_activity_store_for_task
+from litehive.tasks.status import TaskStatusService
 from litehive.workspace import Workspace
 
 pytestmark = pytest.mark.integration
@@ -29,8 +30,7 @@ class _RepeatRecoveryEscalationEngine:
         if not repeated:
             return AgentVerdict(outcome="resume", metadata={"target_stage": "implementing"})
 
-        follow_up = create_task_for_workspace(
-            self.workspace,
+        follow_up = WorkspaceTasks(self.workspace).create(
             title=f"Recovery follow-up: {repeated['fingerprint']}",
             goal=f"Fix the repeated recovery failure for `{repeated['fingerprint']}`.",
             acceptance_criteria=[
@@ -39,10 +39,10 @@ class _RepeatRecoveryEscalationEngine:
             ],
         )
         self.follow_up_ids.append(follow_up.id)
-        task = get_task_for_workspace(self.workspace, state.task_id)
+        task = WorkspaceTasks(self.workspace).get(state.task_id)
         assert task is not None
         message = f"Repeated recovery fingerprint `{repeated['fingerprint']}`. Filed follow-up task {follow_up.id}."
-        self.workspace.task_activity(task).append(
+        task_activity_store_for_task(self.workspace, task).append(
             TaskActivityEntry(
                 role="recovery",
                 stage="recovering",
@@ -68,10 +68,7 @@ def _init_workspace_git_repo(root: Path) -> None:
 
 
 def _run_with_repeat_engine(workspace: Workspace, task: TaskRecord, follow_up_ids: list[str]) -> ExecutionResult:
-    return run_task_for_workspace(
-        workspace,
-        workspace.load_config(),
-        task,
+    return TaskOrchestrator(workspace, workspace.load_config()).run(task,
         engine_factory=lambda name: _RepeatRecoveryEscalationEngine(
             name, workspace=workspace, follow_up_ids=follow_up_ids
         ),
@@ -81,11 +78,11 @@ def _run_with_repeat_engine(workspace: Workspace, task: TaskRecord, follow_up_id
 def test_recovery_repeat_fingerprint_escalates_after_requeue(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Repeated recovery fingerprint", pipeline_mode="single")
+    task = WorkspaceTasks(workspace).create( title="Repeated recovery fingerprint", pipeline_mode="single")
     follow_up_ids: list[str] = []
 
     first = _run_with_repeat_engine(workspace, task, follow_up_ids)
-    first_refreshed = get_task_for_workspace(workspace, task.id)
+    first_refreshed = WorkspaceTasks(workspace).get(task.id)
     assert first.final_stage == "failed"
     assert first_refreshed is not None
     assert first_refreshed.flag_reason == "crash_budget_exhausted"
@@ -94,10 +91,10 @@ def test_recovery_repeat_fingerprint_escalates_after_requeue(tmp_path: Path) -> 
 
     second = _run_with_repeat_engine(
         workspace,
-        requeue_task_for_workspace(workspace, task.id),
+        TaskStatusService(workspace).requeue(task.id),
         follow_up_ids,
     )
-    second_refreshed = get_task_for_workspace(workspace, task.id)
+    second_refreshed = WorkspaceTasks(workspace).get(task.id)
     assert second.final_stage == "failed"
     assert second_refreshed is not None
     assert second_refreshed.flag_reason == "recovery_failed"
@@ -105,6 +102,6 @@ def test_recovery_repeat_fingerprint_escalates_after_requeue(tmp_path: Path) -> 
     assert len(follow_up_ids) == 1
     assert second_refreshed.runtime.pipeline.last_outcome.follow_up_task_id == follow_up_ids[0]
 
-    follow_up = get_task_for_workspace(workspace, follow_up_ids[0])
+    follow_up = WorkspaceTasks(workspace).get(follow_up_ids[0])
     assert follow_up is not None
     assert "repeatable infra crash" in follow_up.goal

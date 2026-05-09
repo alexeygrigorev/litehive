@@ -1,124 +1,228 @@
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from typing import Protocol
 
-from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
+from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus, utcnow
 from litehive.domain.pool import PoolSummaryReport, PoolTaskReportEntry
-from litehive.tasks.report_storage import load_stage_reports_for_task_id
+from litehive.state.persist import CONSECUTIVE_TASK_FAILURE_STOP_REASON, WorkspaceStateRepository
+from litehive.state.records import WorkspaceTasks
+from litehive.tasks.report_storage import TaskReportStore
 from litehive.workspace import Workspace
 
 
-def task_stage_outcomes_for_workspace(workspace: Workspace, task_id: str) -> list[str]:
+class PoolRunIteration(Protocol):
     """
-    Flatten a task's stored stage reports using an injected workspace.
+    Minimum run-once result shape needed by the pool drain service.
     """
-    reports = load_stage_reports_for_task_id(workspace, task_id)
-    outcomes: list[str] = []
-    for report in reports:
-        outcomes.append(f"{report.pipeline_state}={report.verdict}")
-    return outcomes
+
+    exit_code: int
+    ran_task: bool
+    final_stage: PipelineState | None
+    pool_stop_reason: str | None
 
 
-def _pool_task_report_entry_for_workspace(
-    workspace: Workspace,
-    task_id: str,
-    title: str,
-    status: TaskStatus,
-    pipeline_status: PipelineStatus,
-    slug: str | None = None,
-    reason_code: str | None = None,
-    reason: str | None = None,
-    follow_up_task_id: str | None = None,
-    close_reason: str | None = None,
-    flag_reason: str | None = None,
-) -> PoolTaskReportEntry:
+class PoolService:
     """
-    Shared pool report entry builder from an injected workspace.
+    Workspace-bound service for pool reporting, summaries, and drain policy.
     """
-    if slug is not None:
-        stage_outcomes = task_stage_outcomes_for_workspace(workspace, task_id)
-    else:
-        stage_outcomes = []
-    return PoolTaskReportEntry(
-        task_id=task_id,
-        title=title,
-        final_task_status=status,
-        pipeline_status=pipeline_status,
-        stage_outcomes=stage_outcomes,
-        reason_code=reason_code,
-        reason=reason,
-        follow_up_task_id=follow_up_task_id,
-        close_reason=close_reason,
-        flag_reason=flag_reason,
-    )
 
+    def __init__(
+        self,
+        workspace: Workspace,
+        tasks: WorkspaceTasks | None = None,
+        run_once: Callable[[str | None, str | None], PoolRunIteration] | None = None,
+        dirty_checker: Callable[[], bool] | None = None,
+        emit: Callable[[str], None] = print,
+    ) -> None:
+        self.workspace = workspace
+        self.tasks = tasks or WorkspaceTasks(workspace)
+        self.run_once = run_once
+        self.dirty_checker = dirty_checker
+        self.emit = emit
 
-def _pending_pool_tasks_for_workspace(workspace: Workspace) -> list[PoolTaskReportEntry]:
-    """
-    Collect pending pool tasks from an injected workspace.
-    """
-    pending = []
-    for task in workspace.list_tasks():
-        if task.is_pool_pending:
-            pending.append(
-                _pool_task_report_entry_for_workspace(
-                    workspace,
+    def stage_outcomes(self, task_id: str) -> list[str]:
+        reports = TaskReportStore(self.workspace).load_stage_reports_for_task_id(task_id)
+        outcomes: list[str] = []
+        for report in reports:
+            outcomes.append(f"{report.pipeline_state}={report.verdict}")
+        return outcomes
+
+    def task_report_entry(
+        self,
+        task_id: str,
+        title: str,
+        status: TaskStatus,
+        pipeline_status: PipelineStatus,
+        slug: str | None = None,
+        reason_code: str | None = None,
+        reason: str | None = None,
+        follow_up_task_id: str | None = None,
+        close_reason: str | None = None,
+        flag_reason: str | None = None,
+    ) -> PoolTaskReportEntry:
+        if slug is not None:
+            stage_outcomes = self.stage_outcomes(task_id)
+        else:
+            stage_outcomes = []
+        return PoolTaskReportEntry(
+            task_id=task_id,
+            title=title,
+            final_task_status=status,
+            pipeline_status=pipeline_status,
+            stage_outcomes=stage_outcomes,
+            reason_code=reason_code,
+            reason=reason,
+            follow_up_task_id=follow_up_task_id,
+            close_reason=close_reason,
+            flag_reason=flag_reason,
+        )
+
+    def collect_pending(self) -> list[PoolTaskReportEntry]:
+        pending: list[PoolTaskReportEntry] = []
+        for task in self.tasks.list():
+            if task.is_pool_pending:
+                pending.append(
+                    self.task_report_entry(
+                        task_id=task.id,
+                        title=task.title,
+                        status=task.status,
+                        pipeline_status=task.pipeline_status,
+                        slug=task.slug,
+                    )
+                )
+        return pending
+
+    def collect_resumable(self) -> list[PoolTaskReportEntry]:
+        resumable: list[PoolTaskReportEntry] = []
+        for task in self.tasks.list():
+            if not task.is_resumable:
+                continue
+            resumable.append(
+                self.task_report_entry(
                     task_id=task.id,
                     title=task.title,
                     status=task.status,
                     pipeline_status=task.pipeline_status,
                     slug=task.slug,
+                    reason_code=task.runtime.pipeline.last_outcome.reason_code,
+                    reason=task.runtime.pipeline.last_outcome.reason,
+                    follow_up_task_id=task.runtime.pipeline.last_outcome.follow_up_task_id,
                 )
             )
-    return pending
+        return resumable
 
-
-def _resumable_pool_tasks_for_workspace(workspace: Workspace) -> list[PoolTaskReportEntry]:
-    """
-    Collect resumable pool tasks from an injected workspace.
-    """
-    resumable = []
-    for task in workspace.list_tasks():
-        if not task.is_resumable:
-            continue
-        resumable.append(
-            _pool_task_report_entry_for_workspace(
-                workspace,
-                task_id=task.id,
-                title=task.title,
-                status=task.status,
-                pipeline_status=task.pipeline_status,
-                slug=task.slug,
-                reason_code=task.runtime.pipeline.last_outcome.reason_code,
-                reason=task.runtime.pipeline.last_outcome.reason,
-                follow_up_task_id=task.runtime.pipeline.last_outcome.follow_up_task_id,
+    def collect_closed(self) -> list[PoolTaskReportEntry]:
+        closed: list[PoolTaskReportEntry] = []
+        for task in self.tasks.list():
+            if not task.is_closed:
+                continue
+            closed.append(
+                self.task_report_entry(
+                    task_id=task.id,
+                    title=task.title,
+                    status=task.status,
+                    pipeline_status=task.pipeline_status,
+                    slug=task.slug,
+                    reason_code=task.runtime.pipeline.last_outcome.reason_code,
+                    reason=task.runtime.pipeline.last_outcome.reason,
+                    follow_up_task_id=task.runtime.pipeline.last_outcome.follow_up_task_id,
+                    close_reason=task.close_reason,
+                )
             )
+        return closed
+
+    def summarize(
+        self,
+        completed: list[PoolTaskReportEntry],
+        flagged: list[PoolTaskReportEntry],
+        stop_reason: str,
+        tasks_run: int | None = None,
+    ) -> PoolSummaryReport:
+        remaining = self.collect_pending()
+        if tasks_run is not None:
+            tasks_run_value = tasks_run
+        else:
+            tasks_run_value = len(completed) + len(flagged)
+        report = PoolSummaryReport(
+            created_at=utcnow(),
+            stop_reason=stop_reason,
+            tasks_run=tasks_run_value,
+            completed=completed,
+            flagged=flagged,
+            resumable=self.collect_resumable(),
+            closed=self.collect_closed(),
+            skipped=remaining,
+            remaining=remaining,
         )
-    return resumable
+        return report.with_derived_progress_report()
 
+    def render_summary(self, report: PoolSummaryReport | Mapping[str, object]) -> list[str]:
+        return self.render_summary_report(report)
 
-def _closed_pool_tasks_for_workspace(workspace: Workspace) -> list[PoolTaskReportEntry]:
-    """
-    Collect closed pool tasks from an injected workspace.
-    """
-    closed = []
-    for task in workspace.list_tasks():
-        if not task.is_closed:
-            continue
-        closed.append(
-            _pool_task_report_entry_for_workspace(
-                workspace,
-                task_id=task.id,
-                title=task.title,
-                status=task.status,
-                pipeline_status=task.pipeline_status,
-                slug=task.slug,
-                reason_code=task.runtime.pipeline.last_outcome.reason_code,
-                reason=task.runtime.pipeline.last_outcome.reason,
-                follow_up_task_id=task.runtime.pipeline.last_outcome.follow_up_task_id,
-                close_reason=task.close_reason,
-            )
-        )
-    return closed
+    @staticmethod
+    def render_summary_report(report: PoolSummaryReport | Mapping[str, object]) -> list[str]:
+        return _pool_summary_report_lines(report)
 
+    def write_summary(self, report: PoolSummaryReport | Mapping[str, object]) -> None:
+        report = _ensure_pool_summary_report_fields(report)
+        report_path = self.workspace.control_dir() / "pool-summary.txt"
+        report_lines = self.render_summary(report)
+        report_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+
+    def print_summary(self, report: PoolSummaryReport | Mapping[str, object]) -> None:
+        self.print_summary_report(report, emit=self.emit)
+
+    @staticmethod
+    def print_summary_report(
+        report: PoolSummaryReport | Mapping[str, object],
+        emit: Callable[[str], None] = print,
+    ) -> None:
+        for line in PoolService.render_summary_report(report):
+            emit(line)
+
+    def stop_for(self, reason: str) -> None:
+        WorkspaceStateRepository(self.workspace).set_pool_stop_reason(reason)
+
+    def run(
+        self,
+        engine: str | None = None,
+        model: str | None = None,
+        stop_on_failure: bool = False,
+        limit: int | None = None,
+        stop_on_dirty_git: bool = False,
+    ) -> int:
+        if self.run_once is None:
+            raise RuntimeError("PoolService.run requires a run_once callback")
+        tasks_run = 0
+        while True:
+            if stop_on_dirty_git and self.dirty_checker is not None and self.dirty_checker():
+                self.stop_for("dirty_git_state")
+                self.emit("Pool stopped: dirty_git_state")
+                return 0
+
+            iteration = self.run_once(engine, model)
+            if iteration.exit_code != 0:
+                return iteration.exit_code
+            if iteration.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
+                self.emit(f"Pool stopped: {CONSECUTIVE_TASK_FAILURE_STOP_REASON}")
+                return 0
+            if not iteration.ran_task:
+                if tasks_run == 0:
+                    state = WorkspaceStateRepository(self.workspace).load()
+                    if state.queue:
+                        self.emit("No runnable task.")
+                    else:
+                        self.emit("No queued task.")
+                return 0
+
+            tasks_run += 1
+            if stop_on_failure and iteration.final_stage != PipelineState.DONE:
+                self.stop_for("failure_detected")
+                self.emit("Pool stopped: failure_detected")
+                return 0
+            if limit is not None and tasks_run >= limit:
+                self.stop_for("max_tasks_reached")
+                self.emit("Pool stopped: max_tasks_reached")
+                return 0
 
 def _format_pool_task_report_line(
     label: str,
@@ -159,52 +263,6 @@ def _format_pool_task_report_line(
     if follow_up_task_id:
         line += f" follow_up_task={follow_up_task_id}"
     return line
-
-
-def _print_pool_summary_report(
-    report: PoolSummaryReport | Mapping[str, object],
-) -> None:
-    """
-    Print the pool summary to stdout instead of writing it to a file.
-
-    Used as a debug/operator override path; no production callers
-    today (candidate for removal alongside the data builder below
-    once the dead-helper sweep retires both).
-    """
-    typed_report = _ensure_pool_summary_report_fields(report)
-    for line in _pool_summary_report_lines(report=typed_report):
-        print(line)
-
-
-def _pool_summary_report_data_for_workspace(
-    workspace: Workspace,
-    completed: list[PoolTaskReportEntry],
-    flagged: list[PoolTaskReportEntry],
-    stop_reason: str,
-    tasks_run: int | None = None,
-) -> PoolSummaryReport:
-    """
-    Build the structured pool-summary payload from an injected workspace.
-    """
-    remaining = _pending_pool_tasks_for_workspace(workspace)
-    resumable = _resumable_pool_tasks_for_workspace(workspace)
-    closed = _closed_pool_tasks_for_workspace(workspace)
-    if tasks_run is not None:
-        tasks_run_value = tasks_run
-    else:
-        tasks_run_value = len(completed) + len(flagged)
-    report = PoolSummaryReport(
-        created_at=utcnow(),
-        stop_reason=stop_reason,
-        tasks_run=tasks_run_value,
-        completed=completed,
-        flagged=flagged,
-        resumable=resumable,
-        closed=closed,
-        skipped=remaining,
-        remaining=remaining,
-    )
-    return report.with_derived_progress_report()
 
 
 def _pool_summary_report_lines(
@@ -293,22 +351,3 @@ def _ensure_pool_summary_report_fields(report: PoolSummaryReport | Mapping[str, 
         # Boundary conversion for summaries built before PoolSummaryReport existed.
         typed_report = PoolSummaryReport.from_mapping(report)
     return typed_report.with_derived_progress_report()
-
-
-def _write_pool_summary_report(
-    workspace: Workspace,
-    report: PoolSummaryReport | Mapping[str, object],
-) -> None:
-    """
-    Persist the operator-facing pool summary to a fixed file.
-
-    Writes ``.litehive/pool-summary.txt`` so daemon runs leave
-    behind a stable, scriptable artifact; operators should not
-    have to recover it from stdout logs that may have been
-    truncated. The path is hard-coded because it is part of the
-    operator-facing contract.
-    """
-    report = _ensure_pool_summary_report_fields(report)
-    report_path = workspace.control_dir() / "pool-summary.txt"
-    report_lines = _pool_summary_report_lines(report=report)
-    report_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8")

@@ -21,30 +21,29 @@ from litehive.lifecycle.nodes.hook import HookNode, HookRunner, HookSpec, Subpro
 from litehive.lifecycle.nodes.system import GitCommitNode, StubCommitNode
 from litehive.lifecycle.orchestration import (
     ExecutionResult,
-    reconcile_terminal_commit_sha_for_workspace,
-    run_task_for_workspace,
+    TaskOrchestrator,
 )
 from litehive.lifecycle.persistence import CommitResult, SqlitePersistence, TaskState
+from litehive.lifecycle.worktree_setup import PipelineWorktreeSetup
 from litehive.workspace import Workspace
 from litehive.lifecycle.types import PipelineMode
-from litehive.state.persist import load_state_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
 from litehive.state.records import (
-    create_task_for_workspace,
-    get_task_for_workspace,
-    save_task_for_workspace,
-    set_task_worktree_path,
+    WorkspaceTasks,
+            set_task_worktree_path,
 )
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.tasks.journal import render_task_journal
-from litehive.tasks.queue import dequeue_next_task
-from litehive.tasks.report_storage import load_stage_reports
-from litehive.worktree.paths import serialize_worktree_path, task_worktree_branch, task_worktree_path_for_workspace
+from litehive.tasks.queue import TaskQueueService
+from litehive.tasks.report_storage import TaskReportStore
+from litehive.worktree.paths import serialize_worktree_path, task_worktree_branch, WorktreePaths
 from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
 
 pytestmark = pytest.mark.integration
 
 
 def _run_task(workspace: Workspace, task: TaskRecord, **kwargs: Any) -> ExecutionResult:
-    return run_task_for_workspace(workspace, workspace.load_config(), task, **kwargs)
+    return TaskOrchestrator(workspace, workspace.load_config()).run(task, **kwargs)
 
 
 def _raw_task_state_payload(root: Path, task_id: str) -> dict:
@@ -495,12 +494,8 @@ def test_commit_node_main_checkout_autocommit_skips_stale_missing_pathspecs(
 
     monkeypatch.setattr(
         node,
-        "git_status_entries",
-        lambda repo_root: (
-            [("??", "generated.txt"), (" D", "tmp_review_probe/.litehive/.gitignore")]
-            if repo_root == main_repo
-            else GitCommitNode.git_status_entries(node, repo_root)
-        ),
+        "main_checkout_git_status_entries",
+        lambda: [("??", "generated.txt"), (" D", "tmp_review_probe/.litehive/.gitignore")],
     )
 
     cleanup_head = node.autocommit_main_checkout_changes(make_state(stage=PipelineState.COMMIT))
@@ -710,7 +705,7 @@ def _init_workspace_git_repo(root: Path, *, config: LitehiveConfig | None = None
 
 def _prepare_committed_task_worktree(workspace: Workspace, task: TaskRecord, *, filename: str = "merged.txt") -> Path:
     root = workspace.root
-    worktree = task_worktree_path_for_workspace(workspace, task)
+    worktree = WorktreePaths(workspace).task_worktree_path(task)
     worktree.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["git", "worktree", "add", "-q", "-b", task_worktree_branch(task), str(worktree), "HEAD"],
@@ -723,21 +718,20 @@ def _prepare_committed_task_worktree(workspace: Workspace, task: TaskRecord, *, 
     subprocess.run(["git", "add", filename], cwd=worktree, check=True)
     subprocess.run(["git", "commit", "-qm", "feature"], cwd=worktree, check=True)
     set_task_worktree_path(task, serialize_worktree_path(worktree))
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
     return worktree
 
 
 def test_run_task_single_mode_executes_only_implementing_then_finishes(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    create_task_for_workspace(
-        workspace,
+    WorkspaceTasks(workspace).create(
         title="Single-mode research task",
         pipeline_mode="single",
         goal="Summarize the current workspace state",
         acceptance_criteria=["A single agent pass completes the task"],
     )
-    task = dequeue_next_task(workspace)
+    task = TaskQueueService(workspace).dequeue_next()
     assert task is not None
 
     calls: list[dict[str, str]] = []
@@ -746,9 +740,9 @@ def test_run_task_single_mode_executes_only_implementing_then_finishes(tmp_path:
         task,
         engine_factory=lambda engine_name: _RecordingPassEngine(engine_name, calls),
     )
-    refreshed = get_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
     pipeline_state = SqlitePersistence(workspace).load(task.id)
-    workspace_state = load_state_for_workspace(workspace)
+    workspace_state = WorkspaceStateRepository(workspace).load()
 
     assert len(calls) == 1
     assert calls[0]["stage"] == "implementing"
@@ -767,12 +761,12 @@ def test_run_task_single_mode_executes_only_implementing_then_finishes(tmp_path:
 def test_run_task_flags_time_budget_exceeded_and_preserves_worktree(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path, config=LitehiveConfig(task_time_budget_seconds=0.01))
     workspace = Workspace.from_path(tmp_path)
-    first = create_task_for_workspace(workspace, title="Time budget task")
-    second = create_task_for_workspace(workspace, title="Next task")
-    task = dequeue_next_task(workspace)
+    first = WorkspaceTasks(workspace).create( title="Time budget task")
+    second = WorkspaceTasks(workspace).create( title="Next task")
+    task = TaskQueueService(workspace).dequeue_next()
     assert task is not None
     assert task.id == first.id
-    worktree = task_worktree_path_for_workspace(workspace, task)
+    worktree = WorktreePaths(workspace).task_worktree_path(task)
     branch = task_worktree_branch(task)
 
     result = _run_task(
@@ -780,8 +774,8 @@ def test_run_task_flags_time_budget_exceeded_and_preserves_worktree(tmp_path: Pa
         task,
         engine_factory=lambda engine_name: _SlowPassEngine(engine_name, sleep_seconds=0.02),
     )
-    refreshed = get_task_for_workspace(workspace, task.id)
-    workspace_state = load_state_for_workspace(workspace)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
+    workspace_state = WorkspaceStateRepository(workspace).load()
     branch_lookup = subprocess.run(
         ["git", "branch", "--list", branch],
         cwd=tmp_path,
@@ -801,7 +795,7 @@ def test_run_task_flags_time_budget_exceeded_and_preserves_worktree(tmp_path: Pa
     assert workspace_state.active_task_id is None
     assert task.id not in workspace_state.queue
 
-    next_task = dequeue_next_task(workspace)
+    next_task = TaskQueueService(workspace).dequeue_next()
     assert next_task is not None
     assert next_task.id == second.id
 
@@ -825,17 +819,17 @@ def test_run_task_runs_after_implementing_hook_in_task_worktree(tmp_path: Path) 
         ),
     )
     workspace = Workspace.from_path(tmp_path)
-    create_task_for_workspace(workspace, title="After implementing hook path")
-    task = dequeue_next_task(workspace)
+    WorkspaceTasks(workspace).create( title="After implementing hook path")
+    task = TaskQueueService(workspace).dequeue_next()
     assert task is not None
-    expected_worktree = task_worktree_path_for_workspace(workspace, task)
+    expected_worktree = WorktreePaths(workspace).task_worktree_path(task)
 
     result = _run_task(
         workspace,
         task,
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )
-    refreshed = get_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
 
     assert result.final_stage == "done"
     assert refreshed is not None
@@ -859,8 +853,8 @@ def test_run_task_runs_after_commit_hook_on_main_and_finishes(tmp_path: Path) ->
         ),
     )
     workspace = Workspace.from_path(tmp_path)
-    create_task_for_workspace(workspace, title="After merge pass")
-    task = dequeue_next_task(workspace)
+    WorkspaceTasks(workspace).create( title="After merge pass")
+    task = TaskQueueService(workspace).dequeue_next()
     assert task is not None
     worktree = _prepare_committed_task_worktree(workspace, task)
 
@@ -869,7 +863,7 @@ def test_run_task_runs_after_commit_hook_on_main_and_finishes(tmp_path: Path) ->
         task,
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )
-    refreshed = get_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
 
     assert result.final_stage == "done"
     assert refreshed is not None
@@ -883,8 +877,8 @@ def test_run_task_runs_after_commit_hook_on_main_and_finishes(tmp_path: Path) ->
 def test_run_task_reconciles_noop_commit_stage_and_records_main_head(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    create_task_for_workspace(workspace, title="Already landed merge")
-    task = dequeue_next_task(workspace)
+    WorkspaceTasks(workspace).create( title="Already landed merge")
+    task = TaskQueueService(workspace).dequeue_next()
     assert task is not None
     worktree = _prepare_committed_task_worktree(workspace, task)
     worktree_head = subprocess.run(
@@ -931,7 +925,7 @@ def test_run_task_reconciles_noop_commit_stage_and_records_main_head(tmp_path: P
         text=True,
         check=True,
     ).stdout.strip()
-    refreshed = get_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
     pipeline_state = SqlitePersistence(workspace).load(task.id)
 
     assert refreshed is not None
@@ -955,7 +949,7 @@ def test_run_task_reconciles_noop_commit_stage_and_records_main_head(tmp_path: P
 def test_reconcile_terminal_commit_sha_recovers_missing_sha_from_persisted_commit_result(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Repair missing terminal commit sha")
+    task = WorkspaceTasks(workspace).create( title="Repair missing terminal commit sha")
     persistence = SqlitePersistence(workspace)
     state = persistence.initialize(task.id, stage=PipelineState.DONE, pipeline_mode=PipelineMode.FULL)
     head_sha = subprocess.run(
@@ -968,19 +962,18 @@ def test_reconcile_terminal_commit_sha_recovers_missing_sha_from_persisted_commi
     state.commit_result = CommitResult(head_sha=head_sha, reason="no_op")
     persistence.save(state)
 
-    fresh = get_task_for_workspace(workspace, task.id)
+    fresh = WorkspaceTasks(workspace).get(task.id)
     assert fresh is not None
     fresh.status = TaskStatus.DONE
     fresh.pipeline_status = PipelineStatus.DONE
-    save_task_for_workspace(workspace, fresh)
+    WorkspaceTasks(workspace).save(fresh)
 
-    reconciled = reconcile_terminal_commit_sha_for_workspace(
-        workspace,
+    reconciled = PipelineWorktreeSetup(workspace).reconcile_terminal_commit_sha(
         fresh,
         final_state=TaskState(task_id=task.id, stage=PipelineState.DONE, pipeline_mode=PipelineMode.FULL),
         persistence=persistence,
     )
-    reloaded = get_task_for_workspace(workspace, task.id)
+    reloaded = WorkspaceTasks(workspace).get(task.id)
 
     assert reconciled is not None
     assert reconciled.runtime.pipeline.git.commit_sha == head_sha
@@ -1002,8 +995,8 @@ def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path
         ),
     )
     workspace = Workspace.from_path(tmp_path)
-    create_task_for_workspace(workspace, title="After commit warning")
-    task = dequeue_next_task(workspace)
+    WorkspaceTasks(workspace).create( title="After commit warning")
+    task = TaskQueueService(workspace).dequeue_next()
     assert task is not None
     worktree = _prepare_committed_task_worktree(workspace, task)
 
@@ -1012,7 +1005,7 @@ def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path
         task,
         engine_factory=lambda engine_name: _RejectRecoveryEngine(engine_name),
     )
-    refreshed = get_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
 
     assert result.final_stage == "failed"
     assert refreshed is not None
@@ -1022,14 +1015,14 @@ def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path
     assert (tmp_path / "after_commit_branch.txt").read_text().strip() == "main"
     assert not worktree.exists()
 
-    activity_entries = workspace.task_activity(refreshed).load()
+    activity_entries = task_activity_store_for_task(workspace, refreshed).load()
     assert activity_entries[-1].role == "hook"
     assert activity_entries[-1].stage == "commit_to_git"
     assert activity_entries[-1].verdict == "reject"
     assert "Runner hook at `after_commit` rejected the stage." in activity_entries[-1].message
     assert "echo fail && exit 1" in activity_entries[-1].message
 
-    reports = load_stage_reports(workspace, refreshed)
+    reports = TaskReportStore(workspace).load_stage_reports(refreshed)
     hook_reports = [report for report in reports if report.source == "hook"]
     assert hook_reports
     assert hook_reports[-1].pipeline_state == "commit_to_git"
@@ -1043,10 +1036,10 @@ def test_run_task_records_after_commit_hook_reject_and_flags_task(tmp_path: Path
 def test_run_task_merge_conflict_failure_journal_stays_distinct_from_noop_reconciliation(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    create_task_for_workspace(workspace, title="Merge conflict failure")
-    task = dequeue_next_task(workspace)
+    WorkspaceTasks(workspace).create( title="Merge conflict failure")
+    task = TaskQueueService(workspace).dequeue_next()
     assert task is not None
-    worktree = task_worktree_path_for_workspace(workspace, task)
+    worktree = WorktreePaths(workspace).task_worktree_path(task)
     worktree.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["git", "worktree", "add", "-q", "-b", task_worktree_branch(task), str(worktree), "HEAD"],
@@ -1058,7 +1051,7 @@ def test_run_task_merge_conflict_failure_journal_stays_distinct_from_noop_reconc
     (worktree / "seed.txt").write_text("feature\n", encoding="utf-8")
     subprocess.run(["git", "commit", "-qam", "feature"], cwd=worktree, check=True)
     set_task_worktree_path(task, serialize_worktree_path(worktree))
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
     (tmp_path / "seed.txt").write_text("main\n", encoding="utf-8")
     subprocess.run(["git", "commit", "-qam", "main"], cwd=tmp_path, check=True)
@@ -1068,7 +1061,7 @@ def test_run_task_merge_conflict_failure_journal_stays_distinct_from_noop_reconc
         task,
         engine_factory=lambda engine_name: _RejectMergeResolverEngine(engine_name),
     )
-    refreshed = get_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
 
     assert refreshed is not None
     journal = render_task_journal(workspace, refreshed)
@@ -1109,8 +1102,8 @@ def test_run_task_before_accepting_hook_retries_and_continues(
         ),
     )
     workspace = Workspace.from_path(tmp_path)
-    create_task_for_workspace(workspace, title="Before accepting hook warning")
-    task = dequeue_next_task(workspace)
+    WorkspaceTasks(workspace).create( title="Before accepting hook warning")
+    task = TaskQueueService(workspace).dequeue_next()
     assert task is not None
 
     result = _run_task(
@@ -1118,21 +1111,21 @@ def test_run_task_before_accepting_hook_retries_and_continues(
         task,
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )
-    refreshed = get_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
     assert refreshed is not None
 
     assert result.final_stage == "done"
     assert refreshed.status == "done"
     assert refreshed.pipeline_status == "done"
 
-    activity_entries = workspace.task_activity(refreshed).load()
+    activity_entries = task_activity_store_for_task(workspace, refreshed).load()
     hook_entries = [entry for entry in activity_entries if entry.role == "hook"]
     assert hook_entries
     assert hook_entries[-1].stage == "accepting"
     assert hook_entries[-1].verdict == "reject"
     assert "lint failed" in hook_entries[-1].message
 
-    reports = load_stage_reports(workspace, refreshed)
+    reports = TaskReportStore(workspace).load_stage_reports(refreshed)
     hook_reports = [report for report in reports if report.source == "hook"]
     assert hook_reports
     report = hook_reports[-1]
@@ -1177,8 +1170,8 @@ def test_run_task_retries_sequential_hooks_one_failure_at_a_time(tmp_path: Path)
         ),
     )
     workspace = Workspace.from_path(tmp_path)
-    create_task_for_workspace(workspace, title="Sequential first-failure stage hooks")
-    task = dequeue_next_task(workspace)
+    WorkspaceTasks(workspace).create( title="Sequential first-failure stage hooks")
+    task = TaskQueueService(workspace).dequeue_next()
     assert task is not None
 
     result = _run_task(
@@ -1186,7 +1179,7 @@ def test_run_task_retries_sequential_hooks_one_failure_at_a_time(tmp_path: Path)
         task,
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )
-    refreshed = get_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
     assert refreshed is not None
 
     assert result.final_stage == "done"
@@ -1194,7 +1187,7 @@ def test_run_task_retries_sequential_hooks_one_failure_at_a_time(tmp_path: Path)
     assert refreshed.pipeline_status == "done"
     assert (tmp_path / ".hook_calls").read_text(encoding="utf-8") == "first\nfirst\nsecond\nfirst\nsecond\n"
 
-    reports = load_stage_reports(workspace, refreshed)
+    reports = TaskReportStore(workspace).load_stage_reports(refreshed)
     hook_reports = [report for report in reports if report.source == "hook"]
     assert len(hook_reports) == 2
     first_report, second_report = hook_reports
@@ -1216,8 +1209,8 @@ def test_run_task_skips_after_commit_when_hook_not_configured(tmp_path: Path) ->
         config=LitehiveConfig(),
     )
     workspace = Workspace.from_path(tmp_path)
-    create_task_for_workspace(workspace, title="After commit skipped")
-    task = dequeue_next_task(workspace)
+    WorkspaceTasks(workspace).create( title="After commit skipped")
+    task = TaskQueueService(workspace).dequeue_next()
     assert task is not None
     worktree = _prepare_committed_task_worktree(workspace, task)
 
@@ -1226,7 +1219,7 @@ def test_run_task_skips_after_commit_when_hook_not_configured(tmp_path: Path) ->
         task,
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )
-    refreshed = get_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
     assert result.final_stage == "done"
     assert refreshed is not None
     assert refreshed.status == "done"
@@ -1257,7 +1250,7 @@ def test_run_task_auto_commit_cleanup_excludes_db_and_gitignored_files(tmp_path:
         ),
     )
     workspace = Workspace.from_path(tmp_path)
-    create_task_for_workspace(workspace, title="Dirty main cleanup")
+    WorkspaceTasks(workspace).create( title="Dirty main cleanup")
     (tmp_path / ".gitignore").write_text("ignored.log\n")
     (tmp_path / "tracked.txt").write_text("base\n")
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
@@ -1266,7 +1259,7 @@ def test_run_task_auto_commit_cleanup_excludes_db_and_gitignored_files(tmp_path:
     subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-qm", "seed"], cwd=tmp_path, check=True)
 
-    task = dequeue_next_task(workspace)
+    task = TaskQueueService(workspace).dequeue_next()
     assert task is not None
     worktree = _prepare_committed_task_worktree(workspace, task)
 
@@ -1275,7 +1268,7 @@ def test_run_task_auto_commit_cleanup_excludes_db_and_gitignored_files(tmp_path:
         task,
         engine_factory=lambda engine_name: _AlwaysPassEngine(engine_name),
     )
-    refreshed = get_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
 
     status = subprocess.run(
         ["git", "status", "--short"],
@@ -1324,7 +1317,7 @@ def test_main_checkout_cleanup_skips_tracked_ignored_task_reports(tmp_path: Path
     gitignore = tmp_path / ".gitignore"
     existing = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
     gitignore.write_text(existing + ".litehive/tasks/*/reports/\n", encoding="utf-8")
-    seed_task = create_task_for_workspace(workspace, title="Tracked ignored report")
+    seed_task = WorkspaceTasks(workspace).create( title="Tracked ignored report")
     report_path = workspace.task_dir(seed_task) / "reports" / "testing-001.yaml"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text("stage: testing\nsummary: seed\n", encoding="utf-8")

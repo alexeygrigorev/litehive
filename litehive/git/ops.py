@@ -574,7 +574,7 @@ def list_worktrees_porcelain(root: Path) -> str:
     Return the raw ``git worktree list --porcelain`` output.
 
     Returns the multi-block porcelain format unchanged so the
-    caller (currently ``WorktreeService.registered_worktree_for_branch``)
+    caller (currently ``WorktreeSyncService.registered_worktree_for_branch``)
     can parse it line-by-line; wrapping it in a structured return
     here would force every caller to understand whatever shape
     this function chose.
@@ -854,7 +854,7 @@ def rebase_worktree_onto(worktree: Path, target_ref: str) -> bool:
     conflicted — in the false case the worktree is left
     unchanged (rebase aborted, stash popped) so callers can
     decide whether to escalate to merge-resolver or report the
-    failure. Used by ``WorktreeService`` to keep task worktrees
+    failure. Used by ``WorktreeSyncService`` to keep task worktrees
     on top of fresh ``main`` before each pre-exec.
     """
     had_changes = has_changes(worktree)
@@ -1018,4 +1018,3 @@ def checkpoint_message(task: TaskRecord, attempt: int | None = None) -> str:
     if attempt > 1 and _uses_generated_commit_message(task):
         return _with_attempt_suffix(base, attempt)
     return base
-

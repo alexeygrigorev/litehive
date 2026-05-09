@@ -9,11 +9,11 @@ import pytest
 from heru.types import SubagentRef
 
 from litehive.agents.session_store import SubagentArtifactPayload, subagent_artifacts
+from litehive.cli.task_logs_support import TaskLogsPresenter
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import create_workspace
 from litehive.domain.runtime import RuntimeSubagentState
-from litehive.state.records import create_task_for_workspace, save_task_for_workspace, save_task_runtime_for_workspace
-from litehive.tasks.paths import task_dir
+from litehive.state.records import WorkspaceTasks, WorkspaceTasks
 from litehive.workspace import Workspace
 
 from tests.support.helpers import _cmd_logs
@@ -40,7 +40,8 @@ def _ns(
 
 def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
     create_workspace(tmp_path)
-    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Logs test task", auto_commit=False)
+    workspace = Workspace.from_path(tmp_path)
+    task = WorkspaceTasks(workspace).create(title="Logs test task", auto_commit=False)
     ref = SubagentRef(
         id="SA-0001",
         role="swe",
@@ -61,7 +62,7 @@ def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
             updated_at="2026-04-09T10:00:01Z",
         )
     else:
-        subagent_artifacts(Workspace.from_path(tmp_path), task.id, "SA-0001").save(
+        subagent_artifacts(workspace, task.id, "SA-0001").save(
             session=SubagentArtifactPayload({
                 "id": "SA-0001",
                 "role": "swe",
@@ -74,10 +75,10 @@ def _make_task_with_subagent(tmp_path: Path, *, active: bool = False):
                 "exit_code": 0,
             }),
         )
-    save_task_for_workspace(Workspace.from_path(tmp_path), task)
-    save_task_runtime_for_workspace(Workspace.from_path(tmp_path), task)
+    WorkspaceTasks(workspace).save(task)
+    WorkspaceTasks(workspace).save_runtime(task)
 
-    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
+    base = workspace.task_dir(task) / "subagents" / "SA-0001-swe"
     base.mkdir(parents=True, exist_ok=True)
     return task, base
 
@@ -125,7 +126,8 @@ def test_logs_daemon_lists_latest_sessions_with_outcomes(tmp_path: Path, capsys:
 
 def test_logs_task_journal_prints_journal(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     create_workspace(tmp_path)
-    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Journal task", auto_commit=False)
+    workspace = Workspace.from_path(tmp_path)
+    task = WorkspaceTasks(workspace).create(title="Journal task", auto_commit=False)
 
     exit_code = _cmd_logs(_ns(tmp_path, task.id))
     output = capsys.readouterr().out
@@ -133,14 +135,14 @@ def test_logs_task_journal_prints_journal(tmp_path: Path, capsys: pytest.Capture
     assert exit_code == 0
     assert f"# {task.id} Journal task" in output
     assert "Task created." in output
-    assert not (task_dir(tmp_path, task) / "journal.md").exists()
+    assert not (workspace.task_dir(task) / "journal.md").exists()
 
 
 def test_logs_task_journal_tolerates_unrelated_missing_runtime_rows(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     create_workspace(tmp_path)
-    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Journal task", auto_commit=False)
+    task = WorkspaceTasks(Workspace.from_path(tmp_path)).create( title="Journal task", auto_commit=False)
 
     missing_dir = tmp_path / ".litehive" / "tasks" / "T-0002-missing-runtime"
     missing_dir.mkdir(parents=True)
@@ -216,7 +218,8 @@ def test_logs_agent_reads_compressed_completed_artifacts(tmp_path: Path, capsys:
 
 def test_logs_agent_all_lists_all_subagents_with_duration(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     create_workspace(tmp_path)
-    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="All subagents", auto_commit=False)
+    workspace = Workspace.from_path(tmp_path)
+    task = WorkspaceTasks(workspace).create(title="All subagents", auto_commit=False)
     task.subagents = [
         SubagentRef(
             id="SA-0001",
@@ -233,20 +236,20 @@ def test_logs_agent_all_lists_all_subagents_with_duration(tmp_path: Path, capsys
             path="subagents/SA-0002-swe",
         ),
     ]
-    save_task_for_workspace(Workspace.from_path(tmp_path), task)
+    WorkspaceTasks(workspace).save(task)
 
-    planner_dir = task_dir(tmp_path, task) / "subagents" / "SA-0001-planner"
+    planner_dir = workspace.task_dir(task) / "subagents" / "SA-0001-planner"
     planner_dir.mkdir(parents=True, exist_ok=True)
-    subagent_artifacts(Workspace.from_path(tmp_path), task.id, "SA-0001").save(
+    subagent_artifacts(workspace, task.id, "SA-0001").save(
         session=SubagentArtifactPayload({
             "exit_code": 0,
             "created_at": "2026-04-09T10:00:00Z",
             "updated_at": "2026-04-09T10:00:03Z",
         }),
     )
-    swe_dir = task_dir(tmp_path, task) / "subagents" / "SA-0002-swe"
+    swe_dir = workspace.task_dir(task) / "subagents" / "SA-0002-swe"
     swe_dir.mkdir(parents=True, exist_ok=True)
-    subagent_artifacts(Workspace.from_path(tmp_path), task.id, "SA-0002").save(
+    subagent_artifacts(workspace, task.id, "SA-0002").save(
         session=SubagentArtifactPayload({
             "exit_code": 1,
             "created_at": "2026-04-09T10:00:10Z",
@@ -279,9 +282,9 @@ def test_logs_follow_streams_active_stdout_until_subagent_finishes(
 
     resolve_calls = 0
 
-    def fake_resolve_follow_task(workspace: Workspace, *, task_id: str | None):
+    def fake_resolve_follow_task(self: TaskLogsPresenter, task_id: str | None):
         del task_id
-        assert workspace.root == tmp_path.resolve()
+        assert self.workspace.root == tmp_path.resolve()
         nonlocal resolve_calls
         resolve_calls += 1
         if resolve_calls == 1:
@@ -293,7 +296,7 @@ def test_logs_follow_streams_active_stdout_until_subagent_finishes(
         task.runtime.execution.active_subagent = None
         return task
 
-    monkeypatch.setattr("litehive.cli.task_logs_support.resolve_follow_task_for_workspace", fake_resolve_follow_task)
+    monkeypatch.setattr("litehive.cli.task_logs_support.TaskLogsPresenter.resolve_follow_task", fake_resolve_follow_task)
 
     exit_code = _cmd_logs(_ns(tmp_path, follow=True))
     output = capsys.readouterr().out

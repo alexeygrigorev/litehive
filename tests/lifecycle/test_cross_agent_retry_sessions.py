@@ -15,7 +15,7 @@ from litehive.lifecycle.runner import StateMachineRunner
 from litehive.lifecycle.sessions import SqliteSessionStore
 from litehive.lifecycle.types import PipelineMode
 from litehive.roles.base import PromptContext
-from litehive.state.records import create_task_for_workspace
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 
@@ -101,7 +101,7 @@ def _build_runner(
 
 
 def test_cross_agent_reject_clears_target_stage_sessions(workspace: Workspace) -> None:
-    task = create_task_for_workspace(workspace, title="QA sends SWE back", pipeline_mode="full")
+    task = WorkspaceTasks(workspace).create( title="QA sends SWE back", pipeline_mode="full")
     persistence = SqlitePersistence(workspace)
     persistence.initialize(task.id, pipeline_mode=PipelineMode.FULL)
     engine = _CrossAgentRetryEngine()
@@ -130,7 +130,7 @@ def test_cross_agent_reject_clears_target_stage_sessions(workspace: Workspace) -
 
 
 def test_same_agent_reject_keeps_stage_session_continuity(workspace: Workspace) -> None:
-    task = create_task_for_workspace(workspace, title="SWE retries in place", pipeline_mode="single")
+    task = WorkspaceTasks(workspace).create( title="SWE retries in place", pipeline_mode="single")
     persistence = SqlitePersistence(workspace)
     persistence.initialize(task.id, pipeline_mode=PipelineMode.SINGLE)
     engine = _SameAgentRetryEngine()

@@ -19,11 +19,10 @@ from litehive.cli.display import format_retry_on
 from litehive.cli.common import WorkspaceOption
 from litehive.config.workspace import create_workspace
 from litehive.container import build_workspace
-from litehive.daemon.registry import daemon_metadata_for_workspace
+from litehive.daemon.registry import DaemonRegistry
 from litehive.domain.common import TaskStatus
 from litehive.observability.status import (
     collect_recent_activity,
-    collect_task_pipeline_status_for_workspace,
     find_last_completed_task,
     render_active_task_section,
     render_engine_availability_lines,
@@ -37,6 +36,7 @@ from litehive.observability.status import (
     render_last_completed_section,
     render_queue_section,
     render_recent_activity_section,
+    TaskPipelineStatusCollector,
     render_task_pipeline_status_lines,
     render_task_summary,
 )
@@ -45,11 +45,11 @@ from litehive.observability.status_diagnostics import (
     status_has_problems,
 )
 from litehive.recovery.workspace_repair import repair_workspace_state
-from litehive.state.records import list_tasks_state_first_for_workspace as list_tasks_state_first
-from litehive.state.persist import load_state_for_workspace
+from litehive.state.records import WorkspaceTasks
+from litehive.state.persist import WorkspaceStateRepository
 from litehive.domain.task_ops import WorkspaceConflictError, WorkspaceRepairSummary
-from litehive.worktree.cleanup import collect_managed_worktrees_for_workspace
-from litehive.worktree.inspection import inspect_dirty_worktree_gate
+from litehive.worktree.cleanup import WorktreeCleanupService
+from litehive.worktree.inspection import WorktreeInspector
 from litehive.workspace import Workspace
 
 
@@ -148,7 +148,7 @@ def status_command(
     """
     ws = build_workspace(workspace)
     root = ws.root
-    status = collect_task_pipeline_status_for_workspace(ws, diagnostics=full)
+    status = TaskPipelineStatusCollector(ws).collect(diagnostics=full)
     if full:
         for line in render_task_pipeline_status_lines(
             status,
@@ -157,7 +157,7 @@ def status_command(
             retry_on_label=format_retry_on(status.config),
         ):
             print(line)
-        tasks = ws.list_tasks(strict=False)
+        tasks = WorkspaceTasks(ws).list(strict=False)
         if tasks:
             print()
             for task in tasks:
@@ -168,7 +168,7 @@ def status_command(
     for line in render_active_task_section(status.active_task, status.config.default_engine):
         print(line)
 
-    all_tasks = list_tasks_state_first(ws, state=status.state)
+    all_tasks = WorkspaceTasks(ws).list_state_first(state=status.state)
     last_done = find_last_completed_task(all_tasks)
     print()
     for line in render_last_completed_section(last_done, ws):
@@ -221,7 +221,7 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     end_time = time.perf_counter()
     duration_ms = (end_time - start_time) * 1000
 
-    state = load_state_for_workspace(workspace_obj)
+    state = WorkspaceStateRepository(workspace_obj).load()
     for line in repair_summary_lines(
         summary,
         result_label="repaired",
@@ -249,6 +249,34 @@ class _QuotaHealth:
     problem: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class DaemonHealthStatus:
+    status: str
+    pid: str
+
+
+class WorkspaceHealthPresenter:
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
+
+    def daemon_status(self) -> DaemonHealthStatus:
+        """
+        Return the daemon health row for the bound workspace.
+
+        Returns ``("stopped", "-")`` semantics when no daemon
+        record is present so the health renderer can print a
+        stable block without branching.
+        """
+        entry = DaemonRegistry(self.workspace).metadata()
+        if entry is None or entry.status != "running":
+            return DaemonHealthStatus(status="stopped", pid="-")
+        if entry.pid is not None:
+            pid_label = str(entry.pid)
+        else:
+            pid_label = "-"
+        return DaemonHealthStatus(status="running", pid=pid_label)
+
+
 def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     """
     Render the workspace-health report.
@@ -262,15 +290,15 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     create_workspace(workspace)
     ws = build_workspace(workspace)
     root = ws.root
-    state = load_state_for_workspace(ws)
-    tasks = list_tasks_state_first(ws, state=state, include_runtime=True)
+    state = WorkspaceStateRepository(ws).load()
+    tasks = WorkspaceTasks(ws).list_state_first(state=state, include_runtime=True)
     if state.active_task_id:
-        active_task = ws.get_task(state.active_task_id)
+        active_task = WorkspaceTasks(ws).get(state.active_task_id)
     else:
         active_task = None
     flagged_tasks = [task for task in tasks if task.status == TaskStatus.FLAGGED]
-    worktrees = collect_managed_worktrees_for_workspace(ws)
-    dirty_report = inspect_dirty_worktree_gate(ws)
+    worktrees = WorktreeCleanupService(ws).collect_managed_worktrees()
+    dirty_report = WorktreeInspector(ws).inspect_dirty_gate()
     quota_health = collect_quota_health()
     completed = sorted(
         (task for task in tasks if task.status == TaskStatus.DONE),
@@ -302,8 +330,8 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
         print(line)
 
     print()
-    daemon_status, daemon_pid = health_daemon_status_for_workspace(ws)
-    for line in render_health_daemon_lines(daemon_status, daemon_pid):
+    daemon_health = WorkspaceHealthPresenter(ws).daemon_status()
+    for line in render_health_daemon_lines(daemon_health.status, daemon_health.pid):
         print(line)
 
     print()
@@ -315,26 +343,6 @@ def health_command(workspace: WorkspaceOption = Path.cwd()) -> int:
     if flagged_tasks or has_worktree_problem or has_quota_problem:
         return 1
     return 0
-
-
-def health_daemon_status_for_workspace(workspace: Workspace) -> tuple[str, str]:
-    """
-    Return a ``(status, pid)`` pair for the workspace daemon.
-
-    Renders the same shape the health command uses so tests can
-    assert the running/stopped surface without invoking the full
-    health report. Returns ``("stopped", "-")`` when no daemon
-    record is present so the caller can render the row without
-    branching.
-    """
-    entry = daemon_metadata_for_workspace(workspace)
-    if entry is None or entry.status != "running":
-        return ("stopped", "-")
-    if entry.pid is not None:
-        pid_label = str(entry.pid)
-    else:
-        pid_label = "-"
-    return ("running", pid_label)
 
 
 def collect_quota_health() -> list[_QuotaHealth]:

@@ -14,7 +14,7 @@ from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport
 from litehive.domain.runtime import RunnerStatusState, RuntimeSubagentState
 from litehive.domain.task import WorkspaceState
 from litehive.observability.status import (
-    collect_task_pipeline_status_for_workspace,
+    TaskPipelineStatusCollector,
     render_active_task_detail_lines,
     render_detailed_status_header_lines,
     render_health_active_task_lines,
@@ -30,17 +30,18 @@ from litehive.observability.status import (
     render_runtime_policy_lines,
     render_task_summary,
 )
-from litehive.state.records import create_task_for_workspace
-from litehive.tasks.report_storage import record_stage_report
+from litehive.observability.status_diagnostics import StatusSnapshot
+from litehive.state.records import WorkspaceTasks
+from litehive.tasks.report_storage import TaskReportStore
 from litehive.workspace import Workspace
 from litehive.domain.common import PipelineStatus, TaskStatus
 
 
 def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Estimate demo task")
+    task = WorkspaceTasks(Workspace.from_path(tmp_path)).create( title="Estimate demo task")
 
-    record_stage_report(Workspace.from_path(tmp_path),
+    TaskReportStore(Workspace.from_path(tmp_path)).record_stage_report(
         task,
         StageReport(
             task_id=task.id,
@@ -61,11 +62,11 @@ def test_render_task_summary_includes_estimate_velocity_and_eta(tmp_path: Path) 
 
 def test_render_task_summary_surfaces_semantic_reject_classification(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Semantic reject status")
+    task = WorkspaceTasks(Workspace.from_path(tmp_path)).create( title="Semantic reject status")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.FLAGGED
     task.flag_reason = SEMANTIC_REJECT_CLASSIFICATION
-    record_stage_report(Workspace.from_path(tmp_path),
+    TaskReportStore(Workspace.from_path(tmp_path)).record_stage_report(
         task,
         StageReport(
             task_id=task.id,
@@ -85,7 +86,7 @@ def test_render_task_summary_surfaces_semantic_reject_classification(tmp_path: P
 
 def test_render_active_task_detail_lines_prefers_active_subagent_engine(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Active detail task")
+    task = WorkspaceTasks(Workspace.from_path(tmp_path)).create( title="Active detail task")
     task.status = TaskStatus.IN_PROGRESS
     task.pipeline_status = PipelineStatus.IMPLEMENTING
     task.runtime.pipeline.current_stage.stage = "testing"
@@ -110,7 +111,7 @@ def test_render_active_task_detail_lines_prefers_active_subagent_engine(tmp_path
 
 
 def test_collect_task_pipeline_status_prefers_runner_active_task_id(tmp_path: Path, monkeypatch) -> None:
-    snapshot = SimpleNamespace(
+    snapshot = StatusSnapshot(
         config=LitehiveConfig(default_engine="codex"),
         state=WorkspaceState(active_task_id=None, queue=["T-0382"]),
         runner=RunnerStatusState(
@@ -125,24 +126,21 @@ def test_collect_task_pipeline_status_prefers_runner_active_task_id(tmp_path: Pa
     )
     active_task = SimpleNamespace(id="T-0381", title="Move stage and recovery reports off YAML storage")
 
-    # ``collect_task_pipeline_status_for_workspace`` imports its callees at module scope, so
-    # patching the callees at their original locations no longer hits the
-    # bindings the function uses — patch the local re-imports here.
     monkeypatch.setattr(
-        "litehive.observability.status.collect_operational_status_snapshot_for_workspace",
-        lambda workspace: snapshot,
+        "litehive.observability.status.StatusSnapshotCollector.collect_operational",
+        lambda self: snapshot,
     )
     monkeypatch.setattr(
-        "litehive.observability.status.waiting_for_you_lines_for_workspace",
-        lambda workspace, **_: ["operator_needed: unavailable"],
+        "litehive.attention.OperatorAttentionProjector.waiting_lines",
+        lambda self, **_: ["operator_needed: unavailable"],
     )
     monkeypatch.setattr(
-        "litehive.observability.status.Workspace.get_task",
+        "litehive.state.records.WorkspaceTasks.get",
         lambda self, task_id: active_task if task_id else None,
     )
 
     create_workspace(tmp_path)
-    status = collect_task_pipeline_status_for_workspace(Workspace.from_path(tmp_path))
+    status = TaskPipelineStatusCollector(Workspace.from_path(tmp_path)).collect()
 
     assert status.active_task_id == "T-0381"
     assert status.active_task is active_task
@@ -227,24 +225,24 @@ def test_render_runtime_policy_lines_uses_preformatted_retry_label() -> None:
 
 def test_render_health_task_sections(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    active = create_task_for_workspace(Workspace.from_path(tmp_path), title="Active health task")
+    active = WorkspaceTasks(Workspace.from_path(tmp_path)).create( title="Active health task")
     active.status = TaskStatus.IN_PROGRESS
     active.pipeline_status = PipelineStatus.IMPLEMENTING
     active.runtime.pipeline.current_stage.stage = "testing"
 
-    flagged = create_task_for_workspace(Workspace.from_path(tmp_path), title="Flagged health task")
+    flagged = WorkspaceTasks(Workspace.from_path(tmp_path)).create( title="Flagged health task")
     flagged.status = TaskStatus.FLAGGED
     flagged.pipeline_status = PipelineStatus.TESTING
     flagged.flag_reason = "needs review"
-    record_stage_report(Workspace.from_path(tmp_path),
+    TaskReportStore(Workspace.from_path(tmp_path)).record_stage_report(
         flagged,
         StageReport(task_id=flagged.id, pipeline_state="testing", verdict="reject", summary="missing evidence"),
     )
 
-    done = create_task_for_workspace(Workspace.from_path(tmp_path), title="Done health task")
+    done = WorkspaceTasks(Workspace.from_path(tmp_path)).create( title="Done health task")
     done.status = TaskStatus.DONE
     done.updated_at = "2026-04-14T10:15:00Z"
-    record_stage_report(Workspace.from_path(tmp_path),
+    TaskReportStore(Workspace.from_path(tmp_path)).record_stage_report(
         done,
         StageReport(task_id=done.id, pipeline_state="accepting", verdict="pass", summary="all checks passed"),
     )

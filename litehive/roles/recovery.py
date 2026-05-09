@@ -1,8 +1,8 @@
 from pathlib import Path
 from typing import Any
 
-from litehive.agents.execution_trace import load_subagent_execution_trace
-from litehive.agents.session_store import load_subagent_report
+from litehive.agents.execution_trace import execution_trace_renderer
+from litehive.agents.session_store import subagent_artifacts
 from litehive.domain.common import PipelineState, SubagentStatus, Verdict, canonical_pipeline_state, pipeline_stage_key
 from litehive.domain.runtime import RuntimeRecoveryOutcome
 from litehive.workspace import Workspace
@@ -11,7 +11,8 @@ from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.prompt_types import FailedSubagentDiagnostics, RecoveryPrompt
 from litehive.recovery.scope_analysis import analyze_scope_changes
-from litehive.tasks.paths import latest_subagent_base_for_workspace, read_text_artifact, resolve_artifact_path
+from litehive.state.records import WorkspaceTasks
+from litehive.tasks.paths import TaskArtifactLocator, read_text_artifact, resolve_artifact_path
 
 from .base import RoleAgent
 
@@ -99,7 +100,7 @@ class RecoveryAgent(RoleAgent):
         root = self.prompt_context.workspace_root
         workspace = self.prompt_context.workspace
         if task_record is None:
-            task_record = workspace.get_task_record(state.task_id)
+            task_record = WorkspaceTasks(workspace).get_record(state.task_id)
         try:
             litehive_source_path, recovery_execution_root = _recovery_source_checkout(workspace)
         except (OSError, ValueError) as exc:
@@ -331,7 +332,7 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
     together the runtime state, the persisted subagent record, and the
     on-disk artifacts under the latest subagent base directory.
     """
-    subagent_base = latest_subagent_base_for_workspace(workspace, task_record)
+    subagent_base = TaskArtifactLocator(workspace).latest_subagent_base(task_record)
     if subagent_base is None or not subagent_base.exists():
         return None
 
@@ -363,14 +364,14 @@ def _failed_subagent_diagnostics_payload(workspace: Workspace, task_record: Any)
     if not subagent_id:
         return None
 
-    session_record = workspace.load_subagent_session_record(task_record.id, subagent_id)
-    report_payload = load_subagent_report(workspace, task_record.id, subagent_id)
+    session_record = subagent_artifacts(workspace, task_record.id, subagent_id).load_session_record()
+    report_payload = subagent_artifacts(workspace, task_record.id, subagent_id).load_report()
     report_summary = str(report_payload.get("summary") or report_payload.get("message") or "").strip()
     trace_ref = runtime_state or subagent_ref
     if trace_ref is None:
         execution_trace_view = None
     else:
-        execution_trace_view = load_subagent_execution_trace(
+        execution_trace_view = execution_trace_renderer().load_for_subagent(
                 workspace,
                 task_record,
                 trace_ref,

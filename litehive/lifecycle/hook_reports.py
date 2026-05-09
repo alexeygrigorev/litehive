@@ -19,8 +19,9 @@ from litehive.domain.reports import (
 )
 from litehive.feedback import cap_feedback
 from litehive.domain.task import TaskRecord
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.tasks.journal import append_journal
-from litehive.tasks.report_storage import record_stage_report
+from litehive.tasks.report_storage import TaskReportStore
 from litehive.workspace import Workspace
 
 from .nodes.hook import HookSpec
@@ -153,9 +154,9 @@ def _record_hook_warnings(
             "source": "hook",
         },
     )
-    report_path = record_stage_report(workspace, task, report)
+    report_path = TaskReportStore(workspace).record_stage_report(task, report)
     message = f"{summary}\n\n{feedback}\n\nreport: {report_path.display()}"
-    workspace.task_activity(task).append(
+    task_activity_store_for_task(workspace, task).append(
         TaskActivityEntry(
             source="system",
             role="hook",
@@ -216,9 +217,9 @@ def _record_hook_reject(
         failure_classification="hook_reject",
         failure_diagnostics=failure_diagnostics,
     )
-    report_path = record_stage_report(workspace, task, report)
+    report_path = TaskReportStore(workspace).record_stage_report(task, report)
     message = f"{summary}\n\n{feedback}\n\nreport: {report_path.display()}"
-    workspace.task_activity(task).append(
+    task_activity_store_for_task(workspace, task).append(
         TaskActivityEntry(
             source="system",
             role="hook",

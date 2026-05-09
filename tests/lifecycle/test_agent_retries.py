@@ -27,7 +27,7 @@ from litehive.lifecycle.persistence import TaskState
 from litehive.lifecycle.prompt_types import AgentPrompt
 from litehive.lifecycle.types import PipelineMode
 from litehive.workspace import Workspace
-from litehive.state.records import create_task_for_workspace
+from litehive.state.records import WorkspaceTasks
 from tests.support.lifecycle_fakes import InMemorySessionStore
 
 
@@ -446,7 +446,7 @@ def test_agent_node_retries_timeout_via_existing_retry_flow(
     resume_id: str,
 ) -> None:
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title=f"{engine_name} timeout retry")
+    task = WorkspaceTasks(workspace).create( title=f"{engine_name} timeout retry")
     adapter = HeruEngineAdapter(engine_name, workspace=workspace)
     store = InMemorySessionStore()
     node = _HeruPromptAgent(
@@ -482,7 +482,7 @@ def test_agent_node_retries_timeout_via_existing_retry_flow(
 
 def test_agent_node_nudges_timeout_retry_with_existing_codex_thread_id(tmp_path, monkeypatch) -> None:
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="codex timeout nudge")
+    task = WorkspaceTasks(workspace).create( title="codex timeout nudge")
     adapter = HeruEngineAdapter("codex", workspace=workspace)
     store = InMemorySessionStore()
     node = _HeruPromptAgent(

@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from litehive.domain.common import PipelineStatus, TaskStatus, utcnow
 from litehive.domain.task import TaskRecord
-from litehive.tasks.event_log import append_task_event, task_event_type_for_audit_action
+from litehive.tasks.event_log import TaskEventLog, task_event_type_for_audit_action
 from litehive.workspace import Workspace
 
 
@@ -201,8 +201,7 @@ def append_task_audit_entries(workspace: Workspace, entries: Iterable[TaskAuditE
     with workspace.connect() as connection:
         insert_task_audit_entries(connection, entry_list)
         for entry in entry_list:
-            append_task_event(
-                workspace,
+            TaskEventLog(workspace).append(
                 event_type=task_event_type_for_audit_action(entry.action),
                 task_id=entry.task_id,
                 payload={"audit_entry": entry.model_dump(mode="json")},

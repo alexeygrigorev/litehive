@@ -47,62 +47,71 @@ class BrokenVenvExecutable:
         return self.binary_path.name
 
 
-def discover_workspace_venvs_for_workspace(workspace: Workspace) -> list[VenvCheckout]:
+class WorkspaceVenvHealth:
     """
-    Locate every ``.venv`` the workspace might dispatch into.
+    Workspace-bound virtualenv health probe.
 
-    Includes the main checkout's ``.venv`` plus the ``.venv``
-    of every per-task worktree, so the health probe walks all
-    of them in one pass. Worktree venvs are easy to forget;
-    skipping them would let a broken worktree venv kill an
-    agent run after status looked clean.
+    Locates each workspace/worktree venv and probes executable
+    entrypoints before the daemon starts work.
     """
-    checkouts: dict[Path, VenvCheckout] = {}
-    main_venv = workspace.root / ".venv"
-    if main_venv.is_dir():
-        resolved_main = main_venv.resolve()
-        checkouts[resolved_main] = VenvCheckout(checkout_root=workspace.root, venv_path=resolved_main)
 
-    worktrees_dir = workspace.runtime_path("worktrees")
-    if worktrees_dir.exists():
-        for venv_path in sorted(worktrees_dir.glob("*/.venv")):
-            checkout_root = venv_path.parent.resolve()
-            if venv_path.is_dir():
-                resolved_venv = venv_path.resolve()
-                checkouts.setdefault(
-                    resolved_venv,
-                    VenvCheckout(checkout_root=checkout_root, venv_path=resolved_venv),
-                )
-    return [checkouts[path] for path in sorted(checkouts)]
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
 
+    def discover_venvs(self) -> list[VenvCheckout]:
+        """
+        Locate every ``.venv`` the workspace might dispatch into.
 
-def probe_broken_venv_executables_for_workspace(workspace: Workspace) -> list[BrokenVenvExecutable]:
-    """
-    Probe every venv entrypoint with a minimal ``--version`` exec.
+        Includes the main checkout's ``.venv`` plus the ``.venv``
+        of every per-task worktree.
+        """
+        checkouts: dict[Path, VenvCheckout] = {}
+        main_venv = self.workspace.root / ".venv"
+        if main_venv.is_dir():
+            resolved_main = main_venv.resolve()
+            checkouts[resolved_main] = VenvCheckout(checkout_root=self.workspace.root, venv_path=resolved_main)
 
-    Surfaces the "uv cache clean nuked the symlink target"
-    failure mode before it crashes a subagent launch. Daemon
-    startup gates on an empty result so a workspace with
-    broken entrypoints cannot quietly start a worker pool that
-    will fail on the first sub-process spawn.
-    """
-    findings: list[BrokenVenvExecutable] = []
-    for checkout in discover_workspace_venvs_for_workspace(workspace):
-        bin_dir = _venv_bin_dir(checkout.venv_path)
-        if not bin_dir.is_dir():
-            continue
-        for candidate in _iter_probe_candidates(bin_dir):
-            error_detail = _probe_executable(candidate)
-            if error_detail is None:
+        worktrees_dir = self.workspace.runtime_path("worktrees")
+        if worktrees_dir.exists():
+            for venv_path in sorted(worktrees_dir.glob("*/.venv")):
+                checkout_root = venv_path.parent.resolve()
+                if venv_path.is_dir():
+                    resolved_venv = venv_path.resolve()
+                    checkouts.setdefault(
+                        resolved_venv,
+                        VenvCheckout(checkout_root=checkout_root, venv_path=resolved_venv),
+                    )
+        return [checkouts[path] for path in sorted(checkouts)]
+
+    def probe_broken_executables(self) -> list[BrokenVenvExecutable]:
+        """
+        Probe every venv entrypoint with a minimal ``--version`` exec.
+        """
+        findings: list[BrokenVenvExecutable] = []
+        for checkout in self.discover_venvs():
+            bin_dir = _venv_bin_dir(checkout.venv_path)
+            if not bin_dir.is_dir():
                 continue
-            findings.append(
-                BrokenVenvExecutable(
-                    checkout=checkout,
-                    binary_path=candidate,
-                    error_detail=error_detail,
+            for candidate in _iter_probe_candidates(bin_dir):
+                error_detail = _probe_executable(candidate)
+                if error_detail is None:
+                    continue
+                findings.append(
+                    BrokenVenvExecutable(
+                        checkout=checkout,
+                        binary_path=candidate,
+                        error_detail=error_detail,
+                    )
                 )
-            )
-    return findings
+        return findings
+
+    def ensure_ready(self) -> None:
+        """
+        Refuse daemon startup when a workspace has broken venv entrypoints.
+        """
+        findings = self.probe_broken_executables()
+        if findings:
+            raise RuntimeError(daemon_broken_venv_message(findings))
 
 
 def broken_venv_issue_message(finding: BrokenVenvExecutable) -> str:

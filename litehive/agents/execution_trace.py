@@ -10,7 +10,7 @@ from heru.base import CLIExecutionResult
 from heru.types import LiveEvent, LiveTimeline, UnifiedEvent
 from pydantic import ValidationError
 
-from litehive.agents.session_store import load_subagent_event_stream
+from litehive.agents.session_store import subagent_artifacts
 from litehive.domain.common import SubagentStatus
 from litehive.domain.runtime import RuntimeSubagentState, Subagent
 from litehive.domain.task import TaskRecord
@@ -46,123 +46,185 @@ class ParsedUnifiedEvents:
         return bool(self.events)
 
 
-def parse_unified_events(stdout: str) -> ParsedUnifiedEvents:
+class ExecutionTraceRenderer:
     """
-    Recover unified events from a captured engine stdout buffer.
-
-    Used when the structured event stream artifact is unavailable —
-    a partial run, a crash, an older format. Tolerant of garbage and
-    non-JSON lines so partial captures still yield a usable trace
-    rather than failing the whole parse on one malformed line.
+    Render and load subagent execution traces from structured events and artifacts.
     """
-    events: list[UnifiedEvent] = []
-    for line_number, raw_line in enumerate(stdout.splitlines(), 1):
-        line = raw_line.strip()
-        if not line:
-            continue
-        if not (line.startswith("{") or line.startswith("[")):
-            continue
-        try:
-            payload = json.loads(line)
-        except (json.JSONDecodeError, ValueError):
-            continue
-        if not isinstance(payload, dict) or "kind" not in payload:
-            continue
-        try:
-            events.append(UnifiedEvent.model_validate(payload))
-        except ValidationError as exc:
-            logger.warning(
-                "Skipping invalid unified event line %d while parsing subagent output: %s",
-                line_number,
-                exc,
-            )
-    return ParsedUnifiedEvents(events=tuple(events))
 
+    def parse_unified_events(self, stdout: str) -> ParsedUnifiedEvents:
+        events: list[UnifiedEvent] = []
+        for line_number, raw_line in enumerate(stdout.splitlines(), 1):
+            line = raw_line.strip()
+            if not line:
+                continue
+            if not (line.startswith("{") or line.startswith("[")):
+                continue
+            try:
+                payload = json.loads(line)
+            except (json.JSONDecodeError, ValueError):
+                continue
+            if not isinstance(payload, dict) or "kind" not in payload:
+                continue
+            try:
+                events.append(UnifiedEvent.model_validate(payload))
+            except ValidationError as exc:
+                logger.warning(
+                    "Skipping invalid unified event line %d while parsing subagent output: %s",
+                    line_number,
+                    exc,
+                )
+        return ParsedUnifiedEvents(events=tuple(events))
 
-def render_event_for_execution_trace(event: UnifiedEvent) -> str:
-    """
-    Format one unified event as a Markdown chunk for the trace.
+    def render_event(self, event: UnifiedEvent) -> str:
+        if event.kind in {"message", "status"} and event.content:
+            return event.content
+        if event.kind == "error" and event.error:
+            return event.error
+        if event.kind not in {"tool_call", "tool_result"}:
+            return ""
 
-    Tool calls and results are wrapped in fenced ``tool`` blocks so
-    the trace round-trips cleanly through diff and chat UIs that
-    only render fenced code; without the fence, free-form tool
-    output would interfere with surrounding Markdown.
-    """
-    if event.kind in {"message", "status"} and event.content:
-        return event.content
-    if event.kind == "error" and event.error:
-        return event.error
-    if event.kind not in {"tool_call", "tool_result"}:
-        return ""
+        lines = ["```tool"]
+        if event.tool_name:
+            lines.append(f"name: {event.tool_name}")
+        if event.tool_input:
+            lines.append("input:")
+            lines.append(event.tool_input.rstrip())
+        if event.tool_output:
+            lines.append("output:")
+            lines.append(event.tool_output.rstrip())
+        if event.error:
+            lines.append("error:")
+            lines.append(event.error.rstrip())
+        lines.append("```")
+        return "\n".join(lines)
 
-    lines = ["```tool"]
-    if event.tool_name:
-        lines.append(f"name: {event.tool_name}")
-    if event.tool_input:
-        lines.append("input:")
-        lines.append(event.tool_input.rstrip())
-    if event.tool_output:
-        lines.append("output:")
-        lines.append(event.tool_output.rstrip())
-    if event.error:
-        lines.append("error:")
-        lines.append(event.error.rstrip())
-    lines.append("```")
-    return "\n".join(lines)
-
-
-def render_execution_trace_from_events(events: ParsedUnifiedEvents, stderr: str) -> str:
-    """
-    Render parsed unified events plus any stderr tail.
-
-    Session writers and status loaders call this as the single place
-    that decides how recovered events and stderr compose into the
-    human-readable trace shown to operators.
-    """
-    parts = [rendered for event in events.events if (rendered := render_event_for_execution_trace(event))]
-    if not parts:
+    def render_from_events(self, events: ParsedUnifiedEvents, stderr: str = "") -> str:
+        parts = [rendered for event in events.events if (rendered := self.render_event(event))]
+        if not parts:
+            if stderr.strip():
+                return f"[stderr]\n{stderr.strip()}"
+            return ""
         if stderr.strip():
-            return f"[stderr]\n{stderr.strip()}"
-        return ""
-    if stderr.strip():
-        parts.append(f"[stderr]\n{stderr.strip()}")
-    return "\n\n".join(parts)
+            parts.append(f"[stderr]\n{stderr.strip()}")
+        return "\n\n".join(parts)
 
+    def render(self, execution: CLIExecutionResult) -> str:
+        events = self.parse_unified_events(execution.stdout)
+        if not events:
+            return execution.transcript
+        return self.render_from_events(events, stderr=execution.stderr)
 
-def render_execution_trace(execution: CLIExecutionResult) -> str:
-    """
-    Produce the human-readable transcript saved alongside a subagent run.
+    def recovered_timeline_from_events(
+        self,
+        events: ParsedUnifiedEvents,
+        engine_name: str,
+        task_id: str | None = None,
+        subagent_id: str | None = None,
+    ) -> LiveTimeline | None:
+        if not events:
+            return None
+        event_stream = LiveTimeline(engine=engine_name, task_id=task_id, subagent_id=subagent_id)
+        event_stream.events = _rehydrate_live_events(events.events)
+        event_stream.recompute_counts()
+        return event_stream
 
-    Falls back to the engine's raw transcript when the unified-event
-    parse yields nothing so callers always have something to persist
-    to ``execution_trace.md``.
-    """
-    events = parse_unified_events(execution.stdout)
-    if not events:
-        return execution.transcript
-    return render_execution_trace_from_events(events, stderr=execution.stderr)
+    def render_from_streams(self, stdout: str, stderr: str) -> str:
+        events = self.parse_unified_events(stdout)
+        if events:
+            return self.render_from_events(events, stderr=stderr)
+        parts = [stdout.strip()]
+        if stderr.strip():
+            parts.append(f"[stderr]\n{stderr.strip()}")
+        return "\n\n".join(part for part in parts if part).strip()
 
+    def render_from_payload(self, payload: dict[str, Any], stderr: str = "") -> str:
+        raw_events = payload.get("events")
+        if not isinstance(raw_events, list):
+            return ""
+        events: list[UnifiedEvent] = []
+        for raw_event in raw_events:
+            if not isinstance(raw_event, dict):
+                continue
+            try:
+                events.append(UnifiedEvent.model_validate(raw_event))
+            except ValidationError:
+                continue
+        return self.render_from_events(ParsedUnifiedEvents(events=tuple(events)), stderr=stderr)
 
-def recovered_timeline_from_events(
-    events: ParsedUnifiedEvents,
-    engine_name: str,
-    task_id: str | None = None,
-    subagent_id: str | None = None,
-) -> LiveTimeline | None:
-    """
-    Build a Heru timeline from events recovered from stdout.
+    def load_for_subagent(
+        self,
+        workspace: Workspace,
+        task: TaskRecord,
+        ref: Subagent | RuntimeSubagentState,
+        active: bool,
+        runtime_state: RuntimeSubagentState | None = None,
+    ) -> ExecutionTraceView | None:
+        base = workspace.task_dir(task) / ref.path
+        stderr = self._read_stream_artifact(base, "stderr", active=active)
+        if stderr is None:
+            stderr_text = ""
+        else:
+            stderr_text = stderr.text
+        event_stream = subagent_artifacts(workspace, task.id, ref.id).load_event_stream()
+        event_trace = self.render_from_payload(
+            event_stream,
+            stderr=stderr_text,
+        )
+        if event_trace:
+            return ExecutionTraceView(text=event_trace, source="subagent_sessions:event_stream")
 
-    Session progress uses this only when no structured live timeline
-    was captured directly. The returned timeline lets downstream
-    status and prompt code handle recovered stdout events the same way
-    it handles a live engine event stream.
-    """
-    if not events:
+        if not active and ref.status != SubagentStatus.RUNNING:
+            cached = resolve_artifact_path(base, "execution_trace.md")
+            if cached is not None:
+                return ExecutionTraceView(
+                    text=read_text_artifact(cached),
+                    source=cached,
+                    cached_final_snapshot=True,
+                )
+
+        stdout = self._read_stream_artifact(base, "stdout", active=active)
+        if stdout is None:
+            stdout_text = ""
+        else:
+            stdout_text = stdout.text
+        if stdout is not None or stderr is not None:
+            trace = self.render_from_streams(
+                stdout=stdout_text,
+                stderr=stderr_text,
+            )
+            if stdout is None:
+                source = None
+            else:
+                source = stdout.source
+            if source is None and stderr is not None:
+                source = stderr.source
+            return ExecutionTraceView(text=trace, source=source)
+
+        if runtime_state is None:
+            snippet = ""
+        else:
+            snippet = runtime_state.execution_trace_snippet.strip()
+        if snippet:
+            return ExecutionTraceView(text=snippet, source="runtime:execution_trace_snippet")
         return None
-    event_stream = LiveTimeline(engine=engine_name, task_id=task_id, subagent_id=subagent_id)
-    event_stream.events = _rehydrate_live_events(events.events)
-    event_stream.recompute_counts()
-    return event_stream
+
+    def _read_stream_artifact(self, base: Path, stream: str, active: bool) -> ExecutionTraceView | None:
+        if stream not in {"stdout", "stderr"}:
+            raise ValueError(f"Unsupported stream artifact: {stream}")
+        if active:
+            names = (f"{stream}.log", f"{stream}.txt")
+        else:
+            names = (f"{stream}.txt", f"{stream}.log")
+        for name in names:
+            path = resolve_artifact_path(base, name)
+            if path is not None:
+                return ExecutionTraceView(text=read_text_artifact(path), source=path)
+        return None
+
+
+def execution_trace_renderer() -> ExecutionTraceRenderer:
+    """Return the default execution trace renderer."""
+    return ExecutionTraceRenderer()
 
 
 def _rehydrate_live_events(events) -> list[LiveEvent]:
@@ -179,135 +241,3 @@ def _rehydrate_live_events(events) -> list[LiveEvent]:
         payload = event.model_dump(mode="python")
         rehydrated.append(LiveEvent.model_validate(payload))
     return rehydrated
-
-
-def render_execution_trace_from_streams(stdout: str, stderr: str) -> str:
-    """
-    Build a trace from raw stdout/stderr.
-
-    Fallback path used by the loader when no structured event stream
-    artifact survived (older runs, partial captures); produces a
-    readable trace that lets diagnostics still recover *something*
-    from a half-broken subagent run.
-    """
-    events = parse_unified_events(stdout)
-    if events:
-        return render_execution_trace_from_events(events, stderr=stderr)
-    parts = [stdout.strip()]
-    if stderr.strip():
-        parts.append(f"[stderr]\n{stderr.strip()}")
-    return "\n\n".join(part for part in parts if part).strip()
-
-
-def render_execution_trace_from_event_stream_payload(payload: dict[str, Any], stderr: str) -> str:
-    """
-    Render a trace from the persisted JSON event-stream payload.
-
-    Preferred path because it reads from the session store rather
-    than parsing engine stdout — engines do not always flush
-    well-formed JSONL, but the session-store payload was written by
-    our own code and is structurally clean.
-    """
-    raw_events = payload.get("events")
-    if not isinstance(raw_events, list):
-        return ""
-    events: list[UnifiedEvent] = []
-    for raw_event in raw_events:
-        if not isinstance(raw_event, dict):
-            continue
-        try:
-            events.append(UnifiedEvent.model_validate(raw_event))
-        except ValidationError:
-            continue
-    return render_execution_trace_from_events(ParsedUnifiedEvents(events=tuple(events)), stderr=stderr)
-
-
-def load_subagent_execution_trace(
-    workspace: Workspace,
-    task: TaskRecord,
-    ref: Subagent | RuntimeSubagentState,
-    active: bool,
-    runtime_state: RuntimeSubagentState | None = None,
-) -> ExecutionTraceView | None:
-    """
-    Load a readable execution trace for one subagent.
-
-    Walks four sources in preference order: persisted event-stream
-    payload, cached `execution_trace.md` for finished legacy runs, raw
-    stdout/stderr, and the runtime-state snippet. SQLite session rows
-    are preferred because they are structured state; the file cache is
-    retained only so older artifact-only runs still have readable
-    diagnostics.
-    """
-
-    base = workspace.task_dir(task) / ref.path
-    stderr = _read_stream_artifact(base, "stderr", active=active)
-    if stderr is None:
-        stderr_text = ""
-    else:
-        stderr_text = stderr.text
-    event_stream = load_subagent_event_stream(workspace, task.id, ref.id)
-    event_trace = render_execution_trace_from_event_stream_payload(
-        event_stream,
-        stderr=stderr_text,
-    )
-    if event_trace:
-        return ExecutionTraceView(text=event_trace, source="subagent_sessions:event_stream")
-
-    if not active and ref.status != SubagentStatus.RUNNING:
-        cached = resolve_artifact_path(base, "execution_trace.md")
-        if cached is not None:
-            return ExecutionTraceView(
-                text=read_text_artifact(cached),
-                source=cached,
-                cached_final_snapshot=True,
-            )
-
-    stdout = _read_stream_artifact(base, "stdout", active=active)
-    if stdout is None:
-        stdout_text = ""
-    else:
-        stdout_text = stdout.text
-    if stdout is not None or stderr is not None:
-        trace = render_execution_trace_from_streams(
-            stdout=stdout_text,
-            stderr=stderr_text,
-        )
-        if stdout is None:
-            source = None
-        else:
-            source = stdout.source
-        if source is None and stderr is not None:
-            source = stderr.source
-        return ExecutionTraceView(text=trace, source=source)
-
-    if runtime_state is None:
-        snippet = ""
-    else:
-        snippet = runtime_state.execution_trace_snippet.strip()
-    if snippet:
-        return ExecutionTraceView(text=snippet, source="runtime:execution_trace_snippet")
-    return None
-
-
-def _read_stream_artifact(base: Path, stream: str, active: bool) -> ExecutionTraceView | None:
-    """
-    Pick the right stdout/stderr artifact file for the stream.
-
-    While a subagent runs, the live ``.log`` is the freshest source;
-    after it finishes, the persisted ``.txt`` is the canonical one.
-    The order flips on ``active`` so we don't accidentally read a
-    stale ``.txt`` over a still-growing ``.log`` and miss recent
-    output.
-    """
-    if stream not in {"stdout", "stderr"}:
-        raise ValueError(f"Unsupported stream artifact: {stream}")
-    if active:
-        names = (f"{stream}.log", f"{stream}.txt")
-    else:
-        names = (f"{stream}.txt", f"{stream}.log")
-    for name in names:
-        path = resolve_artifact_path(base, name)
-        if path is not None:
-            return ExecutionTraceView(text=read_text_artifact(path), source=path)
-    return None

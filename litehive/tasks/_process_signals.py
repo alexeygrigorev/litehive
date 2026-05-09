@@ -69,7 +69,7 @@ def terminate_subagent_pid(
         Poll ``_pid_is_dead`` until the process exits or the deadline passes.
 
         The SIGTERM/SIGKILL escalation needs a bounded wait between signals
-        so a stuck subagent cannot block ``stop_current_task`` forever; the
+        so a stuck subagent cannot block ``TaskStatusService.stop_current`` forever; the
         deadline rather than the per-poll budget is what guarantees the
         outer call returns within ``wait_timeout_seconds``.
         """

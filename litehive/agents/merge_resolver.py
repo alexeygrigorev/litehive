@@ -9,7 +9,7 @@ agent-running stays in one place. All git plumbing goes through
 from pathlib import Path
 
 from litehive.config.model import LitehiveConfig
-from litehive.container import build_subagent_manager_for_workspace
+from litehive.container import build_subagent_manager
 from litehive.domain.roles import AgentRole
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import GitError, merge_abort, merge_no_edit, unmerged_files
@@ -72,7 +72,7 @@ def run_worktree_merge_agent(
         append_journal(workspace, task, f"[worktree] Merge agent unavailable: {exc}")
         return
 
-    subagents = build_subagent_manager_for_workspace(workspace, config, execution_root=worktree_path)
+    subagents = build_subagent_manager(workspace, config, execution_root=worktree_path)
     subagents.run(
         task,
         role=AgentRole.MERGE_RESOLVER.value,

@@ -14,7 +14,7 @@ from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from litehive.domain.common import utcnow
-from litehive.tasks.event_log import append_task_event
+from litehive.tasks.event_log import TaskEventLog
 from litehive.workspace import Workspace
 
 from litehive.domain.common import PipelineState
@@ -327,8 +327,7 @@ class SqliteJournal(PipelineJournal):
                     json.dumps(payload["delta"], sort_keys=True),
                 ),
             )
-            append_task_event(
-                self.workspace,
+            TaskEventLog(self.workspace).append(
                 event_type="pipeline_transition_recorded",
                 task_id=task_id,
                 payload={
@@ -371,8 +370,7 @@ class SqliteJournal(PipelineJournal):
                 """,
                 (task_id, seq, created_at, kind, json.dumps(payload, sort_keys=True)),
             )
-            append_task_event(
-                self.workspace,
+            TaskEventLog(self.workspace).append(
                 event_type="pipeline_journal_recorded",
                 task_id=task_id,
                 payload={

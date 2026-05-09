@@ -61,19 +61,6 @@ class DaemonLogs:
         return latest_matching(self.latest_run_all_dir(), pattern)
 
 
-def latest_run_all_log_dir_for_workspace(workspace: Workspace) -> Path | None:
-    """
-    Return the most recent ``run-all`` session log directory.
-
-    Called by the CLI ``logs`` subcommand and the daemon-side
-    post-mortem helpers when no specific session is named — those
-    paths want "the last thing that happened" without having to
-    enumerate session names. Returns ``None`` for a workspace that
-    has never run a daemon session.
-    """
-    return DaemonLogs(workspace).latest_run_all_dir()
-
-
 def prune_run_all_log_dirs(log_base: Path, keep: int = _RUN_ALL_SESSION_RETENTION) -> None:
     """
     Drop the oldest run-all session directories so the log tree stays bounded.

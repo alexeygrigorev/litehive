@@ -1,10 +1,9 @@
 """Task status transitions for re-entering a task after a stop or failure.
 
-Covers ``requeue_task_for_workspace`` (start over from the implementation
-entry stage) and ``resume_task_for_workspace`` (continue from the stage
-that was last in flight). Both push a task back onto the workspace queue;
-they differ in what prior progress they preserve and how they pick the
-re-entry stage.
+Covers requeue (start over from the implementation entry stage) and resume
+(continue from the stage that was last in flight). Both push a task back
+onto the workspace queue; they differ in what prior progress they preserve
+and how they pick the re-entry stage.
 """
 
 from pathlib import Path
@@ -19,10 +18,12 @@ from litehive.tasks.constants import (
     RESUMABLE_TASK_STATUSES,
 )
 from litehive.state.locking import (
-    ensure_future_task_mutation_allowed_for_workspace,
-    workspace_lock_for_workspace,
+    WorkspaceMutationGuard,
+    WorkspaceStateLock,
 )
-from litehive.state.persist import load_state_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.records import WorkspaceTasks
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.tasks.activity_rendering import (
     is_retractable_pass_entry,
     normalized_files_changed,
@@ -47,7 +48,7 @@ from litehive.tasks._status_helpers import (
     _queue_task,
     _reset_pipeline_state,
 )
-from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace
+from litehive.worktree.paths import WorktreePaths
 
 
 def _requeue_task_transition(
@@ -75,8 +76,8 @@ def _requeue_task_transition(
         pass-retraction logic compares the right tree against main rather
         than always assuming the worktree is intact.
         """
-        worktree_path = resolve_recorded_worktree_path_for_workspace(
-            workspace, task.runtime.pipeline.git.worktree_path or task.git.worktree_path
+        worktree_path = WorktreePaths(workspace).resolve_recorded_worktree_path(
+            task.runtime.pipeline.git.worktree_path or task.git.worktree_path
         )
         if worktree_path is not None and worktree_path.exists():
             return worktree_path
@@ -95,8 +96,8 @@ def _requeue_task_transition(
         except GitError as exc:
             raise ValueError(str(exc)) from exc
 
-    with workspace_lock_for_workspace(workspace):
-        task = workspace.get_task_record(task_id)
+    with WorkspaceStateLock(workspace).hold():
+        task = WorkspaceTasks(workspace).get_record(task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
         before_task = snapshot_task_audit_state(task)
@@ -109,15 +110,15 @@ def _requeue_task_transition(
             raise ValueError(failed_run_block_message(task, blocked_failed_runs))
         if blocked_failed_runs and force:
             failed_run_overrides = mark_failed_run_operator_override(workspace, task, blocked_failed_runs)
-        state = load_state_for_workspace(workspace)
+        state = WorkspaceStateRepository(workspace).load()
         queue_before = list(state.queue)
-        ensure_future_task_mutation_allowed_for_workspace(workspace, [task.id], state=state)
+        WorkspaceMutationGuard(workspace).ensure_future_task_mutation_allowed([task.id], state=state)
         if task.status not in {TaskStatus.FLAGGED, TaskStatus.PARKED, *CLOSED_TASK_STATUSES}:
             raise ValueError(f"Task {task.id} is not flagged, parked, or closed")
         main_ref = current_head(workspace.root)
         if main_ref is not None:
             checkout_path = _task_checkout_path(task)
-            activity_log = workspace.task_activity(task)
+            activity_log = task_activity_store_for_task(workspace, task)
             activity_entries = activity_log.load()
             changed = False
             for entry in activity_entries:
@@ -165,10 +166,10 @@ def _resume_task_transition(workspace: Workspace, task_id: str, front: bool = Fa
     (so the next agent sees the previous failure context); clears it for
     requested-retry shapes so the next run starts from a clean verdict.
     """
-    with workspace_lock_for_workspace(workspace):
-        task = workspace.require_task(task_id)
+    with WorkspaceStateLock(workspace).hold():
+        task = WorkspaceTasks(workspace).require(task_id)
         before_task = snapshot_task_audit_state(task)
-        state = load_state_for_workspace(workspace)
+        state = WorkspaceStateRepository(workspace).load()
         queue_before = list(state.queue)
         resumed_stage = resumable_queue_stage(task)
         stranded_in_progress = (
@@ -180,7 +181,7 @@ def _resume_task_transition(workspace: Workspace, task_id: str, front: bool = Fa
         already_queued_resumable = task.status == TaskStatus.QUEUED and resumed_stage is not None
         if state.active_task_id == task.id and task.runtime.pipeline.execution_status != TaskExecutionStatus.RUNNING:
             state.active_task_id = None
-        ensure_future_task_mutation_allowed_for_workspace(workspace, [task.id], state=state)
+        WorkspaceMutationGuard(workspace).ensure_future_task_mutation_allowed([task.id], state=state)
         if (
             task.status not in {TaskStatus.FLAGGED, *CLOSED_TASK_STATUSES, *RESUMABLE_TASK_STATUSES}
             and not stranded_in_progress
@@ -221,31 +222,3 @@ def _resume_task_transition(workspace: Workspace, task_id: str, front: bool = Fa
             },
         )
         return task
-
-
-def requeue_task_for_workspace(
-    workspace: Workspace,
-    task_id: str,
-    front: bool = False,
-    force: bool = False,
-    audit_actor: str = "operator",
-    audit_source: str = "cli",
-) -> TaskRecord:
-    """
-    Public entry for requeueing a task using an injected workspace.
-    """
-    return _requeue_task_transition(
-        workspace,
-        task_id,
-        front=front,
-        force=force,
-        audit_actor=audit_actor,
-        audit_source=audit_source,
-    )
-
-
-def resume_task_for_workspace(workspace: Workspace, task_id: str, front: bool = False) -> TaskRecord:
-    """
-    Public entry for resuming a task using an injected workspace.
-    """
-    return _resume_task_transition(workspace, task_id, front=front)

@@ -3,16 +3,16 @@
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import GitError
-from litehive.state.persist import load_state_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
 from litehive.tasks.normalization import implementation_entry_stage
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
-from litehive.tasks.queue import prepare_completed_task_for_recovery
-from litehive.state.locking import workspace_lock_for_workspace, workspace_mutation_guard_for_workspace
-from litehive.state.persist import persist_task_and_state_for_workspace
+from litehive.tasks.queue import TaskQueueService, prepare_completed_task_for_recovery
+from litehive.state.locking import WorkspaceMutationGuard, WorkspaceStateLock
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 
-def require_completed_task(task: TaskRecord, action: str) -> None:
+def _require_completed_task(task: TaskRecord, action: str) -> None:
     """
     Refuse an operator-only ``recover``/``reopen`` action on an unfinished task.
 
@@ -24,7 +24,7 @@ def require_completed_task(task: TaskRecord, action: str) -> None:
         raise GitError(f"Task {task.id} is not completed; cannot {action}")
 
 
-def recover_completed_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord:
+def _recover_completed_task_transition(workspace: Workspace, task_id: str) -> TaskRecord:
     """
     Re-queue a finished task for another implementation pass.
 
@@ -33,22 +33,19 @@ def recover_completed_task_for_workspace(workspace: Workspace, task_id: str) -> 
     see who reopened the task. Called by ``litehive recover`` when an operator
     decides a closed task needs more work.
     """
-    with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
-        from litehive.tasks.queue import drop_task_from_workspace_state  # noqa: PLC0415
-
-        task = workspace.get_task(task_id)
+    with WorkspaceMutationGuard(workspace).hold(), WorkspaceStateLock(workspace).hold():
+        task = WorkspaceTasks(workspace).get(task_id)
         if task is None:
             raise GitError(f"Task {task_id} not found")
         before_task = snapshot_task_audit_state(task)
-        require_completed_task(task, action="recover")
+        _require_completed_task(task, action="recover")
         recovery_stage = implementation_entry_stage(task)
         prepare_completed_task_for_recovery(task, recovery_stage=recovery_stage)
-        state = load_state_for_workspace(workspace)
+        state = WorkspaceStateRepository(workspace).load()
         queue_before = list(state.queue)
-        drop_task_from_workspace_state(state, task.id)
+        TaskQueueService.remove_from_state(state, task.id)
         state.queue.append(task.id)
-        persist_task_and_state_for_workspace(
-            workspace,
+        WorkspaceStateRepository(workspace).persist_task_and_state(
             task=task,
             state=state,
             journal_message="Task recovered for another implementation pass.",

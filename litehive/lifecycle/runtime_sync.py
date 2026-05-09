@@ -23,9 +23,10 @@ from litehive.domain.runtime import (
     RuntimeRecoveryOutcome,
 )
 from litehive.domain.task import TaskRecord
-from litehive.state.locking import persist_future_task_update_for_workspace
-from litehive.state.persist import load_state_for_workspace, persist_tasks_and_state_for_workspace
-from litehive.state.records import set_task_commit_sha
+from litehive.state.locking import WorkspaceMutationGuard
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.records import set_task_commit_sha, WorkspaceTasks
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.runtime import apply_task_outcome
 from litehive.workspace import Workspace
@@ -313,7 +314,7 @@ def _sync_back(state: TaskState, workspace: Workspace) -> TaskRecord | None:
     operator-facing surfaces would drift from the actual lifecycle
     state until the task ends.
     """
-    task_record = workspace.get_task(state.task_id)
+    task_record = WorkspaceTasks(workspace).get(state.task_id)
     if task_record is None:
         return None
     before_task = snapshot_task_audit_state(task_record)
@@ -351,8 +352,7 @@ def _sync_back(state: TaskState, workspace: Workspace) -> TaskRecord | None:
                 },
             )
         )
-    persist_future_task_update_for_workspace(
-        workspace,
+    WorkspaceMutationGuard(workspace).persist_future_task_update(
         task_record,
         journal_message=journal_message,
         audit_entries=audit_entries or None,
@@ -374,7 +374,7 @@ def _sync_recovery_follow_up(workspace: Workspace, task_record: TaskRecord, stat
         return
     if failed_reason != "recovery_exhausted":
         return
-    latest = workspace.task_activity(task_record).latest_entry(
+    latest = task_activity_store_for_task(workspace, task_record).latest_entry(
         role="recovery",
         stage=PipelineState.RECOVERING,
         verdicts={"reject"},
@@ -424,13 +424,12 @@ def _clear_terminal_task_from_workspace_state(workspace: Workspace, task_id: str
     spin in a tight no-op loop until an operator manually cleared the
     queue.
     """
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     if state.active_task_id == task_id:
         state.active_task_id = None
     if task_id in state.queue:
         state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
-    persist_tasks_and_state_for_workspace(
-        workspace,
+    WorkspaceStateRepository(workspace).persist_tasks_and_state(
         tasks=(),
         state=state,
         protected_task_ids=[task_id],

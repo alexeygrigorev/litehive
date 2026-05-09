@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from litehive.agents.execution_trace import load_subagent_execution_trace
-from litehive.agents.session_store import load_subagent_artifacts, load_subagent_event_stream
+from litehive.agents.execution_trace import execution_trace_renderer
+from litehive.agents.session_store import subagent_artifacts
 from litehive.domain.common import SubagentStatus
 from litehive.domain.reports import RecoveryEvidenceItem, StageReport
 from litehive.domain.task import TaskRecord
@@ -11,14 +11,14 @@ from litehive.git.ops import GitError, current_head, is_git_repo, status_porcela
 from litehive.observability.engine_monitoring import load_engine_monitoring
 from litehive.observability.events import read_events
 from litehive.state.records import get_task_worktree_path
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.tasks.paths import (
-    latest_run_all_log_path_for_workspace,
-    latest_subagent_base_for_workspace,
+    TaskArtifactLocator,
     resolve_artifact_path,
     status_entry_paths,
 )
-from litehive.tasks.report_storage import latest_stage_report
-from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace
+from litehive.tasks.report_storage import TaskReportStore
+from litehive.worktree.paths import WorktreePaths
 from litehive.workspace import Workspace
 
 
@@ -38,10 +38,11 @@ def collect_recovery_evidence(
     hand.
     """
     evidence: list[RecoveryEvidenceItem] = []
-    activity_entries = workspace.task_activity(task).load()
+    artifact_locator = TaskArtifactLocator(workspace)
+    activity_entries = task_activity_store_for_task(workspace, task).load()
     task_events = read_events(workspace, task)
-    latest_report = latest_stage_report(workspace, task)
-    latest_run_log = latest_run_all_log_path_for_workspace(workspace)
+    latest_report = TaskReportStore(workspace).latest_stage_report(task)
+    latest_run_log = artifact_locator.latest_run_all_log_path()
     monitoring = load_engine_monitoring(workspace)
     engine_name = None
     if task.runtime.execution.active_subagent is not None:
@@ -49,7 +50,7 @@ def collect_recovery_evidence(
     elif task.subagents:
         engine_name = task.subagents[-1].engine
     engine_record = monitoring.engines.get(engine_name or "")
-    subagent_base = latest_subagent_base_for_workspace(workspace, task)
+    subagent_base = artifact_locator.latest_subagent_base(task)
 
     if task.close_reason:
         close_reason_part = f" close_reason={task.close_reason}"
@@ -120,8 +121,9 @@ def collect_recovery_evidence(
             artifacts: dict = {}
             event_stream: dict = {}
         else:
-            artifacts = load_subagent_artifacts(workspace, task.id, subagent_ref.id)
-            event_stream = load_subagent_event_stream(workspace, task.id, subagent_ref.id)
+            artifact_store = subagent_artifacts(workspace, task.id, subagent_ref.id)
+            artifacts = artifact_store.load_all()
+            event_stream = artifact_store.load_event_stream()
         runtime_state = None
         if subagent_ref is not None:
             active_subagent = task.runtime.execution.active_subagent
@@ -137,7 +139,7 @@ def collect_recovery_evidence(
         if subagent_ref is None:
             trace_view = None
         else:
-            trace_view = load_subagent_execution_trace(
+            trace_view = execution_trace_renderer().load_for_subagent(
                 workspace,
                 task,
                 subagent_ref,
@@ -216,8 +218,8 @@ def collect_recovery_evidence(
     )
 
     if is_git_repo(workspace.root):
-        worktree_path = resolve_recorded_worktree_path_for_workspace(
-            workspace, task.runtime.pipeline.git.worktree_path or task.git.worktree_path
+        worktree_path = WorktreePaths(workspace).resolve_recorded_worktree_path(
+            task.runtime.pipeline.git.worktree_path or task.git.worktree_path
         )
         worktree_rel = get_task_worktree_path(task)
         try:

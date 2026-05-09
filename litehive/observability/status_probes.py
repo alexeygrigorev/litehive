@@ -17,8 +17,8 @@ from typing import Mapping
 
 from pydantic import ValidationError
 
-from litehive.daemon.logs import latest_run_all_log_dir_for_workspace
-from litehive.daemon.registry import daemon_metadata_for_workspace
+from litehive.daemon.logs import DaemonLogs
+from litehive.daemon.registry import DaemonRegistry
 from litehive.domain.common import PipelineStatus, RuntimeStageStatus, TaskExecutionStatus, TaskStatus
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
@@ -34,11 +34,12 @@ from litehive.observability.status_types import (
     _TRUSTED_STAGE_MARKER_STATUSES,
     _RecoveryFailureContext,
 )
+from litehive.state.records import WorkspaceTasks
 from litehive.state.locking import runner_metadata_present, runner_pid_is_alive
 from litehive.workspace import Workspace
 
 
-def _probe_runner_state_for_workspace(
+def _probe_runner_state_impl(
     workspace: Workspace,
     state: WorkspaceState,
     runner: RunnerStatusState,
@@ -88,7 +89,7 @@ def _probe_runner_state_for_workspace(
     return issues
 
 
-def _probe_daemon_status_for_workspace(workspace: Workspace) -> list[StatusIssue]:
+def _probe_daemon_status_impl(workspace: Workspace) -> list[StatusIssue]:
     """
     Flag a daemon whose lockfile says ``stale`` with a dead PID.
 
@@ -99,7 +100,7 @@ def _probe_daemon_status_for_workspace(workspace: Workspace) -> list[StatusIssue
     surfaced so the operator can fix the lock file directly.
     """
     try:
-        entry = daemon_metadata_for_workspace(workspace)
+        entry = DaemonRegistry(workspace).metadata()
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         return [
             StatusIssue(
@@ -126,7 +127,7 @@ def _probe_daemon_status_for_workspace(workspace: Workspace) -> list[StatusIssue
     return []
 
 
-def _probe_last_cycle_for_workspace(workspace: Workspace) -> list[StatusIssue]:
+def _probe_last_cycle_impl(workspace: Workspace) -> list[StatusIssue]:
     """
     Catch a stalled cycle where repair tracebacked and the daemon stopped.
 
@@ -136,7 +137,7 @@ def _probe_last_cycle_for_workspace(workspace: Workspace) -> list[StatusIssue]:
     instead of leaving the workspace looking healthy when in
     fact the daemon is silently broken.
     """
-    latest_dir = latest_run_all_log_dir_for_workspace(workspace)
+    latest_dir = DaemonLogs(workspace).latest_run_all_dir()
     if latest_dir is None:
         return []
     repair_logs = sorted(latest_dir.glob("*-repair.log"))
@@ -164,7 +165,7 @@ def _probe_last_cycle_for_workspace(workspace: Workspace) -> list[StatusIssue]:
     ]
 
 
-def _probe_heru_link_for_workspace(workspace: Workspace) -> list[StatusIssue]:
+def _probe_heru_link_impl(workspace: Workspace) -> list[StatusIssue]:
     """
     Detect a broken local heru source path in pyproject.
 
@@ -206,7 +207,7 @@ def _probe_heru_link_for_workspace(workspace: Workspace) -> list[StatusIssue]:
     ]
 
 
-def _probe_origin_divergence_for_workspace(workspace: Workspace, state: WorkspaceState) -> list[StatusIssue]:
+def _probe_origin_divergence_impl(workspace: Workspace, state: WorkspaceState) -> list[StatusIssue]:
     """
     Re-surface a previous main/origin-main divergence stop.
 
@@ -258,7 +259,7 @@ def _probe_pool_stop_reason(state: WorkspaceState) -> list[StatusIssue]:
     ]
 
 
-def _probe_task_index_references_for_workspace(
+def _probe_task_index_references_impl(
     workspace: Workspace,
     state: WorkspaceState,
     state_issues: list[StatusIssue],
@@ -335,7 +336,7 @@ def _probe_task_status_damage(
     if not workspace.runtime_path("data.db").exists():
         return []
     try:
-        tasks = workspace.list_tasks(strict=False)
+        tasks = WorkspaceTasks(workspace).list(strict=False)
     except (OSError, sqlite3.DatabaseError, ValueError) as exc:
         return [
             StatusIssue(

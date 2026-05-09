@@ -2,14 +2,13 @@ from pathlib import Path
 
 from litehive.config.workspace import create_workspace
 from litehive.git.ops import checkpoint_message
-from litehive.state.records import create_task_for_workspace
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 
 def test_generated_checkpoint_message_uses_task_metadata(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task_for_workspace(
-        Workspace.from_path(tmp_path),
+    task = WorkspaceTasks(Workspace.from_path(tmp_path)).create(
         title="Generate detailed commit messages",
         goal="Explain completed work using persisted task metadata.",
         acceptance_criteria=[

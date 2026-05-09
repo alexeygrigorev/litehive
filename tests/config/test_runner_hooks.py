@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from litehive.config.loading import load_config_for_workspace
+from litehive.config.loading import WorkspaceConfigLoader
 from litehive.config.model import LitehiveConfig
 from litehive.config.model import VALID_RUNNER_HOOK_ENTRY_KEYS, VALID_RUNNER_HOOK_POINTS
 from litehive.config.workspace import create_workspace
@@ -11,7 +11,7 @@ from litehive.workspace import Workspace
 
 
 def _load_config(root: Path) -> LitehiveConfig:
-    return load_config_for_workspace(Workspace.from_path(root))
+    return WorkspaceConfigLoader(Workspace.from_path(root)).load()
 
 
 def test_load_config_normalizes_runner_hooks(tmp_path: Path) -> None:

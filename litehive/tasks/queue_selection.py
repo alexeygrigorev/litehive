@@ -18,22 +18,18 @@ from litehive.domain.task_ops import BlockedTask, TaskSelection, WorkspaceConfli
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.recovery.detection import TaskLaunchFailure
 from litehive.recovery.execution_recovery import (
+    RunnerRecoveryService,
     interruption_journal_message,
     prepare_interrupted_task,
-    recover_stale_runner_state_for_workspace,
     stale_interruption_reason,
 )
 from litehive.state.locking import (
-    workspace_lock_for_workspace,
-    workspace_mutation_guard_for_workspace,
+    WorkspaceMutationGuard,
+    WorkspaceStateLock,
 )
-from litehive.state.persist import (
-    load_state_for_workspace,
-    persist_task_and_state_for_workspace,
-    persist_tasks_and_state_for_workspace,
-    save_state_for_workspace,
-)
-from litehive.state.store import runtime_store_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.records import WorkspaceTasks
+from litehive.state.store import RuntimeStore
 from litehive.tasks.queue_eligibility import (
     _auto_recovery_stage_for_flagged_task,
     _is_parked_task,
@@ -94,44 +90,44 @@ def _normalize_stale_pipeline_statuses(
     return mutated
 
 
-def set_active_task(workspace: Workspace, task_id: str | None) -> WorkspaceState:
+def _set_active_task(workspace: Workspace, task_id: str | None) -> WorkspaceState:
     """
     Pin a specific task as the workspace's active task, bypassing selection.
 
     Integration tests and helper fixtures use this to put a known task in
     the runner's slot directly; production code reaches active state through
-    ``dequeue_next_task_selection`` so the eligibility checks and audit
+    ``TaskQueueService.select_next`` so the eligibility checks and audit
     bookkeeping run.
     """
-    with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
-        state = load_state_for_workspace(workspace)
+    with WorkspaceMutationGuard(workspace).hold(), WorkspaceStateLock(workspace).hold():
+        state = WorkspaceStateRepository(workspace).load()
         state.active_task_id = task_id
         if task_id is not None and task_id in state.queue:
             state.queue = [item for item in state.queue if item != task_id]
-        validate_single_active_task_for_workspace(workspace, state)
+        _validate_single_active_task_impl(workspace, state)
         if task_id is None:
-            save_state_for_workspace(workspace, state)
+            WorkspaceStateRepository(workspace).save(state)
             return state
-        task = workspace.require_task(task_id)
+        task = WorkspaceTasks(workspace).require(task_id)
         if task.status == TaskStatus.QUEUED:
             task.status = TaskStatus.IN_PROGRESS
-        persist_task_and_state_for_workspace(workspace, task=task, state=state)
+        WorkspaceStateRepository(workspace).persist_task_and_state(task=task, state=state)
         return state
 
 
-def peek_next_task(workspace: Workspace) -> TaskRecord | None:
+def _peek_next_task(workspace: Workspace) -> TaskRecord | None:
     """
     Return the next runnable task without dequeuing it.
 
     Only test code calls this; production status surfaces use
-    ``peek_next_task_selection`` so they can also report the blocked tasks.
+    ``TaskQueueService.peek_next_selection`` so they can also report the blocked tasks.
     This thin wrapper drops that information and is a candidate for
     inlining at its one test caller.
     """
-    return peek_next_task_selection(workspace).task
+    return _peek_next_task_selection(workspace).task
 
 
-def peek_next_task_selection(workspace: Workspace) -> TaskSelection:
+def _peek_next_task_selection(workspace: Workspace) -> TaskSelection:
     """
     Return the next runnable task plus blocked-task diagnostics, queue intact.
 
@@ -139,32 +135,32 @@ def peek_next_task_selection(workspace: Workspace) -> TaskSelection:
     surfaces use the dequeue path instead. If no production caller appears,
     fold it back into the dequeue helper rather than carrying two near-copies.
     """
-    recover_stale_runner_state_for_workspace(workspace)
-    with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
-        state = load_state_for_workspace(workspace)
-        validate_single_active_task_for_workspace(workspace, state)
+    RunnerRecoveryService(workspace).recover_stale_runner_state()
+    with WorkspaceMutationGuard(workspace).hold(), WorkspaceStateLock(workspace).hold():
+        state = WorkspaceStateRepository(workspace).load()
+        _validate_single_active_task_impl(workspace, state)
         next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(workspace, state)
         if mutated:
             if normalized_tasks:
-                persist_tasks_and_state_for_workspace(workspace, tasks=normalized_tasks, state=state)
+                WorkspaceStateRepository(workspace).persist_tasks_and_state(tasks=normalized_tasks, state=state)
             else:
-                save_state_for_workspace(workspace, state)
+                WorkspaceStateRepository(workspace).save(state)
         return TaskSelection(task=next_task, blocked=blocked)
 
 
-def dequeue_next_task(workspace: Workspace) -> TaskRecord | None:
+def _dequeue_next_task(workspace: Workspace) -> TaskRecord | None:
     """
     Pick the next runnable task and promote it to active.
 
     The runner's main entry point: the CLI runner loop and the one-shot
     ``litehive run`` command call this to advance the queue. Callers that
-    also need blocked-task reasons use ``dequeue_next_task_selection``
+    also need blocked-task reasons use ``TaskQueueService.select_next``
     directly so they don't have to re-walk the queue to recover them.
     """
-    return dequeue_next_task_selection(workspace).task
+    return _dequeue_next_task_selection(workspace).task
 
 
-def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
+def _dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
     """
     Pick the next runnable task, promote it to active, and report blocked siblings.
 
@@ -174,18 +170,18 @@ def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
     persists the workspace mutation so the runner can begin executing
     without a second round-trip.
     """
-    recover_stale_runner_state_for_workspace(workspace)
-    with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
-        state = load_state_for_workspace(workspace)
+    RunnerRecoveryService(workspace).recover_stale_runner_state()
+    with WorkspaceMutationGuard(workspace).hold(), WorkspaceStateLock(workspace).hold():
+        state = WorkspaceStateRepository(workspace).load()
         original_queue = list(state.queue)
-        validate_single_active_task_for_workspace(workspace, state)
+        _validate_single_active_task_impl(workspace, state)
         next_task, blocked, mutated, normalized_tasks = _resolve_next_task_from_state(workspace, state)
         if next_task is None:
             if mutated:
                 if normalized_tasks:
-                    persist_tasks_and_state_for_workspace(workspace, tasks=normalized_tasks, state=state)
+                    WorkspaceStateRepository(workspace).persist_tasks_and_state(tasks=normalized_tasks, state=state)
                 else:
-                    save_state_for_workspace(workspace, state)
+                    WorkspaceStateRepository(workspace).save(state)
             return TaskSelection(task=None, blocked=blocked)
         if state.active_task_id != next_task.id:
             state.active_task_id = next_task.id
@@ -197,7 +193,7 @@ def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
                     if state.active_task_id == next_task.id:
                         state.active_task_id = None
                     if mutated:
-                        save_state_for_workspace(workspace, state)
+                        WorkspaceStateRepository(workspace).save(state)
                     return TaskSelection(task=None, blocked=blocked)
                 recovery_stage = _auto_recovery_stage_for_flagged_task(next_task)
                 record_recovery_report(
@@ -236,15 +232,13 @@ def dequeue_next_task_selection(workspace: Workspace) -> TaskSelection:
             if normalized_tasks:
                 tasks_to_persist = {task.id: task for task in normalized_tasks}
                 tasks_to_persist[next_task.id] = next_task
-                persist_tasks_and_state_for_workspace(
-                    workspace,
+                WorkspaceStateRepository(workspace).persist_tasks_and_state(
                     tasks=list(tasks_to_persist.values()),
                     state=state,
                     protected_task_ids=queue_additions,
                 )
             else:
-                persist_task_and_state_for_workspace(
-                    workspace,
+                WorkspaceStateRepository(workspace).persist_task_and_state(
                     task=next_task,
                     state=state,
                     protected_task_ids=queue_additions,
@@ -323,8 +317,8 @@ def _resolve_next_task_from_state(
     runner surfaces missing-intent corruption instead of silently dropping
     the task.
     """
-    tasks_by_id = {task.id: task for task in workspace.list_tasks(strict=False)}
-    store = runtime_store_for_workspace(workspace)
+    tasks_by_id = {task.id: task for task in WorkspaceTasks(workspace).list(strict=False)}
+    store = RuntimeStore(workspace)
     for queued_task_id in state.queue:
         if queued_task_id in tasks_by_id:
             continue
@@ -443,7 +437,7 @@ def _resolve_next_task_from_snapshot(
     return None, blocked, mutated
 
 
-def clear_active_task(workspace: Workspace) -> WorkspaceState:
+def _clear_active_task(workspace: Workspace) -> WorkspaceState:
     """
     Detach whichever task currently sits in the active slot.
 
@@ -451,10 +445,10 @@ def clear_active_task(workspace: Workspace) -> WorkspaceState:
     flows that already null out ``state.active_task_id`` themselves.
     Candidate for removal.
     """
-    return set_active_task(workspace, None)
+    return _set_active_task(workspace, None)
 
 
-def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
+def _restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
     """
     Push the active task back onto the queue if it was never actually started.
 
@@ -462,13 +456,13 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
     ``recovery.execution_recovery`` and ``restore_missing_queued_tasks``;
     looks like a leftover from before workspace-repair owned this concern.
     """
-    with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
-        state = load_state_for_workspace(workspace)
-        validate_single_active_task_for_workspace(workspace, state)
+    with WorkspaceMutationGuard(workspace).hold(), WorkspaceStateLock(workspace).hold():
+        state = WorkspaceStateRepository(workspace).load()
+        _validate_single_active_task_impl(workspace, state)
         if state.active_task_id is None:
             return state
 
-        task = workspace.get_task(state.active_task_id)
+        task = WorkspaceTasks(workspace).get(state.active_task_id)
         if task is not None and _should_requeue_commit_stage_task(task):
             prepare_interrupted_task(
                 workspace,
@@ -480,8 +474,7 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
             task.status = TaskStatus.QUEUED
             enqueue_recovered_task(state, task.id)
             state.active_task_id = None
-            persist_task_and_state_for_workspace(
-                workspace,
+            WorkspaceStateRepository(workspace).persist_task_and_state(
                 task=task,
                 state=state,
                 journal_message=interruption_journal_message(task),
@@ -496,8 +489,7 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
             task.status = TaskStatus.QUEUED
             enqueue_recovered_task(state, task.id)
             state.active_task_id = None
-            persist_task_and_state_for_workspace(
-                workspace,
+            WorkspaceStateRepository(workspace).persist_task_and_state(
                 task=task,
                 state=state,
                 journal_message=f"Restored untouched active task to queue at `{task.pipeline_status}`.",
@@ -516,8 +508,7 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
                 task.status = TaskStatus.QUEUED
                 enqueue_recovered_task(state, task.id)
             state.active_task_id = None
-            persist_task_and_state_for_workspace(
-                workspace,
+            WorkspaceStateRepository(workspace).persist_task_and_state(
                 task=task,
                 state=state,
                 journal_message=interruption_journal_message(task),
@@ -525,11 +516,11 @@ def restore_untouched_active_task(workspace: Workspace) -> WorkspaceState:
             return state
 
         state.active_task_id = None
-        save_state_for_workspace(workspace, state)
+        WorkspaceStateRepository(workspace).save(state)
         return state
 
 
-def active_task_markers_for_workspace(workspace: Workspace, state: WorkspaceState | None = None) -> dict[str, list[str]]:
+def _active_task_markers_impl(workspace: Workspace, state: WorkspaceState | None = None) -> dict[str, list[str]]:
     """
     Collect every signal that says "this task is active", keyed by task id.
 
@@ -539,8 +530,8 @@ def active_task_markers_for_workspace(workspace: Workspace, state: WorkspaceStat
     they do (so the conflict message names the failing slot).
     """
     markers: dict[str, list[str]] = {}
-    current_state = state or load_state_for_workspace(workspace)
-    tasks = workspace.list_tasks(strict=False)
+    current_state = state or WorkspaceStateRepository(workspace).load()
+    tasks = WorkspaceTasks(workspace).list(strict=False)
     tasks_by_id = {task.id: task for task in tasks}
     if current_state.active_task_id is None:
         active_task = None
@@ -567,7 +558,7 @@ def active_task_markers_for_workspace(workspace: Workspace, state: WorkspaceStat
     return markers
 
 
-def validate_single_active_task_for_workspace(workspace: Workspace, state: WorkspaceState | None = None) -> None:
+def _validate_single_active_task_impl(workspace: Workspace, state: WorkspaceState | None = None) -> None:
     """
     Raise ``WorkspaceConflictError`` if more than one task is currently active.
 
@@ -575,7 +566,7 @@ def validate_single_active_task_for_workspace(workspace: Workspace, state: Works
     calls this before touching state so a corrupted workspace fails loudly
     instead of silently launching two runners against the same worktree.
     """
-    markers = active_task_markers_for_workspace(workspace, state)
+    markers = _active_task_markers_impl(workspace, state)
     if len(markers) <= 1:
         return
     details = _format_active_task_markers(markers)

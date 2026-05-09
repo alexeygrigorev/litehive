@@ -14,6 +14,7 @@ from litehive.domain.common import (
     canonical_pipeline_state,
 )
 from litehive.domain.task import TaskRecord
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 from .persistence import FailedRunRecord, SqlitePersistence, TaskNotFound, TaskState
@@ -30,7 +31,7 @@ def _load_or_initialize(task_id: str, workspace: Workspace, persistence: SqliteP
     drifted from the launch request (reset while preserving the
     cross-run failure/recovery memory).
     """
-    task_record = workspace.get_task(task_id)
+    task_record = WorkspaceTasks(workspace).get(task_id)
     if task_record is None:
         raise LookupError(f"no task record for {task_id!r}")
     raw = task_record.pipeline_mode

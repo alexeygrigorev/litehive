@@ -25,6 +25,7 @@ class SubagentIdRepository:
     def __init__(self, workspace: Workspace) -> None:
         """Store the workspace database handle used for allocations."""
         self.workspace = workspace
+        self.counter_store = SubagentCounterStore(workspace)
 
     def reserve_next_id(self, task: TaskRecord) -> SubagentId:
         """
@@ -33,13 +34,29 @@ class SubagentIdRepository:
         The read/advance happens in one SQLite transaction so repeated
         manager calls cannot allocate the same id within a task.
         """
+        next_number = self.counter_store.reserve_next_number(task)
+        return SubagentId(f"SA-{next_number:04d}")
+
+
+class SubagentCounterStore:
+    """
+    SQLite-backed task-scoped subagent id counter.
+    """
+
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
+
+    def reserve_next_number(self, task: TaskRecord) -> int:
+        """
+        Reserve and return the next numeric suffix for ``task``.
+        """
         task_ref_next_number = _next_number_after_task_refs(task)
         with self.workspace.connect() as connection:
             counter_next_number = self._counter_next_number(connection, task.id)
             session_next_number = self._session_next_number(connection, task.id)
             next_number = max(counter_next_number, session_next_number, task_ref_next_number)
             self._save_counter_next_number(connection, task.id, next_number + 1)
-        return SubagentId(f"SA-{next_number:04d}")
+        return next_number
 
     def _counter_next_number(self, connection: sqlite3.Connection, task_id: str) -> int:
         """

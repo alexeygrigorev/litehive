@@ -1,11 +1,10 @@
 """
 Subagent artifact writers.
 
-Each helper is a thin wrapper around the atomic-write primitives in
-`litehive.state.persist` that knows about one specific kind of file
-the runner stores under `<task>/subagents/<id>-<role>/`: stream logs
-(stdout/stderr), the execution trace, the prompt, and similar
-companions.
+`ArtifactService` wraps the atomic-write primitives in
+`litehive.state.persist` for the files the runner stores under
+`<task>/subagents/<id>-<role>/`: stream logs (stdout/stderr), the
+execution trace, the prompt, and similar companions.
 
 Subagent artifacts are debug evidence. The runner does not delete
 prior-attempt artifacts on the success path; the only deletion these
@@ -102,17 +101,6 @@ class ArtifactService:
         (self.base / f"{name}{suffix}.gz").unlink(missing_ok=True)
 
 
-def write_stream_artifact(base: Path, name: str, content: str, compress: bool) -> None:
-    """
-    Persist a streaming log artifact for a subagent.
-
-    Compatibility wrapper used by current manager/session call sites.
-    New code should create `ArtifactService(base)` once and call
-    `write_stream` so the artifact root is explicit in one object.
-    """
-    ArtifactService(base).write_stream(name, content, compress)
-
-
 def write_text_if_changed(path: Path, content: str) -> bool:
     """
     Write content to a path only if it differs from what is there.
@@ -127,30 +115,3 @@ def write_text_if_changed(path: Path, content: str) -> bool:
     write_atomic_files({path: content})
     return True
 
-
-def write_text_artifact(
-    base: Path,
-    name: str,
-    suffix: str,
-    content: str,
-    compress: bool,
-) -> Path:
-    """
-    Persist a non-streaming text artifact for a subagent.
-
-    Compatibility wrapper used by current manager/session call sites.
-    New code should create `ArtifactService(base)` once and call
-    `write_text` so the artifact root is explicit in one object.
-    """
-    return ArtifactService(base).write_text(name, suffix, content, compress)
-
-
-def remove_text_artifact(base: Path, name: str, suffix: str) -> None:
-    """
-    Remove both variants of a text artifact.
-
-    Compatibility wrapper used by current session code. New code should
-    call `ArtifactService(base).remove_text(...)` so deletion remains
-    tied to one artifact root and does not look like general cleanup.
-    """
-    ArtifactService(base).remove_text(name, suffix)

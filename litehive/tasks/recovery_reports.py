@@ -6,8 +6,9 @@ from litehive.domain.common import Verdict
 from litehive.domain.recovery import TriggerEventKind
 from litehive.domain.reports import RecoveryAction, RecoveryReport, TaskActivityEntry
 from litehive.domain.task import TaskRecord
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.tasks.recovery_evidence import collect_recovery_evidence, stage_report_context
-from litehive.tasks.report_storage import ReportReference, insert_recovery_report, latest_stage_report
+from litehive.tasks.report_storage import ReportReference, TaskReportStore
 from litehive.workspace import Workspace
 
 
@@ -46,8 +47,9 @@ def record_recovery_report(
         actions=list(actions or []),
         warnings=list(warnings or []),
     )
-    ref = insert_recovery_report(workspace, task, report)
-    latest_report = latest_stage_report(workspace, task)
+    reports = TaskReportStore(workspace)
+    ref = reports.insert_recovery_report(task, report)
+    latest_report = reports.latest_stage_report(task)
     if latest_report is not None:
         latest_report_part = f"\nlatest_stage_report: {stage_report_context(latest_report)}"
     else:
@@ -56,7 +58,7 @@ def record_recovery_report(
         blocker_part = f"\nblocker: {blocker}"
     else:
         blocker_part = ""
-    workspace.task_activity(task).append(
+    task_activity_store_for_task(workspace, task).append(
         TaskActivityEntry(
             source="system",
             role="recovery",

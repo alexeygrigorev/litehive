@@ -11,15 +11,7 @@ from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStat
 from litehive.domain.outcomes import TaskOutcomeKind
 from litehive.domain.runtime import TaskOutcomeState
 from litehive.domain.task import TaskRecord, WorkspaceState
-from litehive.state.locking import (
-    ensure_future_task_mutation_allowed_for_workspace,
-    workspace_lock_for_workspace,
-)
-from litehive.state.persist import (
-    load_state_for_workspace,
-    save_state_without_runner_guard_for_workspace,
-)
-from litehive.state.records import set_task_commit_sha
+from litehive.state.records import set_task_commit_sha, WorkspaceTasks
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.queue_eligibility import (
     _normalize_resumable_stage_name,
@@ -27,103 +19,6 @@ from litehive.tasks.queue_eligibility import (
 )
 from litehive.tasks.runtime import clear_task_run_activity, idle_stage_state
 from litehive.workspace import Workspace
-
-
-def enqueue_task_for_workspace(workspace: Workspace, task_id: str) -> WorkspaceState:
-    """
-    Append a task to the back of the workspace queue.
-    """
-    return _enqueue_task_for_workspace(workspace, task_id, front=False)
-
-
-def enqueue_task_front_for_workspace(workspace: Workspace, task_id: str) -> WorkspaceState:
-    """
-    Insert a task at the head of the workspace queue.
-    """
-    return _enqueue_task_for_workspace(workspace, task_id, front=True)
-
-
-def _enqueue_task_for_workspace(workspace: Workspace, task_id: str, front: bool) -> WorkspaceState:
-    """
-    Shared body of ``enqueue_task`` / ``enqueue_task_front``.
-
-    Dedupes, inserts, and audits in one pass so the two public wrappers
-    share locking, audit-entry shape, and runner-guard handling. Both
-    wrappers are currently dead code, but this helper is preserved alongside
-    them in case they are re-introduced.
-    """
-    with workspace_lock_for_workspace(workspace):
-        state = load_state_for_workspace(workspace)
-        ensure_future_task_mutation_allowed_for_workspace(workspace, [task_id], state=state)
-        task = workspace.require_task(task_id)
-        before_task = snapshot_task_audit_state(task)
-        queue_before = list(state.queue)
-        state.queue = [item for item in state.queue if item != task_id]
-        if front:
-            state.queue.insert(0, task_id)
-        else:
-            state.queue.append(task_id)
-        save_state_without_runner_guard_for_workspace(
-            workspace,
-            state,
-            audit_entries=[
-                build_task_audit_entry(
-                    task_id=task_id,
-                    action="queue_enqueued",
-                    actor="operator",
-                    source="queue",
-                    before_task=before_task,
-                    after_task=task,
-                    before_queue=queue_before,
-                    after_queue=state.queue,
-                    context={"front": front},
-                )
-            ],
-        )
-        return state
-
-
-def move_queued_task_for_workspace(workspace: Workspace, task_id: str, position: int) -> WorkspaceState:
-    """
-    Reorder a queued task to a 1-based position and record an audit entry.
-
-    The ``litehive queue move`` CLI calls this when an operator hand-curates
-    the queue; the engine-switch flow also re-positions the active task
-    here when the user swaps engines mid-run so the swapped task continues
-    next instead of being preempted by other queued work.
-    """
-    if position < 1:
-        raise ValueError("Queue position must be 1 or greater")
-    with workspace_lock_for_workspace(workspace):
-        state = load_state_for_workspace(workspace)
-        ensure_future_task_mutation_allowed_for_workspace(workspace, [task_id], state=state)
-        task = workspace.require_task(task_id)
-        before_task = snapshot_task_audit_state(task)
-        queue_before = list(state.queue)
-        if task_id not in state.queue:
-            raise ValueError(f"Task {task_id} is not queued")
-        queue = [item for item in state.queue if item != task_id]
-        target_index = min(position - 1, len(queue))
-        queue.insert(target_index, task_id)
-        state.queue = queue
-        save_state_without_runner_guard_for_workspace(
-            workspace,
-            state,
-            audit_entries=[
-                build_task_audit_entry(
-                    task_id=task_id,
-                    action="queue_moved",
-                    actor="operator",
-                    source="queue",
-                    before_task=before_task,
-                    after_task=task,
-                    before_queue=queue_before,
-                    after_queue=state.queue,
-                    context={"requested_position": position},
-                )
-            ],
-        )
-        return state
 
 
 def _prioritize_audit_entries(
@@ -157,54 +52,6 @@ def _prioritize_audit_entries(
             )
         )
     return entries
-
-
-def prioritize_queued_tasks_for_workspace(workspace: Workspace, task_ids: list[str]) -> WorkspaceState:
-    """
-    Hoist the given queued tasks to the front of the queue, in order.
-
-    Called by the ``litehive queue prioritize`` CLI when an operator wants
-    a specific batch run next without manually moving each task one at a
-    time; the relative ordering inside ``task_ids`` is preserved so the
-    operator can also reshuffle a small set in one call.
-    """
-    if not task_ids:
-        raise ValueError("At least one task id is required")
-    seen: set[str] = set()
-    duplicates: set[str] = set()
-    for task_id in task_ids:
-        if task_id in seen:
-            duplicates.add(task_id)
-            continue
-        seen.add(task_id)
-    if duplicates:
-        joined = ", ".join(sorted(duplicates))
-        raise ValueError(f"Task ids must be unique: {joined}")
-    with workspace_lock_for_workspace(workspace):
-        state = load_state_for_workspace(workspace)
-        ensure_future_task_mutation_allowed_for_workspace(workspace, task_ids, state=state)
-        queue_before = list(state.queue)
-        missing = [task_id for task_id in task_ids if task_id not in state.queue]
-        if missing:
-            joined = ", ".join(missing)
-            raise ValueError(f"Tasks are not queued: {joined}")
-        queued_tasks = {task_id: workspace.require_task(task_id) for task_id in task_ids}
-        before_tasks = {task_id: snapshot_task_audit_state(task) for task_id, task in queued_tasks.items()}
-        remaining = [queued_id for queued_id in state.queue if queued_id not in task_ids]
-        state.queue = [*task_ids, *remaining]
-        audit_entries = _prioritize_audit_entries(
-            task_ids=task_ids,
-            queued_tasks=queued_tasks,
-            before_tasks=before_tasks,
-            queue_before=queue_before,
-            queue_after=state.queue,
-        )
-        save_state_without_runner_guard_for_workspace(
-            workspace,
-            state,
-            audit_entries=audit_entries,
-        )
-        return state
 
 
 def reset_task_for_recovery(
@@ -248,8 +95,8 @@ def enqueue_recovered_task(state: WorkspaceState, task_id: str) -> None:
     """
     Move a recovered task to the back of the queue, exactly once.
 
-    Recovery flows — ``restore_untouched_active_task`` and the flagged-task
-    auto-recovery in ``dequeue_next_task_selection`` — call this so a task
+    Recovery flows — ``TaskQueueService.restore_untouched_active`` and the flagged-task
+    auto-recovery in ``TaskQueueService.select_next`` — call this so a task
     that was rolled back to ``queued`` lands at the tail without showing up
     twice if it was already present in the queue.
     """

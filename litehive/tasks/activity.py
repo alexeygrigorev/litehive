@@ -11,19 +11,20 @@ from litehive.domain.agent import SubagentId
 from litehive.domain.common import Verdict
 from litehive.domain.reports import TaskActivityEntry, TaskActivityStage
 from litehive.domain.task import TaskRecord
-from litehive.tasks.event_log import append_task_event
+from litehive.tasks.event_log import TaskEventLog
 from litehive.workspace import Workspace
 
 
 @dataclass(frozen=True, slots=True)
-class TaskActivityLog:
+class TaskActivityStore:
     """
     Workspace-scoped activity feed for one task.
 
     Owns query operations that need both the persisted task activity
     rows and the task identity. Callers that already hold a
-    ``Workspace`` should get one through ``workspace.task_activity``
-    instead of passing both objects to loose query helpers.
+    ``Workspace`` should get one through
+    ``task_activity_store_for_task(workspace, task)`` instead of
+    passing both objects to loose query helpers.
     """
 
     workspace: Workspace
@@ -80,8 +81,7 @@ class TaskActivityLog:
                     """,
                     (self.task.id, entry_index, entry.created_at, payload),
                 )
-            append_task_event(
-                self.workspace,
+            TaskEventLog(self.workspace).append(
                 event_type="task_reported",
                 task_id=self.task.id,
                 payload={"activity": [entry.model_dump(mode="json") for entry in activity]},
@@ -140,50 +140,11 @@ class TaskActivityLog:
         return self.latest_entry()
 
 
-def load_task_activity(workspace: Workspace, task: TaskRecord) -> list[TaskActivityEntry]:
+def task_activity_store_for_task(workspace: Workspace, task: TaskRecord) -> TaskActivityStore:
     """
-    Compatibility wrapper for loading a task's persisted activity feed.
+    Assemble the task-bound activity store.
     """
-    return TaskActivityLog(workspace, task).load()
-
-
-def save_task_activity(workspace: Workspace, task: TaskRecord, activity: list[TaskActivityEntry]) -> None:
-    """
-    Compatibility wrapper for replacing a task's activity feed.
-    """
-    TaskActivityLog(workspace, task).save(activity)
-
-
-def append_task_activity(workspace: Workspace, task: TaskRecord, entry: TaskActivityEntry) -> None:
-    """
-    Compatibility wrapper for appending one activity entry.
-    """
-    TaskActivityLog(workspace, task).append(entry)
-
-
-def latest_task_activity_entry(
-    workspace: Workspace,
-    task: TaskRecord,
-    role: str | None = None,
-    stage: TaskActivityStage | str | None = None,
-    source_subagent_id: SubagentId | str | None = None,
-    verdicts: Iterable[str | Verdict] | None = None,
-    after: datetime | None = None,
-) -> TaskActivityEntry | None:
-    """
-    Compatibility wrapper for querying the most recent matching activity entry.
-    """
-    if source_subagent_id is None:
-        canonical_source_subagent_id = None
-    else:
-        canonical_source_subagent_id = SubagentId(source_subagent_id)
-    return TaskActivityLog(workspace, task).latest_entry(
-        role=role,
-        stage=stage,
-        source_subagent_id=canonical_source_subagent_id,
-        verdicts=verdicts,
-        after=after,
-    )
+    return TaskActivityStore(workspace, task)
 
 
 def _parse_created_at(value: str) -> datetime:
@@ -191,7 +152,7 @@ def _parse_created_at(value: str) -> datetime:
     Parse the ``created_at`` ISO string into a UTC-aware datetime.
 
     Normalises trailing ``Z`` to ``+00:00`` and naive datetimes to UTC so
-    ``TaskActivityLog.latest_entry``'s ``after`` filter can compare entries
+    ``TaskActivityStore.latest_entry``'s ``after`` filter can compare entries
     written by older code (no timezone) against newer UTC-aware writers
     without raising on the mixed-shape comparison.
     """

@@ -11,7 +11,7 @@ from litehive.domain.common import PipelineStatus, TaskExecutionStatus, TaskStat
 from litehive.domain.outcomes import OutcomeReasonCode, TaskCloseReason, TaskOutcomeKind
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.lifecycle.persistence import SqlitePersistence
-from litehive.state.persist import persist_task_and_state_without_runner_guard_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
 from litehive.tasks._process_signals import terminate_subagent_pid
 from litehive.workspace import Workspace
 from litehive.tasks.audit import (
@@ -62,8 +62,7 @@ def _persist_transition(
     avoids each transition reinventing the build_task_audit_entry call.
     """
 
-    persist_task_and_state_without_runner_guard_for_workspace(
-        workspace,
+    WorkspaceStateRepository(workspace).persist_task_and_state_without_runner_guard(
         task=task,
         state=state,
         journal_message=journal_message,

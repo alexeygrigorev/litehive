@@ -19,10 +19,11 @@ from typing import Callable, cast
 
 from litehive.config.engine_models import (
     EngineSelectionRequest,
-    select_engine_for_workspace,
+    EngineRoutingPolicy,
 )
 from litehive.config.model import LitehiveConfig
 from litehive.domain.task import TaskRecord
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 from .nodes.agent import (
@@ -86,7 +87,7 @@ class ConfigBackedEngineSelector:
         paths.
         """
         if getattr(state, "task_id", None):
-            task = self.workspace.get_task(state.task_id)
+            task = WorkspaceTasks(self.workspace).get(state.task_id)
             if task is not None:
                 return task
         return TaskRecord(
@@ -123,7 +124,7 @@ class ConfigBackedEngineSelector:
             excluded_engine_names=excluded,
             check_quota=self.check_quota,
         )
-        selection = select_engine_for_workspace(self.workspace, task, self.config, request)
+        selection = EngineRoutingPolicy(self.workspace, self.config).select(task, request)
         if selection.engine_name is None:
             return None
 

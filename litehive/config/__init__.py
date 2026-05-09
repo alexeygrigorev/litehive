@@ -6,8 +6,7 @@ Re-exporting from here would force every caller of one submodule to
 load the rest of the package, hiding real import dependencies.
 
 - ``loading`` — read/merge/effective-config helpers
-  (`load_config_for_workspace`, `load_context_for_workspace`,
-  `merge_config_layers`, `load_effective_config_data_for_workspace`).
+  (`WorkspaceConfigLoader`, `merge_config_layers`).
 - ``model`` — pydantic models for litehive config and sandbox/engine
   policy (`LitehiveConfig`, `ExternalEngineSandboxConfig`,
   `ExternalEngineSandboxPolicy`, validators).
@@ -22,8 +21,8 @@ load the rest of the package, hiding real import dependencies.
 - ``runtime_settings`` — audited per-workspace settings persisted in
   SQLite.
 - ``engine_models`` — engine and model selection
-  (`select_engine_for_workspace`, `resolve_model`).
-- ``engine_freezes`` — engine freeze projection and audited persistence
-  (`active_engine_freezes`, `persist_engine_freeze_iso_for_workspace`).
+  (`EngineRoutingPolicy`, `resolve_model`).
+- ``engine_freezes`` — engine freeze projection helpers
+  (`active_engine_freezes`, `is_engine_frozen`).
 - ``profiles/`` — process profile loaders, defaults, and rendering.
 """

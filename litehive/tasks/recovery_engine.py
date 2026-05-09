@@ -20,24 +20,12 @@ def resolve_recovery_engine(
     so an unreachable engine fails loudly instead of silently swapping for
     a different model.
     """
-    # inline: kept so tests can monkey-patch ``select_engine_for_workspace`` on the
-    # config.engine_models module (the canonical home) and have callers
-    # here see it.
-    from litehive.config.engine_models import EngineSelectionRequest, select_engine_for_workspace  # noqa: PLC0415
+    # inline: avoids a module-load cycle while callers migrate to the policy.
+    from litehive.config.engine_models import EngineRoutingPolicy  # noqa: PLC0415
 
     if config is None:
         return "codex", None
-
-    engine_override = None
-    if config.recovery_engine and config.recovery_engine != "auto":
-        engine_override = config.recovery_engine
-
-    selection = select_engine_for_workspace(
-        workspace,
-        task,
-        config,
-        EngineSelectionRequest(engine_override=engine_override, require_available=True),
-    )
-    if selection.engine_name is None:
-        raise GitError(selection.blocked_reason)
-    return selection.engine_name, selection.model_name
+    try:
+        return EngineRoutingPolicy(workspace, config).resolve_recovery_engine(task)
+    except RuntimeError as exc:
+        raise GitError(str(exc)) from exc

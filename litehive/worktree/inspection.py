@@ -5,7 +5,7 @@ Walks the main checkout and every task worktree, classifying findings
 by ownership (main-checkout dirt, task-owned, ambiguous,
 missing-recorded). The pool gate refuses to proceed on certain
 ownership classes; ``litehive workspace status`` and
-``WorktreeService.inspect_task_worktree`` render the same data for
+``WorktreeInspector.inspect_task_worktree`` render the same data for
 the operator. Read-only by design — repair flows live elsewhere so
 status code never accidentally mutates state.
 """
@@ -20,6 +20,7 @@ from litehive.domain.pool import (
     DirtyWorktreeOwnership,
 )
 from litehive.domain.task import TaskRecord
+from litehive.domain.worktree import TaskWorktreeInspection
 from litehive.git.ops import (
     GitError,
     current_head,
@@ -28,89 +29,132 @@ from litehive.git.ops import (
     stdout_lines as git_stdout_lines,
     stdout_or_none as git_stdout_or_none,
 )
-from litehive.state.records import get_task_worktree_path
+from litehive.state.records import get_task_worktree_path, WorkspaceTasks
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.tasks.activity_rendering import normalized_files_changed
 from litehive.workspace import Workspace
-from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace
+from litehive.worktree.paths import WorktreePaths
 
 
-def inspect_dirty_worktree_gate(workspace: Workspace) -> DirtyWorktreeGateReport:
+class WorktreeInspector:
     """
-    Build the operator-facing dirty-worktree report.
-
-    The pool gate consults ``DirtyWorktreeGateReport.blocks_pool``
-    before letting a new task claim the workspace, so "what's dirty
-    and who owns it" must be a single read-only snapshot. Same data
-    drives ``litehive workspace status`` and the lifecycle tests for
-    interrupted-task resumption — three call sites means one helper
-    instead of three.
+    Read-only task worktree inspection for status and debug surfaces.
     """
-    if not is_git_repo(workspace.root):
-        return DirtyWorktreeGateReport()
 
-    findings: list[DirtyWorktreeFinding] = []
-    try:
-        dirty_entries = status_porcelain(workspace.root)
-    except GitError:
-        return DirtyWorktreeGateReport()
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
+        self.paths = WorktreePaths(workspace)
 
-    tasks = workspace.list_tasks(strict=False)
-    if dirty_entries:
-        owners = [task for task in tasks if _task_can_resume_with_owned_dirty_paths(workspace, task, dirty_entries)]
-        finding = DirtyWorktreeFinding(
-            location_kind=DirtyWorktreeLocationKind.MAIN_CHECKOUT,
-            ownership=DirtyWorktreeOwnership.MAIN_CHECKOUT,
-            dirty_paths=dirty_entry_paths(dirty_entries),
-        )
-        if len(owners) == 1:
-            finding.ownership = DirtyWorktreeOwnership.TASK_OWNED
-            finding.task_id = owners[0].id
-            finding.worktree_path = get_task_worktree_path(owners[0])
-        elif len(owners) > 1:
-            finding.ownership = DirtyWorktreeOwnership.AMBIGUOUS_OWNERSHIP
-            finding.task_id = ",".join(task.id for task in owners)
-        findings.append(finding)
+    def inspect_task_worktree(self, task: TaskRecord) -> TaskWorktreeInspection:
+        """
+        Snapshot a task's recorded worktree state without mutating metadata.
 
-    for task in tasks:
-        worktree_path = resolve_recorded_worktree_path_for_workspace(workspace, get_task_worktree_path(task))
-        if worktree_path is None:
-            continue
-        recorded_path = get_task_worktree_path(task)
-        if not worktree_path.exists():
-            findings.append(
-                DirtyWorktreeFinding(
-                    location_kind=DirtyWorktreeLocationKind.TASK_WORKTREE,
-                    ownership=DirtyWorktreeOwnership.MISSING_RECORDED_WORKTREE,
-                    task_id=task.id,
-                    worktree_path=recorded_path,
-                )
-            )
-            continue
-        try:
-            worktree_dirty_entries = status_porcelain(worktree_path)
-        except GitError:
-            findings.append(
-                DirtyWorktreeFinding(
-                    location_kind=DirtyWorktreeLocationKind.TASK_WORKTREE,
-                    ownership=DirtyWorktreeOwnership.MISSING_RECORDED_WORKTREE,
-                    task_id=task.id,
-                    worktree_path=recorded_path,
-                )
-            )
-            continue
-        if not worktree_dirty_entries:
-            continue
-        findings.append(
-            DirtyWorktreeFinding(
-                location_kind=DirtyWorktreeLocationKind.TASK_WORKTREE,
-                ownership=DirtyWorktreeOwnership.TASK_OWNED_WORKTREE,
+        Bundles existence, uncommitted changes, and committed-past-main paths
+        into one domain record so CLI/debug callers can render a stable view
+        without knowing the git commands behind it.
+        """
+        worktree_rel = get_task_worktree_path(task)
+        worktree_path = self.paths.resolve_recorded_worktree_path(worktree_rel)
+        if worktree_rel is None or worktree_path is None or not worktree_path.exists():
+            return TaskWorktreeInspection(
                 task_id=task.id,
-                worktree_path=recorded_path,
-                dirty_paths=dirty_entry_paths(worktree_dirty_entries),
+                worktree_rel=worktree_rel,
+                worktree_path=worktree_path,
+                exists=False,
+                uncommitted=[],
+                committed_ahead_of_main=[],
             )
+        return TaskWorktreeInspection(
+            task_id=task.id,
+            worktree_rel=worktree_rel,
+            worktree_path=worktree_path,
+            exists=True,
+            uncommitted=worktree_uncommitted_changes(worktree_path),
+            committed_ahead_of_main=self.committed_changes(worktree_path),
         )
 
-    return DirtyWorktreeGateReport(findings=findings)
+    def inspect_dirty_gate(self) -> DirtyWorktreeGateReport:
+        """
+        Build the operator-facing dirty-worktree report.
+        """
+        if not is_git_repo(self.workspace.root):
+            return DirtyWorktreeGateReport()
+
+        findings: list[DirtyWorktreeFinding] = []
+        try:
+            dirty_entries = status_porcelain(self.workspace.root)
+        except GitError:
+            return DirtyWorktreeGateReport()
+
+        tasks = WorkspaceTasks(self.workspace).list(strict=False)
+        if dirty_entries:
+            owners = [
+                task for task in tasks if _task_can_resume_with_owned_dirty_paths(self.workspace, task, dirty_entries)
+            ]
+            finding = DirtyWorktreeFinding(
+                location_kind=DirtyWorktreeLocationKind.MAIN_CHECKOUT,
+                ownership=DirtyWorktreeOwnership.MAIN_CHECKOUT,
+                dirty_paths=dirty_entry_paths(dirty_entries),
+            )
+            if len(owners) == 1:
+                finding.ownership = DirtyWorktreeOwnership.TASK_OWNED
+                finding.task_id = owners[0].id
+                finding.worktree_path = get_task_worktree_path(owners[0])
+            elif len(owners) > 1:
+                finding.ownership = DirtyWorktreeOwnership.AMBIGUOUS_OWNERSHIP
+                finding.task_id = ",".join(task.id for task in owners)
+            findings.append(finding)
+
+        for task in tasks:
+            worktree_path = self.paths.resolve_recorded_worktree_path(get_task_worktree_path(task))
+            if worktree_path is None:
+                continue
+            recorded_path = get_task_worktree_path(task)
+            if not worktree_path.exists():
+                findings.append(
+                    DirtyWorktreeFinding(
+                        location_kind=DirtyWorktreeLocationKind.TASK_WORKTREE,
+                        ownership=DirtyWorktreeOwnership.MISSING_RECORDED_WORKTREE,
+                        task_id=task.id,
+                        worktree_path=recorded_path,
+                    )
+                )
+                continue
+            try:
+                worktree_dirty_entries = status_porcelain(worktree_path)
+            except GitError:
+                findings.append(
+                    DirtyWorktreeFinding(
+                        location_kind=DirtyWorktreeLocationKind.TASK_WORKTREE,
+                        ownership=DirtyWorktreeOwnership.MISSING_RECORDED_WORKTREE,
+                        task_id=task.id,
+                        worktree_path=recorded_path,
+                    )
+                )
+                continue
+            if not worktree_dirty_entries:
+                continue
+            findings.append(
+                DirtyWorktreeFinding(
+                    location_kind=DirtyWorktreeLocationKind.TASK_WORKTREE,
+                    ownership=DirtyWorktreeOwnership.TASK_OWNED_WORKTREE,
+                    task_id=task.id,
+                    worktree_path=recorded_path,
+                    dirty_paths=dirty_entry_paths(worktree_dirty_entries),
+                )
+            )
+
+        return DirtyWorktreeGateReport(findings=findings)
+
+    def committed_changes(self, worktree_path: Path) -> list[str]:
+        """
+        Return sorted unique paths committed past main on the worktree branch.
+        """
+        main_head = current_head(self.workspace.root) or "HEAD"
+        fork_point = git_stdout_or_none(worktree_path, "merge-base", main_head, "HEAD")
+        if not fork_point:
+            return []
+        return sorted(set(git_stdout_lines(worktree_path, "diff", "--name-only", fork_point, "HEAD")))
 
 
 def dirty_entry_paths(dirty_entries: list[str]) -> list[str]:
@@ -119,7 +163,7 @@ def dirty_entry_paths(dirty_entries: list[str]) -> list[str]:
 
     Centralized so the porcelain-parsing rules (status code prefix,
     quoted paths with embedded escapes, rename arrows) live in one
-    place — ``inspect_dirty_worktree_gate`` and
+    place — ``WorktreeInspector.inspect_dirty_gate`` and
     ``worktree_uncommitted_changes`` both rely on the same parsing
     or they would disagree about which paths count as dirty.
     """
@@ -143,7 +187,7 @@ def worktree_uncommitted_changes(worktree_path: Path) -> list[str]:
 
     Returns ``[]`` when git fails, so a transient git error doesn't
     crash the status code path. Called by
-    ``WorktreeService.inspect_task_worktree`` when building a
+    ``WorktreeInspector.inspect_task_worktree`` when building a
     ``TaskWorktreeInspection`` — the sort + dedupe means the
     operator output is stable across reruns.
     """
@@ -151,23 +195,6 @@ def worktree_uncommitted_changes(worktree_path: Path) -> list[str]:
         return sorted(set(dirty_entry_paths(status_porcelain(worktree_path))))
     except GitError:
         return []
-
-
-def worktree_committed_changes_for_workspace(workspace: Workspace, worktree_path: Path) -> list[str]:
-    """
-    Return sorted unique paths committed past main on the worktree branch.
-
-    Pairs with :func:`worktree_uncommitted_changes`: together they
-    form the "what has this task changed?" view rendered by
-    ``TaskWorktreeInspection``. Returns ``[]`` when there's no
-    fork-point with main (a fresh worktree that never diverged
-    has nothing committed past main).
-    """
-    main_head = current_head(workspace.root) or "HEAD"
-    fork_point = git_stdout_or_none(worktree_path, "merge-base", main_head, "HEAD")
-    if not fork_point:
-        return []
-    return sorted(set(git_stdout_lines(worktree_path, "diff", "--name-only", fork_point, "HEAD")))
 
 
 def _allowed_commit_paths(workspace: Workspace, task: TaskRecord) -> set[PurePosixPath]:
@@ -182,7 +209,7 @@ def _allowed_commit_paths(workspace: Workspace, task: TaskRecord) -> set[PurePos
     """
     paths: set[PurePosixPath] = set()
     paths.add(PurePosixPath(".litehive") / "tasks" / f"{task.id}-{task.slug}")
-    for entry in workspace.task_activity(task).load():
+    for entry in task_activity_store_for_task(workspace, task).load():
         for changed_file in normalized_files_changed(entry.files_changed):
             paths.add(PurePosixPath(changed_file))
     return paths
@@ -247,7 +274,7 @@ def _task_can_resume_with_owned_dirty_paths(
     """
     True when an interrupted task can plausibly own the dirty main checkout.
 
-    Used by ``inspect_dirty_worktree_gate`` to disambiguate which
+    Used by ``WorktreeInspector.inspect_dirty_gate`` to disambiguate which
     task should resume when the main checkout has uncommitted
     changes. The task must be ``INTERRUPTED`` (terminal tasks
     obviously can't resume), out of the backlog/done buckets, and

@@ -4,8 +4,8 @@ Config loading and merge helpers.
 Owns the layered-config pipeline: defaults from
 :class:`LitehiveConfig`, the user-global layer under the litehive
 root, and the per-workspace layer. Runtime-setting overrides are
-applied last by :func:`load_config_for_workspace` so they always win over
-file-based values.
+applied last by :meth:`WorkspaceConfigLoader.load` so they always win
+over file-based values.
 """
 
 from dataclasses import asdict
@@ -58,47 +58,48 @@ def merge_config_layers(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> 
     return merged
 
 
-def load_effective_config_data_for_workspace(workspace: "Workspace") -> dict[str, Any]:
+class WorkspaceConfigLoader:
     """
-    Materialize the effective config dict from the layered files.
+    Workspace-bound config and context loader.
 
-    Applies defaults, then the user-global layer under the
-    litehive root, then the per-workspace layer. Runtime-setting
-    overrides are *not* applied here because that step requires
-    the SQLite store; tests and tools that only want the file
-    layout call this directly with an injected workspace.
+    Owns the layered YAML load plus audited runtime-setting overlay for
+    a single workspace.
     """
-    config = asdict(LitehiveConfig())
-    config = merge_config_layers(config, _read_config_layer(litehive_root() / "config.yaml"))
-    return merge_config_layers(config, _read_config_layer(workspace.control_files().config()))
 
+    def __init__(self, workspace: "Workspace") -> None:
+        self.workspace = workspace
 
-def load_config_for_workspace(workspace: "Workspace") -> LitehiveConfig:
-    """
-    Load config for an injected workspace.
+    def effective_data(self) -> dict[str, Any]:
+        """
+        Materialize the effective config dict from the layered files.
 
-    Requires an existing workspace, layers in runtime-setting overrides
-    on top of the file-based config, and returns a validated
-    :class:`LitehiveConfig`. Workspace creation stays explicit through
-    ``create_workspace``.
-    """
-    workspace.require_existing(source="load_config")
-    # inline: runtime_settings transitively pulls db.schema which loads
-    # config.* back through litehive/config/__init__.py during partial init.
-    from litehive.config.runtime_settings import apply_runtime_settings_to_config_data  # noqa: PLC0415
+        Applies defaults, then the user-global layer under the
+        litehive root, then the per-workspace layer. Runtime-setting
+        overrides are *not* applied here because that step requires
+        the SQLite store.
+        """
+        config = asdict(LitehiveConfig())
+        config = merge_config_layers(config, _read_config_layer(litehive_root() / "config.yaml"))
+        return merge_config_layers(config, _read_config_layer(self.workspace.control_files().config()))
 
-    data = apply_runtime_settings_to_config_data(workspace, load_effective_config_data_for_workspace(workspace))
-    return parse_litehive_config_data(data)
+    def load(self) -> LitehiveConfig:
+        """
+        Load and validate the workspace config.
+        """
+        self.workspace.require_existing(source="load_config")
+        # inline: runtime_settings transitively pulls db.schema which loads
+        # config.* back through litehive/config/__init__.py during partial init.
+        from litehive.config.runtime_settings import RuntimeSettingsRepository  # noqa: PLC0415
 
+        data = RuntimeSettingsRepository(self.workspace).apply_to_config_data(self.effective_data())
+        return parse_litehive_config_data(data)
 
-def load_context_for_workspace(workspace: "Workspace") -> str:
-    """
-    Read the workspace context document used as a prompt preamble.
+    def context(self) -> str:
+        """
+        Read the workspace context document used as a prompt preamble.
 
-    The context document is the stable workspace-level prose
-    every agent prompt opens with (project background, conventions).
-    Requires an existing workspace so reads cannot silently bootstrap a
-    new project.
-    """
-    workspace.require_existing(source="load_context")
-    return workspace.control_files().context().read_text(encoding="utf-8")
+        Requires an existing workspace so reads cannot silently bootstrap a
+        new project.
+        """
+        self.workspace.require_existing(source="load_context")
+        return self.workspace.control_files().context().read_text(encoding="utf-8")

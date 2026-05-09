@@ -2,6 +2,8 @@
 
 import logging
 import os
+import builtins
+from collections.abc import Sequence
 from pathlib import Path
 
 from litehive.config.workspace import render_workspace_gitignore
@@ -16,13 +18,12 @@ from litehive.domain.task import (
     WorkspaceState,
     canonicalize_task_terminal_state,
 )
-from litehive.state.store import runtime_store_for_workspace
+from litehive.state.store import RuntimeStore
 
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
-from litehive.state.locking import workspace_lock_for_workspace, workspace_mutation_guard_for_workspace
+from litehive.state.locking import WorkspaceMutationGuard, WorkspaceStateLock
 from litehive.state.persist import (
-    load_state_for_workspace,
-    save_state_without_runner_guard_for_workspace,
+    WorkspaceStateRepository,
     write_atomic_files_and_then,
 )
 from litehive.tasks.audit import (
@@ -50,18 +51,105 @@ class TaskStateMissingError(RuntimeError):
     """
 
 
-def _highest_task_number_in_store_for_workspace(workspace: Workspace) -> int:
+class WorkspaceTasks:
+    """
+    Workspace-bound task record and runtime persistence service.
+
+    This is the object-shaped owner for task CRUD behavior.
+    """
+
+    def __init__(self, workspace: Workspace, runtime_store: RuntimeStore | None = None) -> None:
+        self.workspace = workspace
+        self.runtime_store = runtime_store or RuntimeStore(workspace)
+
+    def ensure_runtime_ignored(self) -> None:
+        _ensure_runtime_ignored_for_workspace_impl(self.workspace)
+
+    def write_runtime(self, task: TaskRecord) -> None:
+        _write_task_runtime_for_workspace_impl(self.workspace, task)
+
+    def save_runtime(self, task: TaskRecord) -> None:
+        _save_task_runtime_for_workspace_impl(self.workspace, task)
+
+    def load_runtime(self, task: TaskRecord) -> TaskRecord:
+        return _load_task_runtime_impl(self.workspace, task)
+
+    def create(
+        self,
+        title: str,
+        depends_on: list[str] | None = None,
+        pipeline_mode: str = "full",
+        model: str | None = None,
+        retry_limit: int | None = None,
+        goal: str = "",
+        acceptance_criteria: list[str] | None = None,
+        auto_commit: bool = True,
+        priority: str | None = None,
+    ) -> TaskRecord:
+        return _create_task_for_workspace_impl(
+            self.workspace,
+            title=title,
+            depends_on=depends_on,
+            pipeline_mode=pipeline_mode,
+            model=model,
+            retry_limit=retry_limit,
+            goal=goal,
+            acceptance_criteria=acceptance_criteria,
+            auto_commit=auto_commit,
+            priority=priority,
+        )
+
+    def next_task_id(self, state: WorkspaceState) -> str:
+        """
+        Reserve and return the next task id using the existing counter semantics.
+        """
+        return f"T-{_reserve_next_task_numbers_impl(self.workspace, state)[0]:04d}"
+
+    def discard_created(self, task_id: str) -> None:
+        _discard_created_task_for_workspace_impl(self.workspace, task_id)
+
+    def list(self, include_runtime: bool = True, strict: bool = True) -> list[TaskRecord]:
+        return _list_tasks_for_workspace_impl(self.workspace, include_runtime=include_runtime, strict=strict)
+
+    def list_state_first(
+        self,
+        state: WorkspaceState | None = None,
+        include_runtime: bool = False,
+    ) -> builtins.list[TaskRecord]:
+        return _list_tasks_state_first_impl(self.workspace, state=state, include_runtime=include_runtime)
+
+    def create_follow_ups(
+        self,
+        parent_task: TaskRecord,
+        stage: str,
+        follow_ups: Sequence[FollowUpTaskSpec],
+    ) -> Sequence[TaskRecord]:
+        return _create_follow_up_tasks_impl(self.workspace, parent_task, stage, list(follow_ups))
+
+    def get(self, task_id: str) -> TaskRecord | None:
+        return _get_task_for_workspace_impl(self.workspace, task_id)
+
+    def get_record(self, task_id: str) -> TaskRecord | None:
+        return _get_task_record_for_workspace_impl(self.workspace, task_id)
+
+    def require(self, task_id: str) -> TaskRecord:
+        return _require_task_for_workspace_impl(self.workspace, task_id)
+
+    def save(self, task: TaskRecord) -> None:
+        _save_task_for_workspace_impl(self.workspace, task)
+
+def _highest_task_number_in_store_impl(workspace: Workspace) -> int:
     """
     Return the largest ``T-NNNN`` numeric prefix actually present in the store.
 
-    ``_reserve_next_task_numbers`` consults this whenever the in-memory
+    ``_reserve_next_task_numbers_impl`` consults this whenever the in-memory
     ``next_task_number`` is missing or zero so a freshly bootstrapped
     workspace cannot reuse an existing id when the counter was lost.
     """
-    return runtime_store_for_workspace(workspace).highest_task_number()
+    return RuntimeStore(workspace).highest_task_number()
 
 
-def _reserve_next_task_numbers_for_workspace(
+def _reserve_next_task_numbers_impl(
     workspace: Workspace,
     state: WorkspaceState,
     count: int = 1,
@@ -77,13 +165,13 @@ def _reserve_next_task_numbers_for_workspace(
     if count < 1:
         raise ValueError("count must be 1 or greater")
     if state.next_task_number <= 0:
-        state.next_task_number = _highest_task_number_in_store_for_workspace(workspace)
+        state.next_task_number = _highest_task_number_in_store_impl(workspace)
     start = state.next_task_number + 1
     state.next_task_number += count
     return list(range(start, start + count))
 
 
-def _task_creation_stage_for_workspace(workspace: Workspace, current_task_id: str | None) -> str | None:
+def _task_creation_stage_impl(workspace: Workspace, current_task_id: str | None) -> str | None:
     """
     Resolve the stage of the agent currently creating a sibling task.
 
@@ -97,7 +185,7 @@ def _task_creation_stage_for_workspace(workspace: Workspace, current_task_id: st
         return env_stage
     if not current_task_id:
         return None
-    current_task = get_task_record_for_workspace(workspace, current_task_id)
+    current_task = _get_task_record_for_workspace_impl(workspace, current_task_id)
     if current_task is None:
         return None
     runtime_stage = current_task.current_pipeline_stage
@@ -109,7 +197,7 @@ def _task_creation_stage_for_workspace(workspace: Workspace, current_task_id: st
     return None
 
 
-def _default_task_creation_source_for_workspace(workspace: Workspace) -> TaskCreationSource:
+def _default_task_creation_source_impl(workspace: Workspace) -> TaskCreationSource:
     """
     Build the provenance attached to a new task at create time.
 
@@ -131,13 +219,13 @@ def _default_task_creation_source_for_workspace(workspace: Workspace) -> TaskCre
     return TaskCreationSource(
         source="agent",
         task_id=current_task_id,
-        stage=_task_creation_stage_for_workspace(workspace, current_task_id=current_task_id),
+        stage=_task_creation_stage_impl(workspace, current_task_id=current_task_id),
         role=agent_role,
         rationale=rationale,
     )
 
 
-def ensure_runtime_ignored_for_workspace(workspace: Workspace) -> None:
+def _ensure_runtime_ignored_for_workspace_impl(workspace: Workspace) -> None:
     """
     Refresh the workspace ``.gitignore`` after any persistence write.
 
@@ -167,7 +255,7 @@ def task_state_for_storage(task: TaskRecord) -> TaskStateRecord:
     return task.to_storage_state_record()
 
 
-def write_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
+def _write_task_runtime_for_workspace_impl(workspace: Workspace, task: TaskRecord) -> None:
     """
     Persist a task's runtime row without entering the workspace mutation guard.
 
@@ -175,8 +263,8 @@ def write_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> 
     raw save; entering the guard here would force re-entry on a thread
     that has already taken it via a different pathway.
     """
-    runtime_store_for_workspace(workspace).save_task_state(task.id, task_state_for_storage(task))
-    ensure_runtime_ignored_for_workspace(workspace)
+    RuntimeStore(workspace).save_task_state(task.id, task_state_for_storage(task))
+    _ensure_runtime_ignored_for_workspace_impl(workspace)
 
 
 def set_task_commit_sha(task: TaskRecord, commit_sha: str | None) -> None:
@@ -318,7 +406,7 @@ def _cleanup_created_task_dirs(paths: list[Path]) -> list[OSError]:
     return errors
 
 
-def _persist_created_tasks_for_workspace(
+def _persist_created_tasks_impl(
     workspace: Workspace,
     *,
     tasks: list[TaskRecord],
@@ -336,15 +424,13 @@ def _persist_created_tasks_for_workspace(
     leaves disk debris pointing at a row that was never committed.
     Shared by the manual create and follow-up creation paths.
     """
-    # inline: kept so tests can monkey-patch ``merged_state_for_runner_owned_write_for_workspace``
-    # on the persist module (the canonical home) and have callers here see it.
-    from litehive.state.persist import merged_state_for_runner_owned_write_for_workspace, skip_bootstrap_load_state  # noqa: PLC0415
+    # inline: kept so tests can monkey-patch the repository merge method and
+    # have callers here see it.
+    from litehive.state.persist import skip_bootstrap_load_state  # noqa: PLC0415
 
     with skip_bootstrap_load_state():
-        merged_state = merged_state_for_runner_owned_write_for_workspace(
-            workspace,
-            state=state,
-            protected_task_ids=[task.id for task in tasks],
+        merged_state = WorkspaceStateRepository(workspace).merged_state_for_runner_owned_write(
+            state=state, protected_task_ids=[task.id for task in tasks]
         )
     try:
 
@@ -357,7 +443,7 @@ def _persist_created_tasks_for_workspace(
             cannot be undone) only fires once the on-disk artifacts are
             safely in place.
             """
-            runtime_store_for_workspace(workspace).save_runtime_transaction(
+            RuntimeStore(workspace).save_runtime_transaction(
                 task_intents={task.id: task.to_intent_record() for task in tasks},
                 task_states={task.id: task_state_for_storage(task) for task in tasks},
                 workspace_state=merged_state,
@@ -376,7 +462,7 @@ def _persist_created_tasks_for_workspace(
         raise
 
 
-def save_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
+def _save_task_runtime_for_workspace_impl(workspace: Workspace, task: TaskRecord) -> None:
     """
     Persist a task's runtime row under the workspace mutation guard.
 
@@ -385,11 +471,11 @@ def save_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> N
     change; the guard makes the snapshot safe to take while a runner is
     also touching workspace state on a different transition.
     """
-    with workspace_mutation_guard_for_workspace(workspace):
-        write_task_runtime_for_workspace(workspace, task)
+    with WorkspaceMutationGuard(workspace).hold():
+        _write_task_runtime_for_workspace_impl(workspace, task)
 
 
-def _load_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> TaskRecord:
+def _load_task_runtime_impl(workspace: Workspace, task: TaskRecord) -> TaskRecord:
     """
     Hydrate a task's runtime row from SQLite and run the normalisers.
 
@@ -398,7 +484,7 @@ def _load_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> 
     the ``TaskStateMissingError`` so diagnostics can still report on a
     half-deleted task.
     """
-    store = runtime_store_for_workspace(workspace)
+    store = RuntimeStore(workspace)
     task_state = store.load_task_state(task.id)
     if task_state is None:
         raise TaskStateMissingError(f"Task {task.id} is missing its SQLite runtime state row")
@@ -408,7 +494,7 @@ def _load_task_runtime_for_workspace(workspace: Workspace, task: TaskRecord) -> 
     return task
 
 
-def create_task_for_workspace(
+def _create_task_for_workspace_impl(
     workspace: Workspace,
     title: str,
     depends_on: list[str] | None = None,
@@ -437,15 +523,15 @@ def create_task_for_workspace(
         raise ValueError(f"Unsupported pipeline_mode '{pipeline_mode}'") from None
     if priority is not None and priority not in VALID_TASK_PRIORITIES:
         raise ValueError(f"Unsupported priority '{priority}'; choose from {sorted(VALID_TASK_PRIORITIES)}")
-    # inline: tasks.queue top-level-imports state.records (would cycle).
-    from litehive.tasks.queue import validate_task_dependencies_for_workspace  # noqa: PLC0415
+    # inline: queue eligibility imports state.records for repository access.
+    from litehive.tasks.queue_eligibility import TaskDependencyValidator  # noqa: PLC0415
 
-    with workspace_lock_for_workspace(workspace):
-        state = load_state_for_workspace(workspace, bootstrap=False)
-        task_id = f"T-{_reserve_next_task_numbers_for_workspace(workspace, state)[0]:04d}"
+    with WorkspaceStateLock(workspace).hold():
+        state = WorkspaceStateRepository(workspace).load(bootstrap=False)
+        task_id = f"T-{_reserve_next_task_numbers_impl(workspace, state)[0]:04d}"
         slug = slugify(title)
         if depends_on:
-            validate_task_dependencies_for_workspace(workspace, task_id=task_id, depends_on=depends_on)
+            TaskDependencyValidator(workspace).validate(task_id=task_id, depends_on=depends_on)
         task = TaskRecord(
             id=task_id,
             slug=slug,
@@ -457,7 +543,7 @@ def create_task_for_workspace(
             goal=goal,
             acceptance_criteria=normalize_acceptance_criteria(acceptance_criteria),
             retry_policy={"max_retries": retry_limit},
-            created_from=_default_task_creation_source_for_workspace(workspace),
+            created_from=_default_task_creation_source_impl(workspace),
             git={
                 "auto_commit": auto_commit,
                 "commit_message": default_commit_message(task_id, slug),
@@ -479,7 +565,7 @@ def create_task_for_workspace(
             created_from_payload = None
         else:
             created_from_payload = task.created_from.model_dump(mode="json")
-        _persist_created_tasks_for_workspace(
+        _persist_created_tasks_impl(
             workspace,
             tasks=[task],
             state=state,
@@ -502,7 +588,7 @@ def create_task_for_workspace(
                 )
             ],
         )
-        ensure_runtime_ignored_for_workspace(workspace)
+        _ensure_runtime_ignored_for_workspace_impl(workspace)
         return task
 
 
@@ -518,7 +604,7 @@ def _follow_up_journal_messages(
     Each entry records the parent task and originating stage so
     the journal of the new task explains its provenance even if
     the parent record is later deleted. Caller:
-    :func:`create_follow_up_tasks_for_workspace`.
+    :meth:`WorkspaceTasks.create_follow_ups`.
     """
     messages: dict[str, str] = {}
     for task, follow_up in zip(created_tasks, follow_ups):
@@ -539,8 +625,8 @@ def _follow_up_audit_entries(
 
     Threads the post-creation queue snapshot so each entry records
     the queue ordering at the moment the follow-up was created;
-    consistent with how :func:`create_task` audits a single task.
-    Caller: :func:`create_follow_up_tasks_for_workspace`.
+    consistent with how :meth:`WorkspaceTasks.create` audits a single task.
+    Caller: :meth:`WorkspaceTasks.create_follow_ups`.
     """
     entries: list = []
     for task in created_tasks:
@@ -563,7 +649,7 @@ def _follow_up_audit_entries(
     return entries
 
 
-def create_follow_up_tasks_for_workspace(
+def _create_follow_up_tasks_impl(
     workspace: Workspace,
     parent_task: TaskRecord,
     stage: str,
@@ -585,9 +671,9 @@ def create_follow_up_tasks_for_workspace(
     workspace.create()
     created_tasks: list[TaskRecord] = []
     created_dirs: list[Path] = []
-    with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
-        state = load_state_for_workspace(workspace, bootstrap=False)
-        reserved_numbers = _reserve_next_task_numbers_for_workspace(workspace, state, count=len(follow_ups))
+    with WorkspaceMutationGuard(workspace).hold(), WorkspaceStateLock(workspace).hold():
+        state = WorkspaceStateRepository(workspace).load(bootstrap=False)
+        reserved_numbers = _reserve_next_task_numbers_impl(workspace, state, count=len(follow_ups))
 
         for next_number, follow_up in zip(reserved_numbers, follow_ups):
             task_id = f"T-{next_number:04d}"
@@ -624,7 +710,7 @@ def create_follow_up_tasks_for_workspace(
             stage=stage,
         )
         audit_entries = _follow_up_audit_entries(created_tasks, state.queue)
-        _persist_created_tasks_for_workspace(
+        _persist_created_tasks_impl(
             workspace,
             tasks=created_tasks,
             state=state,
@@ -632,11 +718,11 @@ def create_follow_up_tasks_for_workspace(
             cleanup_dirs=created_dirs,
             audit_entries=audit_entries,
         )
-        ensure_runtime_ignored_for_workspace(workspace)
+        _ensure_runtime_ignored_for_workspace_impl(workspace)
     return created_tasks
 
 
-def discard_created_task_for_workspace(workspace: Workspace, task_id: str) -> None:
+def _discard_created_task_for_workspace_impl(workspace: Workspace, task_id: str) -> None:
     """
     Remove a task that should never have existed.
 
@@ -646,20 +732,20 @@ def discard_created_task_for_workspace(workspace: Workspace, task_id: str) -> No
     of the initial persist so the workspace is left in the
     pre-creation shape.
     """
-    with workspace_lock_for_workspace(workspace):
-        task = get_task_for_workspace(workspace, task_id)
-        state = load_state_for_workspace(workspace)
+    with WorkspaceStateLock(workspace).hold():
+        task = _get_task_for_workspace_impl(workspace, task_id)
+        state = WorkspaceStateRepository(workspace).load()
         queue_before = list(state.queue)
         before_task = snapshot_task_audit_state(task)
         if state.active_task_id == task_id:
             state.active_task_id = None
         state.queue = [queued_id for queued_id in state.queue if queued_id != task_id]
-        save_state_without_runner_guard_for_workspace(workspace, state)
+        WorkspaceStateRepository(workspace).save_without_runner_guard(state)
         if task is not None:
             td = workspace.task_dir(task)
             if td.exists():
                 remove_tree_logged(td, logger=logger, target_label="task directory")
-        runtime_store_for_workspace(workspace).delete_task_records(
+        RuntimeStore(workspace).delete_task_records(
             task_id,
             audit_entries=[
                 build_task_audit_entry(
@@ -677,7 +763,7 @@ def discard_created_task_for_workspace(workspace: Workspace, task_id: str) -> No
         )
 
 
-def _load_tasks_from_store_for_workspace(
+def _load_tasks_from_store_impl(
     workspace: Workspace,
     include_runtime: bool,
     strict: bool,
@@ -685,13 +771,13 @@ def _load_tasks_from_store_for_workspace(
     """
     Iterate every stored task intent and pair it with its runtime row.
 
-    The two listing entry points (``list_tasks`` and
-    ``list_tasks_state_first``) share this helper so they apply the
+    The two listing entry points (`WorkspaceTasks.list` and
+    `WorkspaceTasks.list_state_first`) share this helper so they apply the
     same strict/lenient policy when a runtime row is missing or
     malformed; without the shared core, the two would drift in their
     handling of half-deleted tasks.
     """
-    store = runtime_store_for_workspace(workspace)
+    store = RuntimeStore(workspace)
     records: list[TaskRecord] = []
     for intent in store.list_task_intents():
         try:
@@ -711,7 +797,7 @@ def _load_tasks_from_store_for_workspace(
     return records
 
 
-def list_tasks_for_workspace(
+def _list_tasks_for_workspace_impl(
     workspace: Workspace,
     include_runtime: bool = True,
     strict: bool = True,
@@ -724,14 +810,14 @@ def list_tasks_for_workspace(
     population; ``strict=False`` lets recovery still see tasks whose
     runtime row was deleted out from under them.
     """
-    return _load_tasks_from_store_for_workspace(
+    return _load_tasks_from_store_impl(
         workspace,
         include_runtime=include_runtime,
         strict=strict,
     )
 
 
-def list_tasks_state_first_for_workspace(
+def _list_tasks_state_first_impl(
     workspace: Workspace,
     state: WorkspaceState | None = None,
     include_runtime: bool = False,
@@ -746,11 +832,11 @@ def list_tasks_state_first_for_workspace(
     """
     task_by_id = {
         task.id: task
-        for task in _load_tasks_from_store_for_workspace(workspace, include_runtime=include_runtime, strict=True)
+        for task in _load_tasks_from_store_impl(workspace, include_runtime=include_runtime, strict=True)
     }
 
     if state is None:
-        workspace_state = load_state_for_workspace(workspace)
+        workspace_state = WorkspaceStateRepository(workspace).load()
     else:
         workspace_state = state
     ordered_ids: list[str] = []
@@ -778,7 +864,7 @@ def list_tasks_state_first_for_workspace(
     return [task_by_id[task_id] for task_id in ordered_ids]
 
 
-def get_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord | None:
+def _get_task_for_workspace_impl(workspace: Workspace, task_id: str) -> TaskRecord | None:
     """
     Look up a task by id and require its runtime row to exist.
 
@@ -787,14 +873,14 @@ def get_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord | N
     would rather raise on a half-deleted row than guess at runtime
     state from intent-only data.
     """
-    intent = runtime_store_for_workspace(workspace).load_task_intent(task_id)
+    intent = RuntimeStore(workspace).load_task_intent(task_id)
     if intent is None:
         return None
-    task = _load_task_runtime_for_workspace(workspace, TaskRecord.from_intent_and_state(intent))
+    task = _load_task_runtime_impl(workspace, TaskRecord.from_intent_and_state(intent))
     return task
 
 
-def get_task_record_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord | None:
+def _get_task_record_for_workspace_impl(workspace: Workspace, task_id: str) -> TaskRecord | None:
     """
     Return the task record, tolerating a missing runtime row.
 
@@ -803,18 +889,18 @@ def get_task_record_for_workspace(workspace: Workspace, task_id: str) -> TaskRec
     task's intent is recoverable, but forcing a runtime row to exist
     would mask exactly the corruption these flows want to surface.
     """
-    intent = runtime_store_for_workspace(workspace).load_task_intent(task_id)
+    intent = RuntimeStore(workspace).load_task_intent(task_id)
     if intent is None:
         return None
     task = TaskRecord.from_intent_and_state(intent)
     try:
-        task = _load_task_runtime_for_workspace(workspace, task)
+        task = _load_task_runtime_impl(workspace, task)
     except TaskStateMissingError:
         pass
     return task
 
 
-def require_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord:
+def _require_task_for_workspace_impl(workspace: Workspace, task_id: str) -> TaskRecord:
     """
     Look up a task by id and raise if it does not exist.
 
@@ -823,13 +909,13 @@ def require_task_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord
     raise stops them from silently continuing on a ``None`` they would
     have to dereference downstream anyway.
     """
-    task = get_task_for_workspace(workspace, task_id)
+    task = _get_task_for_workspace_impl(workspace, task_id)
     if task is None:
         raise ValueError(f"Task {task_id} not found")
     return task
 
 
-def save_task_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
+def _save_task_for_workspace_impl(workspace: Workspace, task: TaskRecord) -> None:
     """
     Persist both the intent and runtime sides of a task atomically.
 
@@ -839,12 +925,12 @@ def save_task_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
     without touching workspace-level queue state.
     """
     task.updated_at = utcnow()
-    with workspace_mutation_guard_for_workspace(workspace):
+    with WorkspaceMutationGuard(workspace).hold():
         write_atomic_files_and_then(
             {},
-            lambda: runtime_store_for_workspace(workspace).save_runtime_transaction(
+            lambda: RuntimeStore(workspace).save_runtime_transaction(
                 task_intents={task.id: task.to_intent_record()},
                 task_states={task.id: task_state_for_storage(task)},
             ),
         )
-        ensure_runtime_ignored_for_workspace(workspace)
+        _ensure_runtime_ignored_for_workspace_impl(workspace)

@@ -55,7 +55,7 @@ def dispatch_status(argv: list[str]) -> int:
     )
     from litehive.container import build_workspace  # noqa: PLC0415
     from litehive.observability.status import (  # noqa: PLC0415
-        collect_task_pipeline_status_for_workspace,
+        TaskPipelineStatusCollector,
         render_task_pipeline_status_lines,
     )
 
@@ -69,7 +69,7 @@ def dispatch_status(argv: list[str]) -> int:
         print(f"status failed: {exc}")
         return 1
     workspace_obj = build_workspace(workspace)
-    status = collect_task_pipeline_status_for_workspace(workspace_obj, read_only=True)
+    status = TaskPipelineStatusCollector(workspace_obj).collect(read_only=True)
     for line in render_task_pipeline_status_lines(status, workspace=workspace_obj.root, mode="summary"):
         print(line)
     if status_has_problems(status.issues):

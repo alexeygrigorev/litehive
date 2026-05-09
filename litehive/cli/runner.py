@@ -2,17 +2,17 @@ from pathlib import Path
 from typing import Annotated
 import sys
 import json
-from dataclasses import dataclass
 
 import click
 import typer
 
 from litehive.cli.agent_cli import block_if_agent
 from litehive.cli.common import WorkspaceOption, choice, require_subcommand
-from litehive.config.engine_models import EngineSelectionRequest, select_engine_for_workspace
+from litehive.cli.pool import PoolService
+from litehive.config.engine_models import EngineSelectionRequest, EngineRoutingPolicy
 from litehive.config.environment import LitehiveEnvironment
 from litehive.config.paths import workspace_path
-from litehive.config.runtime_settings import load_runtime_setting_audit_entries, load_runtime_settings
+from litehive.config.runtime_settings import RuntimeSettingsRepository
 from litehive.config.workspace import create_workspace, normalize_workspace_root, resolve_workspace
 from litehive.container import LitehiveContainer, build_container, build_workspace
 from heru import ENGINE_CHOICES
@@ -22,28 +22,25 @@ from litehive.daemon.execution import (
     start_background_daemon,
     stop_workspace_daemon,
 )
-from litehive.daemon.registry import get_workspace_daemon_for_workspace
+from litehive.daemon.task_execution import DaemonExecution, DaemonRunIteration
+from litehive.daemon.registry import DaemonRegistry
 from litehive.db.schema import MigrationApplyError, apply_pending_migrations, migration_status
 from litehive.git.ops import has_non_litehive_changes, is_git_repo
-from litehive.domain.common import PipelineState, Verdict
+from litehive.domain.common import Verdict
 from litehive.domain.reports import TaskActivityEntry
-from litehive.lifecycle.orchestration import ExecutionResult, run_task_for_workspace
-from litehive.state.backup import (
-    create_workspace_backup_for_workspace,
-    list_workspace_backups_for_workspace,
-    restore_workspace_backup_for_workspace,
-)
-from litehive.domain.task_ops import WorkspaceConflictError
+from litehive.domain.task import TaskRecord
+from litehive.lifecycle.orchestration import ExecutionResult, TaskOrchestrator
+from litehive.state.backup import WorkspaceBackupService
 from litehive.state.persist import (
     CONSECUTIVE_TASK_FAILURE_STOP_REASON,
-    load_state_for_workspace,
-    record_task_completion_for_workspace,
-    set_pool_stop_reason_for_workspace,
+    WorkspaceStateRepository,
 )
-from litehive.tasks.event_log import rebuild_sqlite_from_task_event_log
-from litehive.tasks.queue import dequeue_next_task, peek_next_task_selection
+from litehive.state.records import WorkspaceTasks
+from litehive.tasks.activity import task_activity_store_for_task
+from litehive.tasks.event_log import TaskEventLog
+from litehive.tasks.queue import TaskQueueService
 from litehive.tasks.audit import load_task_audit_entries
-from litehive.state.locking import runner_status_for_workspace
+from litehive.state.locking import WorkspaceRunnerLock
 from litehive.workspace import Workspace
 
 
@@ -179,27 +176,9 @@ def daemon_worker(workspace):
     return run_daemon_loop(workspace, output_stream=None)
 
 
-@dataclass(slots=True)
-class _RunCommandIteration:
-    """
-    One pass of :func:`run_once`.
-
-    Carries the exit code plus pool-state signals
-    (``consecutive_task_failures``, ``pool_stop_reason``) so the
-    drain loop and the single-shot path can decide whether to
-    continue or stop without re-reading state from the database.
-    """
-
-    exit_code: int
-    ran_task: bool
-    final_stage: PipelineState | None = None
-    consecutive_task_failures: int = 0
-    pool_stop_reason: str | None = None
-
-
 def run_task(
     container: LitehiveContainer,
-    task,
+    task: TaskRecord,
     engine_override: str | None = None,
     model_override: str | None = None,
 ) -> ExecutionResult:
@@ -210,122 +189,17 @@ def run_task(
     pipeline; production passes the already-built container through so the
     orchestration layer does not rebuild workspace dependencies.
     """
-    return run_task_for_workspace(
-        container.workspace,
-        container.config,
-        task,
+    return TaskOrchestrator(container.workspace, container.config).run(task,
         engine_override=engine_override,
         model_override=model_override,
     )
 
 
-def run_once(
-    container: LitehiveContainer,
-    engine: str | None = None,
-    model: str | None = None,
-) -> _RunCommandIteration:
+def pick_next_task(workspace: Workspace) -> TaskRecord | None:
     """
-    Dequeue and execute the next task once.
-
-    Surfaces pool-stop signals to the caller so the drain loop and
-    single-shot path can share this code without each repeating the
-    "should we keep going?" logic. Also short-circuits when the
-    pool is already in the consecutive-failure stop state so a
-    known-bad pool does not eat another task.
-    Used by ``litehive run``, the drain loop, and exercised
-    directly by the hook-reject circuit-breaker tests.
+    Select the next runnable task through the workspace-bound queue service.
     """
-    workspace = container.workspace
-    stopped_iteration = _existing_consecutive_task_failure_stop(workspace)
-    if stopped_iteration is not None:
-        return stopped_iteration
-
-    while True:
-        try:
-            task = dequeue_next_task(workspace)
-        except WorkspaceConflictError as exc:
-            print(f"run failed: {exc}")
-            return _RunCommandIteration(exit_code=1, ran_task=False)
-        except Exception as exc:
-            print(f"run failed: {exc}")
-            return _RunCommandIteration(exit_code=1, ran_task=False)
-
-        if task is None:
-            state = load_state_for_workspace(workspace)
-            return _RunCommandIteration(
-                exit_code=0,
-                ran_task=False,
-                consecutive_task_failures=state.consecutive_task_failures,
-                pool_stop_reason=state.pool_stop_reason,
-            )
-
-        try:
-            result = run_task(
-                container,
-                task,
-                engine_override=engine,
-                model_override=model,
-            )
-        except Exception as exc:
-            print(f"run failed: {exc}")
-            return _RunCommandIteration(exit_code=1, ran_task=False)
-
-        if result.task is not None:
-            print(f"task: {result.task.id} {result.task.title}")
-        print(f"final_stage: {result.final_stage}")
-        if result.failed_reason:
-            print(f"failed_reason: {result.failed_reason}")
-        if result.failed_message:
-            print(f"failed_message: {result.failed_message}")
-        consecutive_task_failures, pool_stop_reason = record_task_completion_for_workspace(
-            workspace,
-            final_stage=result.final_stage,
-        )
-        if pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
-            _emit_consecutive_task_failure_stop(consecutive_task_failures)
-        return _RunCommandIteration(
-            exit_code=0,
-            ran_task=True,
-            final_stage=result.final_stage,
-            consecutive_task_failures=consecutive_task_failures,
-            pool_stop_reason=pool_stop_reason,
-        )
-
-
-def _existing_consecutive_task_failure_stop(workspace: Workspace) -> _RunCommandIteration | None:
-    """
-    Short-circuit ``run_once`` when the pool is already in the failure-stop state.
-
-    Without this guard the runner would dequeue another task into
-    a known-bad pool and either fail it again or silently skip it.
-    Returns the synthetic iteration result that ``run_once`` would
-    otherwise produce after the next failure, so the caller's
-    handling of the stopped state stays uniform.
-    """
-    state = load_state_for_workspace(workspace)
-    if state.pool_stop_reason != CONSECUTIVE_TASK_FAILURE_STOP_REASON:
-        return None
-    _emit_consecutive_task_failure_stop(state.consecutive_task_failures)
-    return _RunCommandIteration(
-        exit_code=0,
-        ran_task=False,
-        consecutive_task_failures=state.consecutive_task_failures,
-        pool_stop_reason=state.pool_stop_reason,
-    )
-
-
-def _emit_consecutive_task_failure_stop(consecutive_task_failures: int) -> None:
-    """
-    Print the operator-visible banner when the pool stops after repeated failures.
-
-    Floors the failure count at 3 so a stale counter cannot show
-    ``stopped after 0`` (or other below-threshold numbers) which
-    would look like a glitch rather than the actual circuit-breaker
-    behavior. Three is the threshold the pool stop reason itself
-    represents.
-    """
-    failure_count = max(3, int(consecutive_task_failures))
-    print(f"critical_status: stopped after {failure_count} consecutive task failures")
+    return TaskQueueService(workspace).dequeue_next()
 
 
 def _run_single(
@@ -336,13 +210,19 @@ def _run_single(
     """
     Single-shot ``litehive run`` path.
 
-    Dispatches one :func:`run_once` and surfaces either the
+    Dispatches one :class:`DaemonExecution` iteration and surfaces either the
     pool-stopped banner or a "no queued task" message — without
     that explicit message the operator would otherwise see a
     silent zero exit code on an empty queue. The operator default
     when neither ``--drain`` nor ``--dry-run`` is given.
     """
-    iteration = run_once(container, engine=engine, model=model)
+    iteration = DaemonExecution(
+        container=container,
+        engine=engine,
+        model=model,
+        task_runner=run_task,
+        task_picker=pick_next_task,
+    ).run_once()
     if iteration.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
         print(f"Pool stopped: {CONSECUTIVE_TASK_FAILURE_STOP_REASON}")
         return iteration.exit_code
@@ -366,19 +246,17 @@ def _preview_single(
     pushed the choice somewhere unexpected.
     """
     workspace = container.workspace
-    selection = peek_next_task_selection(workspace)
+    selection = TaskQueueService(workspace).peek_next_selection()
     if selection.task is None:
-        state = load_state_for_workspace(workspace)
+        state = WorkspaceStateRepository(workspace).load()
         if state.queue:
             print("No runnable task.")
         else:
             print("No queued task.")
         return 0
 
-    engine_selection = select_engine_for_workspace(
-        workspace,
+    engine_selection = EngineRoutingPolicy(workspace, container.config).select(
         selection.task,
-        container.config,
         EngineSelectionRequest(engine_override=engine, requested_model_name=model),
     )
     print(f"task: {selection.task.id} {selection.task.title}")
@@ -420,7 +298,7 @@ def _run_drain(
     """
     Drive ``litehive run --drain``.
 
-    Loops :func:`run_once` until the queue empties, the failure
+    Loops :class:`DaemonExecution` until the queue empties, the failure
     cap is hit, ``max_tasks`` is reached, or the workspace turns
     dirty. Records the chosen stop reason on the pool before
     returning so subsequent invocations and status displays can
@@ -428,37 +306,25 @@ def _run_drain(
     would have to guess from the printed banner alone.
     """
     workspace = container.workspace
-    tasks_run = 0
-    while True:
-        if stop_on_dirty_git and _workspace_has_dirty_non_litehive_changes(workspace):
-            set_pool_stop_reason_for_workspace(workspace, "dirty_git_state")
-            print("Pool stopped: dirty_git_state")
-            return 0
-
-        iteration = run_once(container, engine=engine, model=model)
-        if iteration.exit_code != 0:
-            return iteration.exit_code
-        if iteration.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
-            print(f"Pool stopped: {CONSECUTIVE_TASK_FAILURE_STOP_REASON}")
-            return 0
-        if not iteration.ran_task:
-            if tasks_run == 0:
-                state = load_state_for_workspace(workspace)
-                if state.queue:
-                    print("No runnable task.")
-                else:
-                    print("No queued task.")
-            return 0
-
-        tasks_run += 1
-        if stop_on_failure and iteration.final_stage != PipelineState.DONE:
-            set_pool_stop_reason_for_workspace(workspace, "failure_detected")
-            print("Pool stopped: failure_detected")
-            return 0
-        if max_tasks is not None and tasks_run >= max_tasks:
-            set_pool_stop_reason_for_workspace(workspace, "max_tasks_reached")
-            print("Pool stopped: max_tasks_reached")
-            return 0
+    pool = PoolService(
+        workspace=workspace,
+        tasks=container.tasks,
+        run_once=lambda selected_engine, selected_model: DaemonExecution(
+            container=container,
+            engine=selected_engine,
+            model=selected_model,
+            task_runner=run_task,
+            task_picker=pick_next_task,
+        ).run_once(),
+        dirty_checker=lambda: _workspace_has_dirty_non_litehive_changes(workspace),
+    )
+    return pool.run(
+        engine=engine,
+        model=model,
+        stop_on_failure=stop_on_failure,
+        limit=max_tasks,
+        stop_on_dirty_git=stop_on_dirty_git,
+    )
 
 
 def run_command(
@@ -561,12 +427,12 @@ def report_command(
     workspace_obj = build_workspace(root)
     root = workspace_obj.root
     if not task_id:
-        state = load_state_for_workspace(workspace_obj)
+        state = WorkspaceStateRepository(workspace_obj).load()
         task_id = state.active_task_id
     if not task_id:
         print("report failed: no task id provided, LITEHIVE_TASK_ID is unset, and no active task exists")
         return 1
-    task = workspace_obj.get_task(task_id)
+    task = WorkspaceTasks(workspace_obj).get(task_id)
     if task is None:
         print(f"report failed: task {task_id} not found")
         return 1
@@ -580,7 +446,7 @@ def report_command(
         message=message,
         files_changed=list(files_changed or []),
     )
-    workspace_obj.task_activity(task).append(entry)
+    task_activity_store_for_task(workspace_obj, task).append(entry)
     print(f"task: {task.id}")
     print(f"stage: {stage}")
     print(f"verdict: {verdict}")
@@ -606,7 +472,7 @@ def backup_create(workspace: WorkspaceOption = Path.cwd()) -> int:
     create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
-        backup = create_workspace_backup_for_workspace(workspace_obj)
+        backup = WorkspaceBackupService(workspace_obj).create()
     except Exception as exc:
         print(f"backup create failed: {exc}")
         return 1
@@ -625,7 +491,7 @@ def backup_list(workspace: WorkspaceOption = Path.cwd()) -> int:
     output is line-oriented so it can feed shell pipelines.
     """
     create_workspace(workspace)
-    backups = list_workspace_backups_for_workspace(build_workspace(workspace))
+    backups = WorkspaceBackupService(build_workspace(workspace)).list_backups()
     print(f"backups: {len(backups)}")
     for backup in backups:
         print(f"timestamp: {backup.timestamp}")
@@ -650,11 +516,11 @@ def backup_restore(
     """
     create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
-    daemon = get_workspace_daemon_for_workspace(workspace_obj)
+    daemon = DaemonRegistry(workspace_obj).live_entry()
     if daemon is not None:
         print("backup restore failed: workspace daemon is running")
         return 1
-    runner = runner_status_for_workspace(workspace_obj)
+    runner = WorkspaceRunnerLock(workspace_obj).status()
     if runner.status in {"running", "late"}:
         print("backup restore failed: workspace runner is active")
         return 1
@@ -665,7 +531,7 @@ def backup_restore(
             print("restore cancelled")
             return 1
     try:
-        backup = restore_workspace_backup_for_workspace(workspace_obj, timestamp)
+        backup = WorkspaceBackupService(workspace_obj).restore(timestamp)
     except ValueError as exc:
         print(f"backup restore failed: {exc}")
         return 1
@@ -756,7 +622,7 @@ def db_rebuild_from_events(workspace: WorkspaceOption = Path.cwd()) -> int:
     workspace = normalize_workspace_root(workspace, source="--workspace")
     workspace_obj = build_workspace(workspace)
     try:
-        summary = rebuild_sqlite_from_task_event_log(workspace_obj)
+        summary = TaskEventLog(workspace_obj).rebuild_sqlite()
     except Exception as exc:
         print(f"db rebuild-from-events failed: {exc}")
         return 1
@@ -819,7 +685,7 @@ def db_settings(workspace: WorkspaceOption = Path.cwd()) -> int:
     """
     workspace = normalize_workspace_root(workspace, source="--workspace")
     workspace_obj = build_workspace(workspace)
-    settings = load_runtime_settings(workspace_obj)
+    settings = RuntimeSettingsRepository(workspace_obj).load()
     print(f"workspace: {workspace}")
     for key in sorted(settings):
         print(f"{key}: {json.dumps(settings[key], sort_keys=True)}")
@@ -841,7 +707,7 @@ def db_settings_audit(
     """
     workspace = normalize_workspace_root(workspace, source="--workspace")
     workspace_obj = build_workspace(workspace)
-    entries = load_runtime_setting_audit_entries(workspace_obj, key=key, limit=limit)
+    entries = RuntimeSettingsRepository(workspace_obj).audit_entries(key=key, limit=limit)
     print(f"workspace: {workspace}")
     print(f"setting_audit_entries: {len(entries)}")
     for entry in entries:

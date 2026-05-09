@@ -13,13 +13,14 @@ from litehive.domain.common import Verdict
 from litehive.domain.task import TaskRecord
 
 from litehive.domain.agent import SubagentId, SubagentResult
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.workspace import Workspace
 
 
 class MissingVerdictError(Exception):
     """The subagent finished its turn without submitting a verdict.
 
-    Raised by :func:`stage_report_from_subagent` when no
+    Raised by :meth:`AgentReportService.stage_report_from_subagent` when no
     :class:`TaskActivityEntry` exists for the run: the agent did not
     call ``litehive agent report``. This is an exceptional outcome
     rather than a recordable verdict — the lifecycle layer recovers
@@ -43,50 +44,49 @@ class MissingVerdictError(Exception):
         )
 
 
-def stage_report_from_subagent(
-    task: TaskRecord,
-    stage: ReportPipelineState,
-    result: SubagentResult,
-    workspace: Workspace,
-) -> StageReport:
+class AgentReportService:
     """
-    Build a :class:`StageReport` for a single subagent run.
-
-    The agent submits its verdict via ``litehive agent report``,
-    which appends a :class:`TaskActivityEntry`. This helper looks for
-    that entry: present → the activity becomes the report; absent →
-    we raise :class:`MissingVerdictError` so the caller can skip the
-    stage-report row instead of persisting a synthetic reject. The
-    real "kick the agent" flow lives in the lifecycle layer
-    (``NudgeRequired``); this exception just keeps the recorded
-    artifact honest about the fact that no verdict was submitted.
+    Build stage reports from subagent activity submissions.
     """
-    pipeline_state: ReportPipelineState = canonical_report_pipeline_state(stage)
-    latest = workspace.task_activity(task).latest_entry(
-        stage=pipeline_state,
-        source_subagent_id=SubagentId(result.ref.id),
-        verdicts=REPORT_VERDICT_KINDS,
-    )
-    if latest is None:
-        raise MissingVerdictError(pipeline_state=pipeline_state, subagent_id=SubagentId(result.ref.id))
 
-    if latest.verdict == Verdict.REJECT:
-        failure_classification = latest.verdict_classification
-    else:
-        failure_classification = None
-    report_verdict = canonical_stage_report_verdict(latest.verdict) or "reject"
-    summary = _stage_report_summary(latest, pipeline_state)
-    failure_diagnostics = _failure_diagnostics_for_activity(latest, failure_classification)
-    return StageReport(
-        task_id=task.id,
-        pipeline_state=pipeline_state,
-        verdict=report_verdict,
-        summary=summary,
-        feedback=latest.message,
-        submitted_via_cli=True,
-        failure_classification=failure_classification,
-        failure_diagnostics=failure_diagnostics,
-    )
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
+
+    def stage_report_from_subagent(
+        self,
+        task: TaskRecord,
+        stage: ReportPipelineState,
+        result: SubagentResult,
+    ) -> StageReport:
+        """
+        Build a :class:`StageReport` for a single subagent run.
+        """
+        pipeline_state: ReportPipelineState = canonical_report_pipeline_state(stage)
+        latest = task_activity_store_for_task(self.workspace, task).latest_entry(
+            stage=pipeline_state,
+            source_subagent_id=SubagentId(result.ref.id),
+            verdicts=REPORT_VERDICT_KINDS,
+        )
+        if latest is None:
+            raise MissingVerdictError(pipeline_state=pipeline_state, subagent_id=SubagentId(result.ref.id))
+
+        if latest.verdict == Verdict.REJECT:
+            failure_classification = latest.verdict_classification
+        else:
+            failure_classification = None
+        report_verdict = canonical_stage_report_verdict(latest.verdict) or "reject"
+        summary = _stage_report_summary(latest, pipeline_state)
+        failure_diagnostics = _failure_diagnostics_for_activity(latest, failure_classification)
+        return StageReport(
+            task_id=task.id,
+            pipeline_state=pipeline_state,
+            verdict=report_verdict,
+            summary=summary,
+            feedback=latest.message,
+            submitted_via_cli=True,
+            failure_classification=failure_classification,
+            failure_diagnostics=failure_diagnostics,
+        )
 
 
 def _stage_report_summary(latest: TaskActivityEntry, pipeline_state: ReportPipelineState) -> str:

@@ -18,9 +18,10 @@ top level (rather than under ``domain/``) because it imports IO
 handles, and ``domain/`` is reserved for pure data records by the
 architecture guardrail in ``tests/test_architecture_guardrails.py``.
 
-This is an *incremental* migration: only ported feature areas take
-``Workspace``; the rest still take ``root: Path``. Each new area
-moves over as ergonomics warrant.
+This migration is intentionally incremental: workspace-bound feature
+areas should take ``Workspace`` or a focused service assembled from it,
+while raw path helpers stay at process, config, database, git, sandbox,
+or other explicit filesystem boundaries.
 """
 
 import sqlite3
@@ -34,10 +35,8 @@ from litehive.config.workspace_files import WorkspaceControlFiles
 from litehive.db.schema import connect_workspace_db
 
 if TYPE_CHECKING:
-    from litehive.agents.session_store import LoadedSubagentSession
     from litehive.config.model import LitehiveConfig
     from litehive.domain.task import TaskRecord
-    from litehive.tasks.activity import TaskActivityLog
 
 
 class Workspace:
@@ -124,16 +123,10 @@ class Workspace:
             # inline: config.loading transitively re-imports parts of
             # config/, so we keep the import local to avoid cycles when
             # this module is imported during partial init.
-            from litehive.config.loading import load_config_for_workspace  # noqa: PLC0415
+            from litehive.config.loading import WorkspaceConfigLoader  # noqa: PLC0415
 
-            self._config_cache.append(load_config_for_workspace(self))
+            self._config_cache.append(WorkspaceConfigLoader(self).load())
         return self._config_cache[0]
-
-    def config(self) -> "LitehiveConfig":
-        """
-        Compatibility wrapper for callers not yet migrated to ``load_config``.
-        """
-        return self.load_config()
 
     def require_existing(self, source: str) -> Path:
         """
@@ -209,114 +202,33 @@ class Workspace:
         """
         Return the per-task working directory for a ``TaskRecord``.
 
-        Forwards to ``litehive.tasks.paths.task_dir`` so the
-        id-slug naming convention stays in one place. Lives on
-        ``Workspace`` so helpers already holding a workspace
-        handle don't have to reach for a separate path module
-        just to find a task's artifact directory.
+        Transparently redirects through the per-worktree ``.litehive/`` when
+        this workspace points inside a managed worktree, so artifacts land next
+        to the matching checkout instead of the main workspace.
         """
-        # inline: tasks.paths transitively imports config.workspace which
-        # would re-enter this module's import chain at module load time.
-        from litehive.tasks.paths import task_dir as _task_dir  # noqa: PLC0415
+        tasks = self._tasks_dir(bootstrap=bootstrap)
+        return tasks / f"{task.id}-{task.slug}"
 
-        return _task_dir(self.root, task, bootstrap=bootstrap)
-
-    def list_tasks(self, include_runtime: bool = True, strict: bool = True) -> list["TaskRecord"]:
+    def _tasks_dir(self, bootstrap: bool = True) -> Path:
         """
-        Return task records for this workspace.
-
-        Method form of ``litehive.state.records.list_tasks_for_workspace`` so
-        workspace-aware helpers do not need to re-thread ``root`` for
-        ordinary task lookup.
+        Return the directory containing task artifacts for this workspace.
         """
-        # inline: state.records imports several modules that eventually
-        # refer back to Workspace during partial startup.
-        from litehive.state.records import list_tasks_for_workspace as _list_tasks_for_workspace  # noqa: PLC0415
+        worktree_workspace = self._worktree_workspace_dir()
+        if worktree_workspace is not None:
+            return worktree_workspace / "tasks"
+        if bootstrap:
+            self.create()
+        tasks = self.control_dir() / "tasks"
+        tasks.mkdir(parents=True, exist_ok=True)
+        return tasks
 
-        return _list_tasks_for_workspace(self, include_runtime=include_runtime, strict=strict)
-
-    def get_task(self, task_id: str) -> "TaskRecord | None":
+    def _worktree_workspace_dir(self) -> Path | None:
         """
-        Return one task record from this workspace, or ``None`` when missing.
+        Resolve the canonical ``.litehive`` directory for a managed worktree.
         """
-        # inline: see list_tasks import note above.
-        from litehive.state.records import get_task_for_workspace as _get_task_for_workspace  # noqa: PLC0415
-
-        return _get_task_for_workspace(self, task_id)
-
-    def get_task_record(self, task_id: str) -> "TaskRecord | None":
-        """
-        Return one task record, tolerating a missing runtime row.
-        """
-        # inline: see list_tasks import note above.
-        from litehive.state.records import get_task_record_for_workspace as _get_task_record_for_workspace  # noqa: PLC0415
-
-        return _get_task_record_for_workspace(self, task_id)
-
-    def require_task(self, task_id: str) -> "TaskRecord":
-        """
-        Return one task record or raise the standard missing-task error.
-        """
-        # inline: see list_tasks import note above.
-        from litehive.state.records import require_task_for_workspace as _require_task_for_workspace  # noqa: PLC0415
-
-        return _require_task_for_workspace(self, task_id)
-
-    def save_task(self, task: "TaskRecord") -> None:
-        """
-        Persist a task record in this workspace.
-        """
-        # inline: see list_tasks import note above.
-        from litehive.state.records import save_task_for_workspace as _save_task_for_workspace  # noqa: PLC0415
-
-        _save_task_for_workspace(self, task)
-
-    def task_activity(self, task: "TaskRecord") -> "TaskActivityLog":
-        """
-        Return the persisted activity feed handle for ``task``.
-
-        Query operations live on the returned collaborator so callers
-        holding a ``Workspace`` can ask for task activity directly
-        without threading both objects through loose helper functions.
-        """
-        # inline: tasks.activity imports Workspace for type annotations,
-        # so importing at module load would create an import cycle.
-        from litehive.tasks.activity import TaskActivityLog  # noqa: PLC0415
-
-        return TaskActivityLog(self, task)
-
-    def append_event(self, task: "TaskRecord", event) -> dict:
-        """
-        Append a typed task event to this workspace's durable event stream.
-        """
-        # inline: observability.events imports Workspace for annotations,
-        # so importing at module load would create an import cycle.
-        from litehive.observability.events import append_event  # noqa: PLC0415
-
-        return append_event(self, task, event)
-
-    def load_subagent_session(self, task_id: str, subagent_id: str) -> "LoadedSubagentSession":
-        """
-        Return the typed subagent session slice owned by this workspace.
-        """
-        # inline: session_store imports Workspace for runtime access, so
-        # importing at module load would create an import cycle.
-        from litehive.agents.session_store import load_subagent_session_record  # noqa: PLC0415
-
-        return load_subagent_session_record(self, task_id, subagent_id)
-
-    def load_subagent_session_record(self, task_id: str, subagent_id: str) -> "LoadedSubagentSession":
-        """
-        Return the typed subagent session slice owned by this workspace.
-        """
-        # inline: session_store imports Workspace for runtime access, so
-        # importing at module load would create an import cycle.
-        from litehive.agents.session_store import load_subagent_session_record  # noqa: PLC0415
-
-        return load_subagent_session_record(self, task_id, subagent_id)
-
-    def load_subagent_session_created_at(self, task_id: str, subagent_id: str) -> str | None:
-        """
-        Return the persisted creation timestamp for one subagent session.
-        """
-        return self.load_subagent_session_record(task_id, subagent_id).created_at
+        resolved = self.root.resolve()
+        parts = resolved.parts
+        for i, part in enumerate(parts):
+            if part == ".litehive" and i + 2 < len(parts) and parts[i + 1] == "worktrees":
+                return Path(*parts[: i + 3]) / ".litehive"
+        return None

@@ -4,7 +4,7 @@ from typing import Any, Protocol
 
 from litehive.domain.common import PipelineState, canonical_pipeline_state, utcnow
 from litehive.domain.recovery import RecoveryOutcome, RecoveryTrigger
-from litehive.tasks.event_log import append_task_event
+from litehive.tasks.event_log import TaskEventLog
 from litehive.workspace import Workspace
 
 from .types import FailedReason, PipelineMode
@@ -753,8 +753,7 @@ class SqlitePersistence:
                     updated_at,
                 ),
             )
-            append_task_event(
-                self.workspace,
+            TaskEventLog(self.workspace).append(
                 event_type="pipeline_task_state_saved",
                 task_id=state.task_id,
                 payload={
@@ -850,8 +849,7 @@ class SqlitePersistence:
                         task_id,
                     ),
                 )
-            append_task_event(
-                self.workspace,
+            TaskEventLog(self.workspace).append(
                 event_type="pipeline_task_state_reset",
                 task_id=task_id,
                 payload={},
@@ -863,8 +861,7 @@ class SqlitePersistence:
         with self.workspace.connect() as connection:
             for table_name in ("pipeline_task_state", "pipeline_sessions", "pipeline_transitions", "pipeline_journal"):
                 connection.execute(f"DELETE FROM {table_name} WHERE task_id = ?", (task_id,))
-            append_task_event(
-                self.workspace,
+            TaskEventLog(self.workspace).append(
                 event_type="pipeline_task_state_reset",
                 task_id=task_id,
                 payload={},

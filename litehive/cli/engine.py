@@ -7,19 +7,12 @@ from heru import ENGINE_CHOICES, get_engine
 from litehive.cli.common import WorkspaceOption, choice
 from litehive.config.engine_freezes import (
     active_engine_freezes,
-    clear_persisted_engine_freeze_for_workspace,
-    persist_engine_freeze_iso_for_workspace,
 )
-from litehive.config.engine_models import parse_engine_freeze_until
+from litehive.config.engine_models import EngineRoutingPolicy, parse_engine_freeze_until
 from litehive.config.engine_quota import collect_engine_quota_statuses
 from litehive.config.model import LitehiveConfig
 from litehive.config.model import normalize_engine_sequence
-from litehive.config.runtime_settings import (
-    RuntimeSettingContext,
-    load_runtime_setting_audit_entries,
-    set_default_engine,
-    set_engine_preference,
-)
+from litehive.config.runtime_settings import RuntimeSettingsRepository
 from litehive.container import build_container, build_workspace
 from litehive.workspace import Workspace
 
@@ -84,15 +77,11 @@ def _engine_default_command(workspace: Workspace, name: str | None, reason: str 
     if name is None or name not in ENGINE_CHOICES:
         print(f"engine default: unknown engine '{name}'")
         return 1
-    change = set_default_engine(
-        workspace,
-        name,
-        actor="operator",
-        source="cli",
-        context=_engine_reason_context(reason),
-    )
-    print(f"default_engine: {change.old_value} -> {change.new_value}")
-    print(f"updated: {_updated_label(change.changed)}")
+    config = workspace.load_config()
+    old_value = config.default_engine
+    EngineRoutingPolicy(workspace, config).set_default(name, reason=reason)
+    print(f"default_engine: {old_value} -> {name}")
+    print(f"updated: {_updated_label(old_value != name)}")
     return 0
 
 
@@ -106,18 +95,14 @@ def _engine_preference_command(workspace: Workspace, name: str | None, reason: s
         print("engine preference: provide a comma-separated engine list")
         return 1
     try:
-        change = set_engine_preference(
-            workspace,
-            preference,
-            actor="operator",
-            source="cli",
-            context=_engine_reason_context(reason),
-        )
+        config = workspace.load_config()
+        old_value = list(config.engine_preference)
+        EngineRoutingPolicy(workspace, config).set_preference(preference, reason=reason)
     except ValueError as exc:
         print(f"engine preference: {exc}")
         return 1
-    print(f"engine_preference: {_engine_list_label(change.old_value)} -> {_engine_list_label(change.new_value)}")
-    print(f"updated: {_updated_label(change.changed)}")
+    print(f"engine_preference: {_engine_list_label(old_value)} -> {_engine_list_label(preference)}")
+    print(f"updated: {_updated_label(old_value != preference)}")
     return 0
 
 
@@ -126,14 +111,7 @@ def _engine_freeze_command(workspace: Workspace, name: str, until: str | None, r
     if freeze_iso is None:
         print("engine freeze: --until must be ISO date YYYY-MM-DD")
         return 1
-    persist_engine_freeze_iso_for_workspace(
-        workspace,
-        engine_name=name,
-        freeze_iso=freeze_iso,
-        actor="operator",
-        source="cli",
-        reason=reason,
-    )
+    EngineRoutingPolicy(workspace, workspace.load_config()).freeze(name, until=freeze_iso, reason=reason)
     if reason:
         reason_part = f" reason={reason}"
     else:
@@ -143,24 +121,12 @@ def _engine_freeze_command(workspace: Workspace, name: str, until: str | None, r
 
 
 def _engine_unfreeze_command(workspace: Workspace, name: str, reason: str | None) -> int:
-    unfrozen = clear_persisted_engine_freeze_for_workspace(
-        workspace,
-        engine_name=name,
-        actor="operator",
-        source="cli",
-        reason=reason,
-    )
+    unfrozen = EngineRoutingPolicy(workspace, workspace.load_config()).unfreeze(name, reason=reason)
     if not unfrozen:
         print(f"engine unfreeze: {name} is not frozen")
         return 1
     print(f"engine_unfrozen: {name}")
     return 0
-
-
-def _engine_reason_context(reason: str | None) -> RuntimeSettingContext | None:
-    if reason:
-        return {"reason": reason}
-    return None
 
 
 def _updated_label(changed: bool) -> str:
@@ -231,7 +197,7 @@ def _render_engine_audit_lines(workspace: Workspace, key: str | None, limit: int
     this output to reconstruct who changed an engine setting and
     why, so the layout is intentionally script-friendly.
     """
-    entries = load_runtime_setting_audit_entries(workspace, key=key, limit=limit)
+    entries = RuntimeSettingsRepository(workspace).audit_entries(key=key, limit=limit)
     lines = [f"setting_audit_entries: {len(entries)}"]
     for entry in entries:
         lines.extend(

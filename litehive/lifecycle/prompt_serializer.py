@@ -50,6 +50,7 @@ from litehive.lifecycle.prompt_sections import (
     _verdict_instructions_section,
 )
 from litehive.lifecycle.prompt_types import AgentPrompt, RecoveryPrompt
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.workspace import Workspace
 
 
@@ -154,7 +155,7 @@ def _load_task_activity_history(workspace: Workspace, task_record: TaskRecord) -
     boundary before adapting entries into prompt dictionaries.
     """
     try:
-        activity_entries = workspace.task_activity(task_record).load()
+        activity_entries = task_activity_store_for_task(workspace, task_record).load()
     except (OSError, ValidationError, yaml.YAMLError):
         return []
     return [

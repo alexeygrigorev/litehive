@@ -11,62 +11,74 @@ or another script.
 from pathlib import Path
 import sqlite3
 
-from litehive.agents.execution_trace import load_subagent_execution_trace
+from litehive.agents.execution_trace import execution_trace_renderer
+from litehive.agents.session_store import subagent_artifacts
+from litehive.domain.task import TaskRecord
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.tasks.paths import (
     read_text_artifact,
     resolve_artifact_path,
 )
-from litehive.tasks.report_storage import latest_stage_report
+from litehive.tasks.report_storage import TaskReportStore
 from litehive.workspace import Workspace
-from litehive.worktree.service import WorktreeService
+from litehive.worktree.inspection import WorktreeInspector
 
 
-def render_task_evidence_for_workspace(workspace: Workspace, task) -> int:
+class TaskEvidencePresenter:
     """
-    Render compact task evidence from an injected workspace.
+    Workspace-bound presenter for task evidence/debug output.
     """
-    print(f"task: {task.id}")
-    print(f"title: {task.title}")
-    print(f"status: {task.status}")
-    print(f"pipeline_status: {task.pipeline_status}")
-    _print_lifecycle_evidence(workspace, task)
-    _print_latest_report(workspace, task)
-    _print_latest_activity(workspace, task)
-    _print_latest_subagent(workspace, task)
-    _print_worktree_evidence(workspace, task)
-    return 0
 
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
 
-def debug_all_for_workspace(workspace: Workspace, task):
-    """
-    List every subagent attached to a task using an injected workspace.
-    """
-    if not task.subagents:
-        print(f"{task.id}: no subagents")
+    def render_task_evidence(self, task: TaskRecord) -> int:
+        """
+        Render compact task evidence from the presenter workspace.
+        """
+        print(f"task: {task.id}")
+        print(f"title: {task.title}")
+        print(f"status: {task.status}")
+        print(f"pipeline_status: {task.pipeline_status}")
+        _print_lifecycle_evidence(self.workspace, task)
+        _print_latest_report(self.workspace, task)
+        _print_latest_activity(self.workspace, task)
+        _print_latest_subagent(self.workspace, task)
+        _print_worktree_evidence(self.workspace, task)
         return 0
 
-    print(f"{task.id}: {len(task.subagents)} subagent(s)")
-    print()
-    for ref in task.subagents:
-        exit_code = _read_exit_code(workspace, task.id, ref.id)
-        if exit_code is not None:
-            exit_str = str(exit_code)
-        else:
-            exit_str = "-"
-        print(f"  {ref.id}  role={ref.role}  engine={ref.engine}  status={ref.status}  exit_code={exit_str}")
-    return 0
+    def debug_all(self, task: TaskRecord) -> int:
+        """
+        List every subagent attached to a task.
+        """
+        if not task.subagents:
+            print(f"{task.id}: no subagents")
+            return 0
 
+        print(f"{task.id}: {len(task.subagents)} subagent(s)")
+        print()
+        for ref in task.subagents:
+            exit_code = _read_exit_code(self.workspace, task.id, ref.id)
+            if exit_code is not None:
+                exit_str = str(exit_code)
+            else:
+                exit_str = "-"
+            print(f"  {ref.id}  role={ref.role}  engine={ref.engine}  status={ref.status}  exit_code={exit_str}")
+        return 0
 
-def debug_latest_for_workspace(workspace: Workspace, task):
-    """
-    Compatibility entrypoint for the compact task evidence view.
+    def debug_latest(self, task: TaskRecord) -> int:
+        """
+        Compatibility entrypoint for the compact task evidence view.
+        """
+        return self.render_task_evidence(task)
 
-    Routes the older ``task debug`` (no flags) muscle memory to
-    :func:`render_task_evidence_for_workspace`. Kept as a thin wrapper so the
-    public Typer signature in ``task_cli`` does not change.
-    """
-    return render_task_evidence_for_workspace(workspace, task)
-
+    def debug_worktree(self, task: TaskRecord) -> int:
+        """
+        Render the worktree-only evidence view.
+        """
+        print(f"task: {task.id}")
+        _print_worktree_evidence(self.workspace, task)
+        return 0
 
 def _print_lifecycle_evidence(workspace: Workspace, task) -> None:
     """
@@ -130,7 +142,7 @@ def _print_latest_report(workspace: Workspace, task) -> None:
     compact evidence view so the entire triage screen stays
     readable.
     """
-    report = latest_stage_report(workspace, task)
+    report = TaskReportStore(workspace).latest_stage_report(task)
     if report is None:
         print("latest_stage_report: none")
         return
@@ -150,7 +162,7 @@ def _print_latest_activity(workspace: Workspace, task) -> None:
     stage reports). Showing both surfaces in evidence covers the
     case where an agent posted feedback without a verdict change.
     """
-    entry = workspace.task_activity(task).latest()
+    entry = task_activity_store_for_task(workspace, task).latest()
     if entry is None:
         print("latest_activity: none")
         return
@@ -189,7 +201,7 @@ def _print_latest_subagent(workspace: Workspace, task) -> None:
         started_at = runtime_sa.started_at
         completed_at = runtime_sa.completed_at
     else:
-        session = workspace.load_subagent_session_record(task.id, ref.id)
+        session = subagent_artifacts(workspace, task.id, ref.id).load_session_record()
         if session:
             exit_code = session.exit_code
             started_at = session.created_at
@@ -199,7 +211,13 @@ def _print_latest_subagent(workspace: Workspace, task) -> None:
     trace = None
     if sa_base.exists():
         is_active = bool(task.runtime.execution.active_subagent and task.runtime.execution.active_subagent.id == ref.id)
-        trace = load_subagent_execution_trace(workspace, task, ref, active=is_active, runtime_state=runtime_sa)
+        trace = execution_trace_renderer().load_for_subagent(
+            workspace,
+            task,
+            ref,
+            active=is_active,
+            runtime_state=runtime_sa,
+        )
         produced_output = trace is not None and bool(trace.text.strip())
         for filename in ("stdout.txt", "stdout.log", "stderr.txt", "stderr.log"):
             path = resolve_artifact_path(sa_base, filename)
@@ -226,15 +244,6 @@ def _print_latest_subagent(workspace: Workspace, task) -> None:
         print(f"latest_subagent_trace_source: {trace.source.relative_to(workspace.root)}")
 
 
-def debug_worktree_for_workspace(workspace: Workspace, task):
-    """
-    Render the worktree-only evidence view from an injected workspace.
-    """
-    print(f"task: {task.id}")
-    _print_worktree_evidence(workspace, task)
-    return 0
-
-
 def _print_worktree_evidence(workspace: Workspace, task) -> None:
     """
     Print the task's worktree state.
@@ -246,7 +255,7 @@ def _print_worktree_evidence(workspace: Workspace, task) -> None:
     the operator can tell at a glance whether the task has any
     uncommitted work.
     """
-    inspection = WorktreeService(workspace).inspect_task_worktree(task)
+    inspection = WorktreeInspector(workspace).inspect_task_worktree(task)
     if not inspection.worktree_rel:
         print("worktree: none")
         return
@@ -275,7 +284,7 @@ def _read_exit_code(workspace: Workspace, task_id: str, subagent_id: str) -> int
     or non-integer so the caller can render ``-`` instead of a
     fake zero.
     """
-    return workspace.load_subagent_session_record(task_id, subagent_id).exit_code
+    return subagent_artifacts(workspace, task_id, subagent_id).load_session_record().exit_code
 
 
 def _enum_value(value) -> str | None:

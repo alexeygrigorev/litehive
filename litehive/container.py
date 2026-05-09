@@ -10,6 +10,7 @@ from litehive.config.model import LitehiveConfig
 from litehive.domain.agent import SubagentId
 from litehive.lifecycle.journal import SqliteJournal
 from litehive.lifecycle.persistence import SqlitePersistence, TaskNotFound
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 
@@ -25,6 +26,7 @@ class LitehiveContainer:
 
     workspace: Workspace
     config: LitehiveConfig
+    tasks: WorkspaceTasks
 
 
 @dataclass(frozen=True)
@@ -66,6 +68,7 @@ def build_container(root: Path) -> LitehiveContainer:
     return LitehiveContainer(
         workspace=workspace,
         config=workspace.load_config(),
+        tasks=WorkspaceTasks(workspace),
     )
 
 
@@ -131,7 +134,7 @@ def build_agent_report_submitter(
     )
 
 
-def build_agent_task_mutator_for_workspace(workspace: Workspace, task_id: str) -> AgentTaskMutator:
+def build_agent_task_mutator(workspace: Workspace, task_id: str) -> AgentTaskMutator:
     """
     Assemble the authorized agent task mutation service from injected workspace dependencies.
     """
@@ -141,7 +144,7 @@ def build_agent_task_mutator_for_workspace(workspace: Workspace, task_id: str) -
     )
 
 
-def build_subagent_manager_for_workspace(
+def build_subagent_manager(
     workspace: Workspace,
     config: LitehiveConfig,
     execution_root: Path,

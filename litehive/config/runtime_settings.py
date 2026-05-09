@@ -11,11 +11,12 @@ later YAML drift is intentionally ignored to avoid two writers.
 from dataclasses import dataclass
 import json
 import sqlite3
+from collections.abc import Callable
 from typing import Any, Mapping, Sequence, TypeAlias
 
 from pydantic import TypeAdapter, ValidationError
 
-from litehive.config.loading import load_effective_config_data_for_workspace
+from litehive.config.loading import WorkspaceConfigLoader
 from litehive.config.model import LitehiveConfig, normalize_engine_sequence
 from litehive.domain.common import StringEnum, utcnow
 from litehive.workspace import Workspace
@@ -70,17 +71,197 @@ class RuntimeSettingAuditEntry:
     context: RuntimeSettingContext
 
 
-def _bootstrap_config_data(workspace: Workspace) -> dict[str, Any]:
-    """
-    Compose the three-layer config snapshot used to seed runtime settings.
+RuntimeSettingsConfigLoader: TypeAlias = Callable[[Workspace], dict[str, Any]]
+RuntimeSettingsClock: TypeAlias = Callable[[], str]
 
-    Order: dataclass defaults < global YAML < workspace YAML.
-    Called by :func:`bootstrap_runtime_settings` so the database
-    starts out with the same values an operator would see by
-    reading the YAML files directly — the operator's mental model
-    matches the stored state from day one.
+
+class RuntimeSettingsRepository:
     """
-    return load_effective_config_data_for_workspace(workspace)
+    Audited runtime settings store bound to one workspace.
+
+    The repository owns SQLite reads/writes for mutable engine-control
+    settings. Callers inject the workspace, config-data loader, and clock so
+    construction stays side-effect free and tests can drive exact inputs.
+    """
+
+    def __init__(
+        self,
+        workspace: Workspace,
+        config_data_loader: RuntimeSettingsConfigLoader | None = None,
+        clock: RuntimeSettingsClock | None = None,
+    ) -> None:
+        self.workspace = workspace
+        self.config_data_loader = config_data_loader or (
+            lambda bound_workspace: WorkspaceConfigLoader(bound_workspace).effective_data()
+        )
+        self.clock = clock or utcnow
+
+    def bootstrap(self, config_data: Mapping[str, Any] | None = None) -> None:
+        """
+        Seed audited runtime settings from the config files exactly once.
+
+        Config-file values are bootstrap-only. After the corresponding
+        database rows exist, later config-file drift is intentionally ignored
+        by runtime config loading so the database stays the sole source of
+        truth.
+        """
+        with self.workspace.connect() as connection:
+            existing_keys = {
+                str(row["key"])
+                for row in connection.execute(
+                    "SELECT key FROM runtime_settings WHERE key IN (?, ?, ?)",
+                    RUNTIME_SETTING_KEYS,
+                )
+            }
+            missing_keys = [key for key in RUNTIME_SETTING_KEYS if key not in existing_keys]
+            if not missing_keys:
+                return
+            runtime_values = _runtime_values_from_config(config_data or self.config_data_loader(self.workspace))
+            now = self.clock()
+            for key, value in runtime_values.items():
+                if key not in missing_keys:
+                    continue
+                connection.execute(
+                    """
+                    INSERT INTO runtime_settings (key, value_json, updated_at, actor, source)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (key, _dump_runtime_value(value), now, "system", "config_bootstrap"),
+                )
+            connection.commit()
+
+    def load(self) -> dict[str, RuntimeSettingValue | None]:
+        """
+        Return the current audited values for the engine-control settings.
+        """
+        self.bootstrap()
+        with self.workspace.connect() as connection:
+            rows = _load_setting_rows(connection)
+        return {key: rows[key] for key in RUNTIME_SETTING_KEYS if key in rows}
+
+    def apply_to_config_data(self, config_data: Mapping[str, Any]) -> dict[str, Any]:
+        """
+        Overlay audited runtime values on top of file-loaded config data.
+        """
+        self.bootstrap(config_data)
+        with self.workspace.connect() as connection:
+            settings = _load_setting_rows(connection)
+        effective = dict(config_data)
+        for key in RUNTIME_SETTING_KEYS:
+            if key in settings:
+                effective[key] = settings[key]
+        return effective
+
+    def get(self, key: RuntimeSettingKey) -> RuntimeSettingValue | None:
+        """
+        Return one runtime setting value.
+        """
+        return self.load().get(key.value)
+
+    def set(
+        self,
+        key: RuntimeSettingKey,
+        value: RuntimeSettingValue,
+        actor: str,
+        source: str,
+        context: RuntimeSettingContext | None = None,
+    ) -> RuntimeSettingChange:
+        """
+        Write one audited setting and append an audit-log row atomically.
+        """
+        self.bootstrap()
+        now = self.clock()
+        new_json = _dump_runtime_value(value)
+        with self.workspace.connect() as connection:
+            row = connection.execute("SELECT value_json FROM runtime_settings WHERE key = ?", (key.value,)).fetchone()
+            if row is None:
+                old_json = None
+            else:
+                old_json = str(row["value_json"])
+            old_value = _load_runtime_value(old_json)
+            if old_value == value:
+                return RuntimeSettingChange(key=key, old_value=old_value, new_value=value, changed=False)
+            connection.execute(
+                """
+                INSERT INTO runtime_settings (key, value_json, updated_at, actor, source)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value_json = excluded.value_json,
+                    updated_at = excluded.updated_at,
+                    actor = excluded.actor,
+                    source = excluded.source
+                """,
+                (key.value, new_json, now, actor, source),
+            )
+            connection.execute(
+                """
+                INSERT INTO runtime_settings_audit_log (
+                    key,
+                    created_at,
+                    actor,
+                    source,
+                    old_value_json,
+                    new_value_json,
+                    context_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    key.value,
+                    now,
+                    actor,
+                    source,
+                    old_json,
+                    new_json,
+                    _dump_runtime_context(context),
+                ),
+            )
+            connection.commit()
+        return RuntimeSettingChange(key=key, old_value=old_value, new_value=value, changed=True)
+
+    def audit_entries(self, key: str | None = None, limit: int = 20) -> list[RuntimeSettingAuditEntry]:
+        """
+        Return the most recent runtime-settings audit-log rows.
+        """
+        query = """
+            SELECT id, key, created_at, actor, source, old_value_json, new_value_json, context_json
+            FROM runtime_settings_audit_log
+        """
+        params: list[Any] = []
+        if key is not None:
+            query += " WHERE key = ?"
+            params.append(key)
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+
+        with self.workspace.connect() as connection:
+            rows = connection.execute(query, params).fetchall()
+
+        entries: list[RuntimeSettingAuditEntry] = []
+        for row in rows:
+            context = _load_runtime_context(str(row["context_json"]))
+            if row["old_value_json"] is None:
+                old_value_arg = None
+            else:
+                old_value_arg = str(row["old_value_json"])
+            if row["new_value_json"] is None:
+                new_value_arg = None
+            else:
+                new_value_arg = str(row["new_value_json"])
+            entries.append(
+                RuntimeSettingAuditEntry(
+                    id=int(row["id"]),
+                    key=str(row["key"]),
+                    created_at=str(row["created_at"]),
+                    actor=str(row["actor"]),
+                    source=str(row["source"]),
+                    old_value=_load_runtime_value(old_value_arg),
+                    new_value=_load_runtime_value(new_value_arg),
+                    context=context,
+                )
+            )
+        return entries
+
 
 
 def _dump_runtime_value(value: RuntimeSettingValue) -> str:
@@ -89,7 +270,7 @@ def _dump_runtime_value(value: RuntimeSettingValue) -> str:
 
     Sorting on the way out means two semantically-equal dicts
     produce byte-equal JSON — a precondition for the no-op
-    short-circuit in :func:`set_runtime_setting` (otherwise an
+    short-circuit in :meth:`RuntimeSettingsRepository.set` (otherwise an
     unrelated key reorder would look like a change and write a
     spurious audit row).
     """
@@ -180,7 +361,7 @@ def _runtime_values_from_config(config_data: Mapping[str, Any]) -> dict[str, Run
     Returns ``default_engine``, ``engine_preference``, and
     ``engine_freeze`` after running each through its type
     coercer. The seed value source for
-    :func:`bootstrap_runtime_settings`; centralising the
+    :meth:`RuntimeSettingsRepository.bootstrap`; centralising the
     projection keeps the bootstrap and the operator-visible
     settings in lockstep.
     """
@@ -201,8 +382,8 @@ def _load_setting_rows(connection: sqlite3.Connection) -> dict[str, RuntimeSetti
 
     Tolerates malformed JSON as ``None`` so a single bad row
     does not block the rest of the settings. Shared row reader
-    behind :func:`load_runtime_settings` and
-    :func:`apply_runtime_settings_to_config_data` — the two
+    behind :meth:`RuntimeSettingsRepository.load` and
+    :meth:`RuntimeSettingsRepository.apply_to_config_data` — the two
     callers want the same parsed shape, so the parsing lives here
     rather than at each call site.
     """
@@ -212,148 +393,6 @@ def _load_setting_rows(connection: sqlite3.Connection) -> dict[str, RuntimeSetti
         key = str(row["key"])
         parsed[key] = _load_runtime_value(str(row["value_json"]))
     return parsed
-
-
-def bootstrap_runtime_settings(workspace: Workspace, config_data: Mapping[str, Any] | None = None) -> None:
-    """
-    Seed audited runtime settings from the config files exactly once.
-
-    Config-file values are bootstrap-only. After the corresponding
-    database rows exist, later config-file drift is intentionally
-    ignored by runtime config loading so the database stays the
-    sole source of truth — having two writable surfaces would
-    invite the audit log to disagree with the live setting.
-    """
-    with workspace.connect() as connection:
-        existing_keys = {
-            str(row["key"])
-            for row in connection.execute(
-                "SELECT key FROM runtime_settings WHERE key IN (?, ?, ?)",
-                RUNTIME_SETTING_KEYS,
-            )
-        }
-        missing_keys = [key for key in RUNTIME_SETTING_KEYS if key not in existing_keys]
-        if not missing_keys:
-            return
-        runtime_values = _runtime_values_from_config(config_data or _bootstrap_config_data(workspace))
-        now = utcnow()
-        for key, value in runtime_values.items():
-            if key not in missing_keys:
-                continue
-            connection.execute(
-                """
-                INSERT INTO runtime_settings (key, value_json, updated_at, actor, source)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (key, _dump_runtime_value(value), now, "system", "config_bootstrap"),
-            )
-        connection.commit()
-
-
-def load_runtime_settings(workspace: Workspace) -> dict[str, RuntimeSettingValue | None]:
-    """
-    Return the current audited values for the engine-control settings.
-
-    Bootstraps from config files on first access so a fresh
-    workspace has the right defaults without an explicit init
-    step. Called by the CLI ``runtime-settings show`` surface
-    and anywhere that needs the post-bootstrap view without
-    merging it back into the full :class:`LitehiveConfig` shape.
-    """
-    bootstrap_runtime_settings(workspace)
-    with workspace.connect() as connection:
-        rows = _load_setting_rows(connection)
-    return {key: rows[key] for key in RUNTIME_SETTING_KEYS if key in rows}
-
-
-def apply_runtime_settings_to_config_data(workspace: Workspace, config_data: Mapping[str, Any]) -> dict[str, Any]:
-    """
-    Overlay the audited runtime values on top of file-loaded config data.
-
-    Called by config loading so that once a setting lives in the
-    database the file value is ignored — making the database the
-    source of truth after bootstrap. The overlay is the seam
-    between file-driven defaults and operator-driven mutations,
-    and centralizing it here keeps file/database precedence in
-    one place.
-    """
-    bootstrap_runtime_settings(workspace, config_data)
-    with workspace.connect() as connection:
-        settings = _load_setting_rows(connection)
-    effective = dict(config_data)
-    for key in RUNTIME_SETTING_KEYS:
-        if key in settings:
-            effective[key] = settings[key]
-    return effective
-
-
-def set_runtime_setting(
-    workspace: Workspace,
-    key: RuntimeSettingKey,
-    value: RuntimeSettingValue,
-    actor: str,
-    source: str,
-    context: RuntimeSettingContext | None = None,
-) -> RuntimeSettingChange:
-    """
-    Write one audited setting and append an audit-log row atomically.
-
-    Returns a no-op :class:`RuntimeSettingChange` when the value is
-    unchanged so chained callers can short-circuit without an
-    extra read. The single entry point every CLI, quota, and
-    recovery mutation goes through — that mandate is what keeps
-    the audit log complete; an alternate write path would let
-    changes slip past unnoticed.
-    """
-    bootstrap_runtime_settings(workspace)
-    now = utcnow()
-    new_json = _dump_runtime_value(value)
-    with workspace.connect() as connection:
-        row = connection.execute("SELECT value_json FROM runtime_settings WHERE key = ?", (key.value,)).fetchone()
-        if row is None:
-            old_json = None
-        else:
-            old_json = str(row["value_json"])
-        old_value = _load_runtime_value(old_json)
-        if old_value == value:
-            return RuntimeSettingChange(key=key, old_value=old_value, new_value=value, changed=False)
-        connection.execute(
-            """
-            INSERT INTO runtime_settings (key, value_json, updated_at, actor, source)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(key) DO UPDATE SET
-                value_json = excluded.value_json,
-                updated_at = excluded.updated_at,
-                actor = excluded.actor,
-                source = excluded.source
-            """,
-            (key.value, new_json, now, actor, source),
-        )
-        connection.execute(
-            """
-            INSERT INTO runtime_settings_audit_log (
-                key,
-                created_at,
-                actor,
-                source,
-                old_value_json,
-                new_value_json,
-                context_json
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                key.value,
-                now,
-                actor,
-                source,
-                old_json,
-                new_json,
-                _dump_runtime_context(context),
-            ),
-        )
-        connection.commit()
-    return RuntimeSettingChange(key=key, old_value=old_value, new_value=value, changed=True)
 
 
 def set_default_engine(
@@ -366,14 +405,12 @@ def set_default_engine(
     """
     Persist the workspace's default engine through the audited store.
 
-    Called by the CLI ``engine default`` command. Kept as a thin
-    typed wrapper around :func:`set_runtime_setting` so the
-    audit trail records the semantic intent (``set_default_engine``
-    -> a particular key) rather than a raw key write that future
-    readers would have to decode.
+    Called by the CLI ``engine default`` command. This records the semantic
+    intent (``set_default_engine`` -> a particular key) through
+    ``RuntimeSettingsRepository`` rather than making the caller issue a raw
+    key write that future readers would have to decode.
     """
-    return set_runtime_setting(
-        workspace,
+    return RuntimeSettingsRepository(workspace).set(
         key=RuntimeSettingKey.DEFAULT_ENGINE,
         value=engine_name,
         actor=actor,
@@ -399,8 +436,7 @@ def set_engine_preference(
     selection later. Called by the CLI ``engine preference``
     command.
     """
-    return set_runtime_setting(
-        workspace,
+    return RuntimeSettingsRepository(workspace).set(
         key=RuntimeSettingKey.ENGINE_PREFERENCE,
         value=normalize_engine_sequence(engines, field_name="engine_preference"),
         actor=actor,
@@ -427,12 +463,12 @@ def set_engine_freeze(
     before/after values land in the audit context for easy
     diffing across runs.
     """
-    settings = load_runtime_settings(workspace)
+    repository = RuntimeSettingsRepository(workspace)
+    settings = repository.load()
     freeze_map = _freeze_value(settings.get("engine_freeze", {}))
     old_engine_value = freeze_map.get(engine_name)
     freeze_map[engine_name] = freeze_iso
-    return set_runtime_setting(
-        workspace,
+    return repository.set(
         key=RuntimeSettingKey.ENGINE_FREEZE,
         value=freeze_map,
         actor=actor,
@@ -463,7 +499,7 @@ def clear_engine_freeze(
     and by the engine-selection loop when a freeze window has
     expired.
     """
-    bootstrap_runtime_settings(workspace)
+    RuntimeSettingsRepository(workspace).bootstrap()
     now = utcnow()
     with workspace.connect() as connection:
         row = connection.execute("SELECT value_json FROM runtime_settings WHERE key = ?", ("engine_freeze",)).fetchone()
@@ -528,57 +564,3 @@ def clear_engine_freeze(
         new_value=freeze_map,
         changed=True,
     )
-
-
-def load_runtime_setting_audit_entries(
-    workspace: Workspace,
-    key: str | None = None,
-    limit: int = 20,
-) -> list[RuntimeSettingAuditEntry]:
-    """
-    Return the most recent runtime-settings audit-log rows.
-
-    Newest-first, optionally filtered to one setting key.
-    Consumed by the CLI ``runtime-settings audit`` view that
-    operators use to answer "who changed the engine freeze and
-    when?". Tolerantly decodes legacy/null context values so an
-    early row missing the column does not break the listing.
-    """
-    query = """
-        SELECT id, key, created_at, actor, source, old_value_json, new_value_json, context_json
-        FROM runtime_settings_audit_log
-    """
-    params: list[Any] = []
-    if key is not None:
-        query += " WHERE key = ?"
-        params.append(key)
-    query += " ORDER BY id DESC LIMIT ?"
-    params.append(limit)
-
-    with workspace.connect() as connection:
-        rows = connection.execute(query, params).fetchall()
-
-    entries: list[RuntimeSettingAuditEntry] = []
-    for row in rows:
-        context = _load_runtime_context(str(row["context_json"]))
-        if row["old_value_json"] is None:
-            old_value_arg = None
-        else:
-            old_value_arg = str(row["old_value_json"])
-        if row["new_value_json"] is None:
-            new_value_arg = None
-        else:
-            new_value_arg = str(row["new_value_json"])
-        entries.append(
-            RuntimeSettingAuditEntry(
-                id=int(row["id"]),
-                key=str(row["key"]),
-                created_at=str(row["created_at"]),
-                actor=str(row["actor"]),
-                source=str(row["source"]),
-                old_value=_load_runtime_value(old_value_arg),
-                new_value=_load_runtime_value(new_value_arg),
-                context=context,
-            )
-        )
-    return entries

@@ -5,8 +5,8 @@ import pytest
 
 import litehive.state.persist as workflow_module
 from litehive.config.workspace import create_workspace
-from litehive.state.persist import load_state_for_workspace
-from litehive.state.records import create_task_for_workspace, get_task_for_workspace, save_task_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.records import WorkspaceTasks
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.workspace import Workspace
 
@@ -19,7 +19,7 @@ def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
 
-    task = create_task_for_workspace(workspace, title="Atomic save", auto_commit=False)
+    task = WorkspaceTasks(workspace).create( title="Atomic save", auto_commit=False)
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.TESTING
     task.runtime.pipeline.execution_status = "flagged"
@@ -31,9 +31,9 @@ def test_save_task_rolls_back_task_record_when_runtime_persist_fails(
     monkeypatch.setattr(RuntimeStore, "save_runtime_transaction", fail_runtime_transaction)
 
     with pytest.raises(OSError, match="runtime write failed"):
-        save_task_for_workspace(workspace, task)
+        WorkspaceTasks(workspace).save(task)
 
-    refreshed = get_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "backlog"
@@ -45,17 +45,16 @@ def test_workspace_transition_writes_preserve_task_added_after_state_snapshot(
 ) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    active = create_task_for_workspace(workspace, title="Active task")
-    queued = create_task_for_workspace(workspace, title="Queued task")
-    stale_state = load_state_for_workspace(workspace)
-    create_task_for_workspace(workspace, title="Added later")
+    active = WorkspaceTasks(workspace).create( title="Active task")
+    queued = WorkspaceTasks(workspace).create( title="Queued task")
+    stale_state = WorkspaceStateRepository(workspace).load()
+    WorkspaceTasks(workspace).create( title="Added later")
     active.status = TaskStatus.DONE
     active.pipeline_status = PipelineStatus.DONE
     stale_state.active_task_id = None
     stale_state.queue = [queued.id]
 
-    merged_state = workflow_module.merged_state_for_runner_owned_write_for_workspace(
-        workspace,
+    merged_state = workflow_module.WorkspaceStateRepository(workspace).merged_state_for_runner_owned_write(
         state=stale_state,
         protected_task_ids=[active.id],
     )
@@ -86,7 +85,7 @@ def test_create_task_surfaces_cleanup_failure_when_rollback_removal_fails(
         with pytest.raises(
             ExceptionGroup, match="failed to persist created tasks and roll back created task directories"
         ) as excinfo:
-            create_task_for_workspace(workspace, title="Cleanup failure surfaces")
+            WorkspaceTasks(workspace).create( title="Cleanup failure surfaces")
 
     assert any("intent write failed" in str(error) for error in excinfo.value.exceptions)
     assert any("failed to delete created task directory" in str(error) for error in excinfo.value.exceptions)

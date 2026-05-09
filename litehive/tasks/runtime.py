@@ -1,5 +1,7 @@
 """Runtime state tracking: runs, stages, subagents, engine switches."""
 
+from collections.abc import Callable
+
 from litehive.domain.common import (
     PipelineStatus,
     RuntimeStageStatus,
@@ -21,11 +23,11 @@ from litehive.domain.runtime import (
 from litehive.domain.task import TaskRecord
 
 from litehive.state.records import (
-    save_task_runtime_for_workspace,
-    write_task_runtime_for_workspace,
+    WorkspaceTasks,
+    WorkspaceTasks,
 )
-from litehive.state.locking import workspace_lock_for_workspace, workspace_mutation_guard_for_workspace
-from litehive.state.persist import load_state_for_workspace, persist_task_and_state_for_workspace
+from litehive.state.locking import WorkspaceMutationGuard, WorkspaceStateLock
+from litehive.state.persist import WorkspaceStateRepository
 from litehive.workspace import Workspace
 
 
@@ -122,132 +124,261 @@ def clear_task_run_activity(
     return now
 
 
-def mark_task_run_started_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
+class TaskRuntimeTransitions:
     """
-    Record a run start through an injected workspace.
+    Workspace-bound service for task runtime state transitions.
     """
-    apply_task_run_started(task)
-    save_task_runtime_for_workspace(workspace, task)
 
+    def __init__(
+        self,
+        workspace: Workspace,
+        tasks: WorkspaceTasks,
+        clock: Callable[[], str] = utcnow,
+    ) -> None:
+        self.workspace = workspace
+        self.tasks = tasks
+        self.clock = clock
 
-def apply_task_run_started(task: TaskRecord) -> None:
-    """
-    In-memory variant of ``mark_task_run_started``.
-    """
-    now = clear_task_run_activity(task, execution_status=TaskExecutionStatus.RUNNING, clear_interruption=True)
-    task.runtime.pipeline.run_started_at = now
-    task.runtime.pipeline.retry_count = 0
-    task.runtime.pipeline.retry_limit = task.runtime.pipeline.retry_limit
-    task.runtime.pipeline.last_outcome = TaskOutcomeState()
-    task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now)
-
-
-def mark_task_run_finished_for_workspace(
-    workspace: Workspace,
-    task: TaskRecord,
-    final_status: TaskExecutionStatus | str,
-) -> None:
-    """
-    Persist the closing execution status through an injected workspace.
-    """
-    apply_task_run_finished(task, final_status)
-    save_task_runtime_for_workspace(workspace, task)
-
-
-def apply_task_run_finished(task: TaskRecord, final_status: TaskExecutionStatus | str) -> None:
-    """
-    In-memory variant of ``mark_task_run_finished``.
-    """
-    clear_task_run_activity(task, execution_status=final_status)
-
-
-def apply_flag_count_auto_defer(task: TaskRecord) -> None:
-    """
-    Increment ``flag_count`` and auto-defer once the threshold is reached.
-
-    Called from the end-of-run transition so a task that has been flagged
-    three runs in a row escalates to "needs human review" instead of
-    silently re-queuing forever; the threshold is the runner-policy choice
-    encoded here.
-    """
-    if task.status != TaskStatus.FLAGGED:
-        return
-    task.flag_count += 1
-    if task.flag_count >= 3:
-        task.flag_reason = "flagged 3 times - needs human review"
-
-
-def finish_task_run_transition_for_workspace(
-    workspace: Workspace,
-    task: TaskRecord,
-    final_status: TaskExecutionStatus | str,
-) -> TaskRecord:
-    """
-    End-of-run transition that reconciles task and queue under one lock.
-
-    Called by the orchestration loop when a run terminates (done, paused,
-    interrupted, queued) so flag auto-defer, queue cleanup, and reinsertion
-    happen atomically rather than leaving the queue and the task record
-    briefly disagreeing about who is active.
-    """
-    with workspace_mutation_guard_for_workspace(workspace), workspace_lock_for_workspace(workspace):
-        canonical_final_status = (
-            final_status if isinstance(final_status, TaskExecutionStatus) else TaskExecutionStatus(final_status)
+    def clear_run_activity(
+        self,
+        task: TaskRecord,
+        execution_status: TaskExecutionStatus | str,
+        updated_at: str | None = None,
+        clear_interruption: bool = False,
+    ) -> str:
+        return clear_task_run_activity(
+            task,
+            execution_status=execution_status,
+            updated_at=updated_at or self.clock(),
+            clear_interruption=clear_interruption,
         )
-        apply_flag_count_auto_defer(task)
-        clear_task_run_activity(task, execution_status=canonical_final_status)
-        state = load_state_for_workspace(workspace)
-        state_changed = False
-        if state.active_task_id == task.id:
-            state.active_task_id = None
-            state_changed = True
-        queued_without_task = [item for item in state.queue if item != task.id]
-        if queued_without_task != state.queue:
-            state.queue = queued_without_task
-            state_changed = True
-        if (
-            canonical_final_status
-            in {TaskExecutionStatus.PAUSED, TaskExecutionStatus.QUEUED, TaskExecutionStatus.INTERRUPTED}
-            and task.status == TaskStatus.QUEUED
-            and task.pipeline_status != PipelineStatus.DONE
-        ):
-            state.queue.insert(0, task.id)
-            state_changed = True
-        if (
-            canonical_final_status == TaskExecutionStatus.DONE
-            and task.status == TaskStatus.DONE
-            and task.pipeline_status == PipelineStatus.DONE
-            and not state_changed
-        ):
-            write_task_runtime_for_workspace(workspace, task)
+
+    def start_run(self, task: TaskRecord) -> None:
+        self._apply_task_run_started(task)
+        self.tasks.save_runtime(task)
+
+    def finish_run(self, task: TaskRecord, final_status: TaskExecutionStatus | str) -> None:
+        self._apply_task_run_finished(task, final_status)
+        self.tasks.save_runtime(task)
+
+    def finish_run_transition(self, task: TaskRecord, final_status: TaskExecutionStatus | str) -> TaskRecord:
+        with WorkspaceMutationGuard(self.workspace).hold(), WorkspaceStateLock(self.workspace).hold():
+            canonical_final_status = (
+                final_status if isinstance(final_status, TaskExecutionStatus) else TaskExecutionStatus(final_status)
+            )
+            self._apply_flag_count_auto_defer(task)
+            self.clear_run_activity(task, execution_status=canonical_final_status)
+            state = WorkspaceStateRepository(self.workspace).load()
+            state_changed = False
+            if state.active_task_id == task.id:
+                state.active_task_id = None
+                state_changed = True
+            queued_without_task = [item for item in state.queue if item != task.id]
+            if queued_without_task != state.queue:
+                state.queue = queued_without_task
+                state_changed = True
+            if (
+                canonical_final_status
+                in {TaskExecutionStatus.PAUSED, TaskExecutionStatus.QUEUED, TaskExecutionStatus.INTERRUPTED}
+                and task.status == TaskStatus.QUEUED
+                and task.pipeline_status != PipelineStatus.DONE
+            ):
+                state.queue.insert(0, task.id)
+                state_changed = True
+            if (
+                canonical_final_status == TaskExecutionStatus.DONE
+                and task.status == TaskStatus.DONE
+                and task.pipeline_status == PipelineStatus.DONE
+                and not state_changed
+            ):
+                self.tasks.write_runtime(task)
+                return task
+            WorkspaceStateRepository(self.workspace).persist_task_and_state(task=task, state=state)
             return task
-        persist_task_and_state_for_workspace(workspace, task=task, state=state)
-        return task
 
+    def set_retry_state(self, task: TaskRecord, retry_count: int, retry_limit: int) -> None:
+        _apply_task_retry_state(task, retry_count=retry_count, retry_limit=retry_limit)
+        self.tasks.save_runtime(task)
 
-def set_task_retry_state_for_workspace(
-    workspace: Workspace,
-    task: TaskRecord,
-    retry_count: int,
-    retry_limit: int,
-) -> None:
-    """
-    Persist retry counters through an injected workspace.
-    """
-    _apply_task_retry_state(
-        task,
-        retry_count=retry_count,
-        retry_limit=retry_limit,
-    )
-    save_task_runtime_for_workspace(workspace, task)
+    def clear_outcome(self, task: TaskRecord) -> None:
+        _clear_task_outcome(task)
+        self.tasks.save_runtime(task)
 
+    def record_outcome(
+        self,
+        task: TaskRecord,
+        kind: TaskOutcomeKind | str,
+        stage: str,
+        reason_code: OutcomeReasonCode | str,
+        reason: str,
+        retry_count: int,
+        retry_limit: int,
+        follow_up_task_id: str | None = None,
+        failure_classification: str | None = None,
+        failure_diagnostics: FailureDiagnostics | dict[str, FailureDiagnosticValue] | None = None,
+    ) -> None:
+        apply_task_outcome(
+            task,
+            kind=kind,
+            stage=stage,
+            reason_code=reason_code,
+            reason=reason,
+            retry_count=retry_count,
+            retry_limit=retry_limit,
+            follow_up_task_id=follow_up_task_id,
+            failure_classification=failure_classification,
+            failure_diagnostics=failure_diagnostics,
+        )
+        self.tasks.save_runtime(task)
 
-def clear_task_outcome_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
-    """
-    Reset the last-outcome record through an injected workspace.
-    """
-    _clear_task_outcome(task)
-    save_task_runtime_for_workspace(workspace, task)
+    def start_stage(self, task: TaskRecord, stage: str) -> None:
+        self._apply_stage_started(task, stage)
+        self.tasks.save_runtime(task)
+
+    def finish_stage(self, task: TaskRecord, report: StageReport) -> None:
+        del report
+        self._apply_stage_finished(task)
+        self.tasks.save_runtime(task)
+
+    def mark_subagent_started(self, task: TaskRecord, ref: Subagent) -> None:
+        self._apply_subagent_started(task, ref)
+        self.tasks.save_runtime(task)
+
+    def mark_subagent_pid(self, task: TaskRecord, pid: int | None) -> None:
+        if not self._apply_subagent_pid(task, pid):
+            return
+        self.tasks.save_runtime(task)
+
+    def mark_subagent_progress(
+        self,
+        task: TaskRecord,
+        pid: int | None = None,
+        transcript: str | None = None,
+        continuation: RuntimeEngineContinuation | None = None,
+    ) -> None:
+        if not self._apply_subagent_progress(task, pid=pid, transcript=transcript, continuation=continuation):
+            return
+        self.tasks.save_runtime(task)
+
+    def mark_subagent_finished(
+        self,
+        task: TaskRecord,
+        ref: Subagent,
+        transcript: str,
+        exit_code: int,
+        pid: int | None = None,
+        interruption_reason: str | None = None,
+        continuation: RuntimeEngineContinuation | None = None,
+    ) -> None:
+        del ref, transcript, exit_code, pid, interruption_reason, continuation
+        self._apply_subagent_finished(task)
+        self.tasks.save_runtime(task)
+
+    def switch_engine(
+        self,
+        task: TaskRecord,
+        stage: str,
+        from_engine: str,
+        to_engine: str,
+        reason: str,
+    ) -> None:
+        self._apply_engine_switch(
+            task,
+            stage=stage,
+            from_engine=from_engine,
+            to_engine=to_engine,
+            reason=reason,
+        )
+        self.tasks.save_runtime(task)
+
+    def _apply_task_run_started(self, task: TaskRecord) -> None:
+        now = self.clear_run_activity(task, execution_status=TaskExecutionStatus.RUNNING, clear_interruption=True)
+        task.runtime.pipeline.run_started_at = now
+        task.runtime.pipeline.retry_count = 0
+        task.runtime.pipeline.retry_limit = task.runtime.pipeline.retry_limit
+        task.runtime.pipeline.last_outcome = TaskOutcomeState()
+        task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now)
+
+    def _apply_task_run_finished(self, task: TaskRecord, final_status: TaskExecutionStatus | str) -> None:
+        self.clear_run_activity(task, execution_status=final_status)
+
+    def _apply_flag_count_auto_defer(self, task: TaskRecord) -> None:
+        if task.status != TaskStatus.FLAGGED:
+            return
+        task.flag_count += 1
+        if task.flag_count >= 3:
+            task.flag_reason = "flagged 3 times - needs human review"
+
+    def _apply_stage_started(self, task: TaskRecord, stage: str) -> None:
+        now = self.clock()
+        task.runtime.pipeline.updated_at = now
+        task.runtime.pipeline.current_stage = _running_stage_state(stage, started_at=now)
+
+    def _apply_stage_finished(self, task: TaskRecord) -> None:
+        now = self.clock()
+        task.runtime.pipeline.updated_at = now
+        task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now)
+
+    def _apply_subagent_started(self, task: TaskRecord, ref: Subagent) -> None:
+        now = self.clock()
+        task.runtime.pipeline.updated_at = now
+        task.runtime.execution.active_subagent = _runtime_subagent_state(ref, started_at=now, updated_at=now)
+
+    def _apply_subagent_pid(self, task: TaskRecord, pid: int | None) -> bool:
+        active_subagent = task.runtime.execution.active_subagent
+        if pid is None or active_subagent is None or active_subagent.pid == pid:
+            return False
+        now = self.clock()
+        task.runtime.pipeline.updated_at = now
+        task.runtime.execution.active_subagent = active_subagent.model_copy(update={"pid": pid, "updated_at": now})
+        return True
+
+    def _apply_subagent_progress(
+        self,
+        task: TaskRecord,
+        pid: int | None = None,
+        transcript: str | None = None,
+        continuation: RuntimeEngineContinuation | None = None,
+    ) -> bool:
+        if task.runtime.execution.active_subagent is None:
+            return False
+        now = self.clock()
+        task.runtime.pipeline.updated_at = now
+        if task.current_pipeline_stage is not None:
+            task.runtime.pipeline.current_stage = task.runtime.pipeline.current_stage.model_copy(update={"updated_at": now})
+        updates: dict[str, object] = {"updated_at": now}
+        if pid is not None:
+            updates["pid"] = pid
+        if transcript is not None:
+            updates["execution_trace_snippet"] = summarize_transcript(transcript)
+        if continuation is not None:
+            updates["continuation"] = continuation
+        task.runtime.execution.active_subagent = task.runtime.execution.active_subagent.model_copy(update=updates)
+        return True
+
+    def _apply_subagent_finished(self, task: TaskRecord) -> None:
+        now = self.clock()
+        task.runtime.pipeline.updated_at = now
+        task.runtime.execution.active_subagent = None
+
+    def _apply_engine_switch(
+        self,
+        task: TaskRecord,
+        stage: str,
+        from_engine: str,
+        to_engine: str,
+        reason: str,
+    ) -> None:
+        now = self.clock()
+        task.runtime.pipeline.updated_at = now
+        task.runtime.execution.last_engine_switch = RuntimeEngineSwitch(
+            stage=stage,
+            from_engine=from_engine,
+            to_engine=to_engine,
+            reason=reason,
+            happened_at=now,
+        )
+
 
 
 def _apply_task_retry_state(
@@ -277,37 +408,6 @@ def _clear_task_outcome(task: TaskRecord) -> None:
     """
     task.runtime.pipeline.updated_at = utcnow()
     task.runtime.pipeline.last_outcome = TaskOutcomeState()
-
-
-def mark_task_outcome_for_workspace(
-    workspace: Workspace,
-    task: TaskRecord,
-    kind: TaskOutcomeKind | str,
-    stage: str,
-    reason_code: OutcomeReasonCode | str,
-    reason: str,
-    retry_count: int,
-    retry_limit: int,
-    follow_up_task_id: str | None = None,
-    failure_classification: str | None = None,
-    failure_diagnostics: FailureDiagnostics | dict[str, FailureDiagnosticValue] | None = None,
-) -> None:
-    """
-    Record the verdict that ended a stage through an injected workspace.
-    """
-    apply_task_outcome(
-        task,
-        kind=kind,
-        stage=stage,
-        reason_code=reason_code,
-        reason=reason,
-        retry_count=retry_count,
-        retry_limit=retry_limit,
-        follow_up_task_id=follow_up_task_id,
-        failure_classification=failure_classification,
-        failure_diagnostics=failure_diagnostics,
-    )
-    save_task_runtime_for_workspace(workspace, task)
 
 
 def apply_task_outcome(
@@ -361,199 +461,6 @@ def _normalize_failure_diagnostics(
     if isinstance(failure_diagnostics, FailureDiagnostics):
         return failure_diagnostics
     return FailureDiagnostics(failure_diagnostics)
-
-
-def mark_stage_started_for_workspace(workspace: Workspace, task: TaskRecord, stage: str) -> None:
-    """
-    Record stage entry through an injected workspace.
-    """
-    apply_stage_started(task, stage)
-    save_task_runtime_for_workspace(workspace, task)
-
-
-def apply_stage_started(task: TaskRecord, stage: str) -> None:
-    """
-    In-memory variant of ``mark_stage_started``.
-    """
-    now = utcnow()
-    task.runtime.pipeline.updated_at = now
-    task.runtime.pipeline.current_stage = _running_stage_state(stage, started_at=now)
-
-
-def mark_stage_finished_for_workspace(workspace: Workspace, task: TaskRecord, report: StageReport) -> None:
-    """
-    Record stage exit through an injected workspace.
-    """
-    del report
-    apply_stage_finished(task)
-    save_task_runtime_for_workspace(workspace, task)
-
-
-def apply_stage_finished(task: TaskRecord) -> None:
-    """
-    In-memory variant of ``mark_stage_finished``.
-
-    Called by transitions that hold the workspace lock and want to batch
-    the stage-end marker with other writes; persisting separately would
-    bypass the batch's atomicity guarantee.
-    """
-    now = utcnow()
-    task.runtime.pipeline.updated_at = now
-    task.runtime.pipeline.current_stage = idle_stage_state(updated_at=now)
-
-
-def mark_subagent_started_for_workspace(workspace: Workspace, task: TaskRecord, ref: Subagent) -> None:
-    """
-    Attach a freshly launched subagent using an injected workspace.
-    """
-    apply_subagent_started(task, ref)
-    save_task_runtime_for_workspace(workspace, task)
-
-
-def apply_subagent_started(task: TaskRecord, ref: Subagent) -> None:
-    """
-    In-memory variant of ``mark_subagent_started``.
-    """
-    now = utcnow()
-    task.runtime.pipeline.updated_at = now
-    task.runtime.execution.active_subagent = _runtime_subagent_state(ref, started_at=now, updated_at=now)
-
-
-def mark_subagent_pid_for_workspace(workspace: Workspace, task: TaskRecord, pid: int | None) -> None:
-    """
-    Attach the OS pid through an injected workspace.
-    """
-    if not apply_subagent_pid(task, pid):
-        return
-    save_task_runtime_for_workspace(workspace, task)
-
-
-def apply_subagent_pid(task: TaskRecord, pid: int | None) -> bool:
-    """
-    In-memory variant of ``mark_subagent_pid``.
-    """
-    if (
-        pid is None
-        or task.runtime.execution.active_subagent is None
-        or task.runtime.execution.active_subagent.pid == pid
-    ):
-        return False
-    now = utcnow()
-    task.runtime.pipeline.updated_at = now
-    task.runtime.execution.active_subagent = task.runtime.execution.active_subagent.model_copy(
-        update={"pid": pid, "updated_at": now}
-    )
-    return True
-
-
-def mark_subagent_progress_for_workspace(
-    workspace: Workspace,
-    task: TaskRecord,
-    pid: int | None = None,
-    transcript: str | None = None,
-    continuation: RuntimeEngineContinuation | None = None,
-) -> None:
-    """
-    Refresh active subagent progress through an injected workspace.
-    """
-    if not apply_subagent_progress(task, pid=pid, transcript=transcript, continuation=continuation):
-        return
-    save_task_runtime_for_workspace(workspace, task)
-
-
-def apply_subagent_progress(
-    task: TaskRecord,
-    pid: int | None = None,
-    transcript: str | None = None,
-    continuation: RuntimeEngineContinuation | None = None,
-) -> bool:
-    """
-    In-memory variant of ``mark_subagent_progress``.
-    """
-    if task.runtime.execution.active_subagent is None:
-        return False
-    now = utcnow()
-    task.runtime.pipeline.updated_at = now
-    if task.current_pipeline_stage is not None:
-        task.runtime.pipeline.current_stage = task.runtime.pipeline.current_stage.model_copy(update={"updated_at": now})
-    updates: dict[str, object] = {"updated_at": now}
-    if pid is not None:
-        updates["pid"] = pid
-    if transcript is not None:
-        updates["execution_trace_snippet"] = summarize_transcript(transcript)
-    if continuation is not None:
-        updates["continuation"] = continuation
-    task.runtime.execution.active_subagent = task.runtime.execution.active_subagent.model_copy(update=updates)
-    return True
-
-
-def mark_subagent_finished_for_workspace(
-    workspace: Workspace,
-    task: TaskRecord,
-    ref: Subagent,
-    transcript: str,
-    exit_code: int,
-    pid: int | None = None,
-    interruption_reason: str | None = None,
-    continuation: RuntimeEngineContinuation | None = None,
-) -> None:
-    """
-    Detach the active subagent through an injected workspace.
-    """
-    del ref, transcript, exit_code, pid, interruption_reason, continuation
-    apply_subagent_finished(task)
-    save_task_runtime_for_workspace(workspace, task)
-
-
-def apply_subagent_finished(task: TaskRecord) -> None:
-    """
-    In-memory variant of ``mark_subagent_finished``.
-    """
-    now = utcnow()
-    task.runtime.pipeline.updated_at = now
-    task.runtime.execution.active_subagent = None
-
-
-def mark_engine_switch_for_workspace(
-    workspace: Workspace,
-    task: TaskRecord,
-    stage: str,
-    from_engine: str,
-    to_engine: str,
-    reason: str,
-) -> None:
-    """
-    Stamp the task with the most recent engine swap through an injected workspace.
-    """
-    apply_engine_switch(
-        task,
-        stage=stage,
-        from_engine=from_engine,
-        to_engine=to_engine,
-        reason=reason,
-    )
-    save_task_runtime_for_workspace(workspace, task)
-
-
-def apply_engine_switch(
-    task: TaskRecord,
-    stage: str,
-    from_engine: str,
-    to_engine: str,
-    reason: str,
-) -> None:
-    """
-    In-memory variant of ``mark_engine_switch``.
-    """
-    now = utcnow()
-    task.runtime.pipeline.updated_at = now
-    task.runtime.execution.last_engine_switch = RuntimeEngineSwitch(
-        stage=stage,
-        from_engine=from_engine,
-        to_engine=to_engine,
-        reason=reason,
-        happened_at=now,
-    )
 
 
 def summarize_transcript(transcript: str, limit: int = 120) -> str:

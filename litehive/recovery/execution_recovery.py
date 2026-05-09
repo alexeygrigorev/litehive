@@ -18,99 +18,105 @@ from litehive.recovery.running_task_recovery import (
     update_active_task_after_recovery,
 )
 from litehive.state.locking import (
-    current_thread_owns_runner_guard_for_workspace,
-    runner_lock_is_held_for_workspace,
-    workspace_lock_for_workspace,
+    WorkspaceRunnerLock,
+    WorkspaceStateLock,
 )
-from litehive.state.persist import (
-    load_state_for_workspace,
-    persist_tasks_and_state_without_runner_guard_for_workspace,
-    save_state_without_runner_guard_for_workspace,
-)
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 
 __all__ = [
+    "RunnerRecoveryService",
     "interruption_journal_message",
     "mark_interrupted_subagent",
     "prepare_interrupted_task",
-    "recover_stale_runner_state_for_workspace",
     "stale_interruption_reason",
 ]
 
 
-def recover_stale_runner_state_for_workspace(
-    workspace: Workspace,
-    summary: WorkspaceRepairSummary | None = None,
-) -> bool:
+class RunnerRecoveryService:
     """
-    Recover stale runner state for an injected workspace.
+    Workspace-bound stale runner recovery service.
 
-    Returns whether anything was mutated; takes the workspace lock and
-    only acts when no live runner owns the runner lock, so a live runner
-    cannot be repaired out from under itself.
+    Owns crash recovery for active/running task state. Binding the
+    workspace once keeps queue, stop, and repair callers from threading
+    recovery state through a free helper.
     """
-    with workspace_lock_for_workspace(workspace):
-        state = load_state_for_workspace(workspace)
-        running_task_ids = _running_task_ids(workspace)
-        if _can_skip_recovery_scan(
-            state.active_task_id,
-            running_task_ids,
-            current_thread_owns_runner_guard=current_thread_owns_runner_guard_for_workspace(workspace),
-            runner_lock_held=runner_lock_is_held_for_workspace(workspace),
-            has_repair_candidates=has_nonrunning_resumable_repair_candidates(workspace),
-        ):
-            return False
-        # Repair must tolerate disk-only task dirs that are missing runtime
-        # rows so one stale record does not block runner recovery.
-        tasks = workspace.list_tasks(strict=False)
-        tasks_by_id = {task.id: task for task in tasks}
-        if not can_attempt_stale_runner_recovery(workspace, tasks_by_id, running_task_ids):
-            return False
 
-        recovery = recover_running_tasks(
-            workspace,
-            state,
-            tasks_by_id,
-            running_task_ids,
-            summary=summary,
-        )
-        mutated = recovery["mutated"]
-        transitioned = recovery["transitioned"]
-        prioritized_ids = recovery["prioritized_ids"]
-        journal_messages = recovery["journal_messages"]
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
 
-        normalized = normalize_nonrunning_resumable_tasks(
-            state,
-            tasks_by_id=tasks_by_id,
-            summary=summary,
-        )
-        if normalized["mutated"]:
-            mutated = True
-            transitioned.extend(
-                task for task in normalized["transitioned"] if all(existing.id != task.id for existing in transitioned)
+    def recover_stale_runner_state(self, summary: WorkspaceRepairSummary | None = None) -> bool:
+        """
+        Recover stale runner state for the bound workspace.
+
+        Returns whether anything was mutated; takes the workspace lock and
+        only acts when no live runner owns the runner lock, so a live runner
+        cannot be repaired out from under itself.
+        """
+        with WorkspaceStateLock(self.workspace).hold():
+            state = WorkspaceStateRepository(self.workspace).load()
+            running_task_ids = _running_task_ids(self.workspace)
+            if _can_skip_recovery_scan(
+                state.active_task_id,
+                running_task_ids,
+                current_thread_owns_runner_guard=WorkspaceRunnerLock(self.workspace).owns_current_thread(),
+                runner_lock_held=WorkspaceRunnerLock(self.workspace).is_held(),
+                has_repair_candidates=has_nonrunning_resumable_repair_candidates(self.workspace),
+            ):
+                return False
+            # Repair must tolerate disk-only task dirs that are missing runtime
+            # rows so one stale record does not block runner recovery.
+            tasks = WorkspaceTasks(self.workspace).list(strict=False)
+            tasks_by_id = {task.id: task for task in tasks}
+            if not can_attempt_stale_runner_recovery(self.workspace, tasks_by_id, running_task_ids):
+                return False
+
+            recovery = recover_running_tasks(
+                self.workspace,
+                state,
+                tasks_by_id,
+                running_task_ids,
+                summary=summary,
             )
-            journal_messages.update(normalized["journal_messages"])
+            mutated = recovery["mutated"]
+            transitioned = recovery["transitioned"]
+            prioritized_ids = recovery["prioritized_ids"]
+            journal_messages = recovery["journal_messages"]
 
-        if update_active_task_after_recovery(
-            workspace,
-            state,
-            tasks_by_id=tasks_by_id,
-            prioritized_ids=prioritized_ids,
-            running_task_ids=running_task_ids,
-            summary=summary,
-        ):
-            mutated = True
-        if transitioned:
-            persist_tasks_and_state_without_runner_guard_for_workspace(
-                workspace,
-                tasks=transitioned,
-                state=state,
-                journal_messages=journal_messages,
+            normalized = normalize_nonrunning_resumable_tasks(
+                state,
+                tasks_by_id=tasks_by_id,
+                summary=summary,
             )
-        elif mutated:
-            save_state_without_runner_guard_for_workspace(workspace, state)
-        return mutated
+            if normalized["mutated"]:
+                mutated = True
+                transitioned.extend(
+                    task
+                    for task in normalized["transitioned"]
+                    if all(existing.id != task.id for existing in transitioned)
+                )
+                journal_messages.update(normalized["journal_messages"])
+
+            if update_active_task_after_recovery(
+                self.workspace,
+                state,
+                tasks_by_id=tasks_by_id,
+                prioritized_ids=prioritized_ids,
+                running_task_ids=running_task_ids,
+                summary=summary,
+            ):
+                mutated = True
+            if transitioned:
+                WorkspaceStateRepository(self.workspace).persist_tasks_and_state_without_runner_guard(
+                    tasks=transitioned,
+                    state=state,
+                    journal_messages=journal_messages,
+                )
+            elif mutated:
+                WorkspaceStateRepository(self.workspace).save_without_runner_guard(state)
+            return mutated
 
 
 def _can_skip_recovery_scan(

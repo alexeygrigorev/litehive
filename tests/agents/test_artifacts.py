@@ -1,7 +1,7 @@
 import gzip
 from pathlib import Path
 
-from litehive.agents.artifacts import ArtifactService, write_stream_artifact, write_text_artifact
+from litehive.agents.artifacts import ArtifactService
 
 
 def test_artifact_service_writes_plain_stream_and_removes_compressed_variant(tmp_path: Path) -> None:
@@ -32,12 +32,13 @@ def test_artifact_service_compresses_large_text_and_removes_plain_variant(tmp_pa
         assert handle.read() == content
 
 
-def test_artifact_compatibility_functions_delegate_to_service(tmp_path: Path) -> None:
+def test_artifact_service_writes_stream_and_text_artifacts(tmp_path: Path) -> None:
     base = tmp_path / "subagent"
     base.mkdir()
+    artifacts = ArtifactService(base)
 
-    write_stream_artifact(base, "stderr", "error", compress=False)
-    prompt_path = write_text_artifact(base, "prompt", ".txt", "prompt", compress=False)
+    artifacts.write_stream("stderr", "error", compress=False)
+    prompt_path = artifacts.write_text("prompt", ".txt", "prompt", compress=False)
 
     assert (base / "stderr.txt").read_text(encoding="utf-8") == "error"
     assert prompt_path == base / "prompt.txt"

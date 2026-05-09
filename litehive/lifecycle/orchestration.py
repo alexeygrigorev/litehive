@@ -1,7 +1,7 @@
 """Task orchestration entry point.
 
-``run_task_for_workspace`` wires injected workspace dependencies into the
-pipeline and drives one task through the state machine.
+``TaskOrchestrator`` wires injected workspace dependencies into the pipeline
+and drives one task through the state machine.
 
 What it does, in order:
 
@@ -26,7 +26,8 @@ from litehive.config.engine_models import resolve_task_rejection_loop_limit, res
 from litehive.git.ops import GitError
 from litehive.domain.common import PipelineState
 from litehive.domain.task import TaskRecord
-from litehive.state.locking import runner_heartbeat_for_workspace, workspace_runner_guard
+from litehive.state.locking import WorkspaceRunnerLock
+from litehive.state.records import WorkspaceTasks
 
 from litehive.roles.base import PromptContext
 from .events import HookOk, Reject
@@ -52,23 +53,16 @@ from .sessions import SqliteSessionStore
 from litehive.workspace import Workspace
 from .transitions import Transition
 from .worktree_setup import (
-    _build_worktree_sync_node,
-    _cleanup_terminal_worktree,
-    _mark_task_interrupted_on_crash,
-    _resolve_hook_execution_root_for_workspace,
-    _worktree_metadata_repair,
-    _worktree_missing_probe,
-    build_commit_node_for_workspace,
-    reconcile_terminal_commit_sha_for_workspace,
+    PipelineWorktreeSetup,
 )
 
 
 __all__ = [
     "ExecutionResult",
+    "TaskOrchestrator",
     "_load_or_initialize",
     "_sync_back",
     "hook_specs_from_config",
-    "run_task_for_workspace",
 ]
 
 
@@ -94,115 +88,125 @@ class ExecutionResult:
     failed_message: str | None = None
 
 
-def run_task_for_workspace(
-    workspace: Workspace,
-    config: LitehiveConfig,
-    task: TaskRecord,
-    engine_factory: EngineFactory | None = None,
-    engine_override: str | None = None,
-    model_override: str | None = None,
-) -> ExecutionResult:
+class TaskOrchestrator:
     """
-    Run a single task through the state machine using injected dependencies.
+    Workspace-bound lifecycle orchestrator for running one task.
     """
-    with workspace_runner_guard(workspace):
-        persistence = SqlitePersistence(
-            workspace,
-            limits=replace(
-                Limits(),
-                rejection_loop_limit=resolve_task_rejection_loop_limit(task, config),
-            ),
-        )
-        _load_or_initialize(task.id, workspace, persistence)
 
-        factory = engine_factory or heru_engine_factory(workspace, config)
-        selector = ConfigBackedEngineSelector(
-            config,
-            factory,
-            workspace=workspace,
-            engine_override=engine_override,
-            model_override=model_override,
-            check_quota=engine_factory is None,
-        )
-        sessions = SqliteSessionStore(workspace)
-        journal = SqliteJournal(workspace)
-        hook_runner = SubprocessHookRunner(
-            workspace,
-            execution_root_resolver=lambda state: _resolve_hook_execution_root_for_workspace(workspace, state),
-        )
-        commit_node = build_commit_node_for_workspace(workspace)
-        worktree_sync_node = _build_worktree_sync_node(workspace)
-        ready_node = ReadyNode(probes=[_worktree_missing_probe(workspace)])
-        pre_exec_recovery_node = PreExecRecoveryNode(
-            repairs=[_worktree_metadata_repair(workspace)],
-        )
-        prompt_context = PromptContext(workspace=workspace, config=config)
-        hook_specs = hook_specs_from_config(config)
-        retry_budget = resolve_task_retry_policy(task, config)
+    def __init__(self, workspace: Workspace, config: LitehiveConfig) -> None:
+        self.workspace = workspace
+        self.config = config
 
-        registry = build_registry(
-            selector=selector,
-            session_store=sessions,
-            hook_runner=hook_runner,
-            commit_node=commit_node,
-            worktree_sync_node=worktree_sync_node,
-            ready_node=ready_node,
-            pre_exec_recovery_node=pre_exec_recovery_node,
-            prompt_context=prompt_context,
-            hook_specs=hook_specs,
-            retry_budget=retry_budget,
-            retry_on=tuple(config.retry_on),
-        )
-
-        runner = StateMachineRunner(
-            registry,
-            persistence,
-            journal=journal,
-            state_sync=lambda state: _sync_back_no_return(state, workspace),
-            transition_observer=lambda state, from_stage, event, trans: _observe_transition(
+    def run(
+        self,
+        task: TaskRecord,
+        engine_factory: EngineFactory | None = None,
+        engine_override: str | None = None,
+        model_override: str | None = None,
+    ) -> ExecutionResult:
+        """
+        Run a single task through the state machine using injected dependencies.
+        """
+        workspace = self.workspace
+        config = self.config
+        with WorkspaceRunnerLock(workspace).guard():
+            persistence = SqlitePersistence(
                 workspace,
-                state,
-                from_stage,
-                event,
-                trans,
-            ),
-            session_store=sessions,
-            task_time_budget_seconds=config.task_time_budget_seconds,
-        )
-
-        # 3. Run under the heartbeat so `litehive status` sees the active task.
-        with runner_heartbeat_for_workspace(workspace, active_task_id=task.id):
-            try:
-                final_state = runner.run_task(task.id)
-            except BaseException:
-                # Runner crashed — mark task as interrupted so it can be
-                # resumed instead of leaving stale "running" state behind.
-                _mark_task_interrupted_on_crash(workspace, task)
-                raise
-
-        # 4. Mirror terminal state back to the TaskRecord.
-        updated_task = _sync_back(final_state, workspace) or task
-        if final_state.stage in {PipelineState.DONE, PipelineState.FAILED}:
-            reconciled_task = reconcile_terminal_commit_sha_for_workspace(
-                workspace,
-                updated_task,
-                final_state=final_state,
-                persistence=persistence,
+                limits=replace(
+                    Limits(),
+                    rejection_loop_limit=resolve_task_rejection_loop_limit(task, config),
+                ),
             )
-            updated_task = reconciled_task or updated_task
-            _clear_terminal_task_from_workspace_state(workspace, updated_task.id)
-            try:
-                _cleanup_terminal_worktree(workspace, updated_task)
-            except GitError:
-                pass
+            _load_or_initialize(task.id, workspace, persistence)
+    
+            factory = engine_factory or heru_engine_factory(workspace, config)
+            selector = ConfigBackedEngineSelector(
+                config,
+                factory,
+                workspace=workspace,
+                engine_override=engine_override,
+                model_override=model_override,
+                check_quota=engine_factory is None,
+            )
+            sessions = SqliteSessionStore(workspace)
+            journal = SqliteJournal(workspace)
+            worktree_setup = PipelineWorktreeSetup(workspace)
+            hook_runner = SubprocessHookRunner(
+                workspace,
+                execution_root_resolver=worktree_setup.resolve_hook_execution_root,
+            )
+            commit_node = worktree_setup.build_commit_node()
+            worktree_sync_node = worktree_setup.build_worktree_sync_node()
+            ready_node = ReadyNode(probes=[worktree_setup.worktree_missing_probe()])
+            pre_exec_recovery_node = PreExecRecoveryNode(
+                repairs=[worktree_setup.worktree_metadata_repair()],
+            )
+            prompt_context = PromptContext(workspace=workspace, config=config)
+            hook_specs = hook_specs_from_config(config)
+            retry_budget = resolve_task_retry_policy(task, config)
+    
+            registry = build_registry(
+                selector=selector,
+                session_store=sessions,
+                hook_runner=hook_runner,
+                commit_node=commit_node,
+                worktree_sync_node=worktree_sync_node,
+                ready_node=ready_node,
+                pre_exec_recovery_node=pre_exec_recovery_node,
+                prompt_context=prompt_context,
+                hook_specs=hook_specs,
+                retry_budget=retry_budget,
+                retry_on=tuple(config.retry_on),
+            )
+    
+            runner = StateMachineRunner(
+                registry,
+                persistence,
+                journal=journal,
+                state_sync=lambda state: _sync_back_no_return(state, workspace),
+                transition_observer=lambda state, from_stage, event, trans: _observe_transition(
+                    workspace,
+                    state,
+                    from_stage,
+                    event,
+                    trans,
+                ),
+                session_store=sessions,
+                task_time_budget_seconds=config.task_time_budget_seconds,
+            )
+    
+            # 3. Run under the heartbeat so `litehive status` sees the active task.
+            with WorkspaceRunnerLock(workspace).heartbeat(active_task_id=task.id):
+                try:
+                    final_state = runner.run_task(task.id)
+                except BaseException:
+                    # Runner crashed — mark task as interrupted so it can be
+                    # resumed instead of leaving stale "running" state behind.
+                    worktree_setup.mark_task_interrupted_on_crash(task)
+                    raise
+    
+            # 4. Mirror terminal state back to the TaskRecord.
+            updated_task = _sync_back(final_state, workspace) or task
+            if final_state.stage in {PipelineState.DONE, PipelineState.FAILED}:
+                reconciled_task = worktree_setup.reconcile_terminal_commit_sha(
+                    updated_task,
+                    final_state=final_state,
+                    persistence=persistence,
+                )
+                updated_task = reconciled_task or updated_task
+                _clear_terminal_task_from_workspace_state(workspace, updated_task.id)
+                try:
+                    worktree_setup.cleanup_terminal_worktree(updated_task)
+                except GitError:
+                    pass
 
-    return ExecutionResult(
-        task=updated_task,
-        final_state=final_state,
-        final_stage=final_state.stage,
-        failed_reason=final_state.failed_reason,
-        failed_message=final_state.failed_message,
-    )
+        return ExecutionResult(
+            task=updated_task,
+            final_state=final_state,
+            final_stage=final_state.stage,
+            failed_reason=final_state.failed_reason,
+            failed_message=final_state.failed_message,
+        )
 
 
 def _observe_transition(
@@ -222,7 +226,7 @@ def _observe_transition(
     as agent verdicts.
     """
     del trans
-    task = workspace.get_task(state.task_id)
+    task = WorkspaceTasks(workspace).get(state.task_id)
     if task is None:
         return
     match event:

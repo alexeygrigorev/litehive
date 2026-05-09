@@ -180,10 +180,10 @@ globals, callback best-effort persistence handling, low-level
 session/artifact I/O, sandbox policy calculation, activity storage, or report
 parsing. Those remain with `litehive.lifecycle`, `litehive.roles`,
 `EngineManager`, `SubagentRunCallbacks`, `SubagentSessionManager`,
-`SandboxLauncher`, `Workspace.task_activity(...)`, and
-`stage_report_from_subagent(...)` respectively. If new behavior does not fit the
-coordinator sequence above, add it to the focused collaborator that owns that
-concern instead of widening `SubagentManager`.
+`SandboxLauncher`, `TaskActivityStore`, and
+`AgentReportService.stage_report_from_subagent(...)` respectively. If new
+behavior does not fit the coordinator sequence above, add it to the focused
+collaborator that owns that concern instead of widening `SubagentManager`.
 
 ## Error Ownership
 

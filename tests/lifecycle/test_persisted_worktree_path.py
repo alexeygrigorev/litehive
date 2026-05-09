@@ -16,13 +16,12 @@ from litehive.lifecycle.prompt_types import AgentPrompt
 from litehive.lifecycle.sessions import Session
 from litehive.lifecycle.types import PipelineMode
 from litehive.lifecycle.events import Pass
-from litehive.state.records import create_task_for_workspace, get_task_worktree_path, require_task_for_workspace
-from litehive.state.store import runtime_store_for_workspace
+from litehive.state.records import WorkspaceTasks, get_task_worktree_path
+from litehive.state.store import RuntimeStore
 from litehive.workspace import Workspace
 from litehive.worktree.paths import (
-    resolve_recorded_worktree_path_for_workspace,
     task_worktree_branch,
-    task_worktree_path_for_workspace,
+    WorktreePaths,
 )
 
 
@@ -100,8 +99,8 @@ def test_worktree_sync_persists_runtime_worktree_path(tmp_path: Path) -> None:
     _git_ok(workspace_root, "add", "seed.txt")
     _git_ok(workspace_root, "commit", "-m", "initial")
 
-    task = create_task_for_workspace(workspace, title="Persist worktree")
-    worktree = task_worktree_path_for_workspace(workspace, task)
+    task = WorkspaceTasks(workspace).create( title="Persist worktree")
+    worktree = WorktreePaths(workspace).task_worktree_path(task)
     node = GitWorktreeSyncNode(
         workspace=workspace,
         worktree_resolver=lambda state: worktree,
@@ -109,11 +108,11 @@ def test_worktree_sync_persists_runtime_worktree_path(tmp_path: Path) -> None:
 
     changed = node.sync(_state(task.id, PipelineState.WORKTREE_SYNC))
 
-    stored = runtime_store_for_workspace(workspace).load_task_runtime(task.id)
+    stored = RuntimeStore(workspace).load_task_runtime(task.id)
     assert changed is True
     assert stored is not None
     assert stored.pipeline.git.worktree_path is not None
-    resolved = resolve_recorded_worktree_path_for_workspace(workspace, stored.pipeline.git.worktree_path)
+    resolved = WorktreePaths(workspace).resolve_recorded_worktree_path(stored.pipeline.git.worktree_path)
     assert resolved is not None
     assert resolved.exists()
 
@@ -133,8 +132,8 @@ def test_agent_and_commit_use_persisted_worktree_path(
     _git_ok(workspace_root, "add", "seed.txt")
     _git_ok(workspace_root, "commit", "-m", "initial")
 
-    task = create_task_for_workspace(workspace, title="Persisted checkout")
-    worktree = task_worktree_path_for_workspace(workspace, task)
+    task = WorkspaceTasks(workspace).create( title="Persisted checkout")
+    worktree = WorktreePaths(workspace).task_worktree_path(task)
     sync_node = GitWorktreeSyncNode(
         workspace=workspace,
         worktree_resolver=lambda state: worktree,
@@ -172,10 +171,10 @@ def test_agent_and_commit_use_persisted_worktree_path(
     (worktree / "new.txt").write_text("agent wrote this\n", encoding="utf-8")
 
     def _persisted_worktree(state: TaskState) -> Path:
-        recorded_task = require_task_for_workspace(workspace, state.task_id)
+        recorded_task = WorkspaceTasks(workspace).require(state.task_id)
         recorded = get_task_worktree_path(recorded_task)
         assert recorded is not None
-        resolved = resolve_recorded_worktree_path_for_workspace(workspace, recorded)
+        resolved = WorktreePaths(workspace).resolve_recorded_worktree_path(recorded)
         assert resolved is not None
         return resolved
 
@@ -201,8 +200,8 @@ def test_commit_ignores_untracked_embedded_git_repos_in_task_worktree(tmp_path: 
     _git_ok(workspace_root, "add", "seed.txt")
     _git_ok(workspace_root, "commit", "-m", "initial")
 
-    task = create_task_for_workspace(workspace, title="Scratch repo in worktree")
-    worktree = task_worktree_path_for_workspace(workspace, task)
+    task = WorkspaceTasks(workspace).create( title="Scratch repo in worktree")
+    worktree = WorktreePaths(workspace).task_worktree_path(task)
     sync_node = GitWorktreeSyncNode(
         workspace=workspace,
         worktree_resolver=lambda state: worktree,
@@ -215,10 +214,10 @@ def test_commit_ignores_untracked_embedded_git_repos_in_task_worktree(tmp_path: 
     _git_ok(scratch_repo, "init", "-b", "main")
 
     def _persisted_worktree(state: TaskState) -> Path:
-        recorded_task = require_task_for_workspace(workspace, state.task_id)
+        recorded_task = WorkspaceTasks(workspace).require(state.task_id)
         recorded = get_task_worktree_path(recorded_task)
         assert recorded is not None
-        resolved = resolve_recorded_worktree_path_for_workspace(workspace, recorded)
+        resolved = WorktreePaths(workspace).resolve_recorded_worktree_path(recorded)
         assert resolved is not None
         return resolved
 

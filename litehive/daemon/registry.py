@@ -16,12 +16,13 @@ from dataclasses import dataclass
 import logging
 from pathlib import Path
 import threading
+from collections.abc import Iterator
 from typing import Literal, TextIO
 
 from litehive.state.lock_manager import WorkspaceLockManager
 from litehive.state.locking import runner_pid_is_alive
 from litehive.state.process_lock import ProcessLockManager
-from litehive.state.store import runtime_store_for_workspace
+from litehive.state.store import RuntimeStore
 from litehive.workspace import Workspace
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ _DAEMON_LOCKS: dict[Path, TextIO] = {}
 _DAEMON_LOCKS_MUTEX = threading.Lock()
 
 
-def _daemon_lock_key_for_workspace(workspace: Workspace) -> Path:
+def _daemon_lock_key_impl(workspace: Workspace) -> Path:
     """
     Return the normalized key for the in-process daemon-lock registry.
     """
@@ -75,6 +76,146 @@ class DaemonRegistryEntry:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class DaemonRegistry:
+    """
+    Workspace-bound daemon registration API.
+
+    Owns daemon lock metadata, process-state mirroring, and liveness checks for
+    one workspace. Callers should bind a workspace once instead of passing it
+    through module-level registry helpers.
+    """
+
+    workspace: Workspace
+
+    def lock_is_active(self) -> bool:
+        """
+        Whether a live daemon currently holds the workspace's daemon lock.
+        """
+        return _daemon_lock_manager_impl(self.workspace).is_active()
+
+    def clear_stale_metadata(self, pid: int | None = None) -> None:
+        """
+        Drop a leftover daemon registration that no live process owns.
+        """
+        manager = _daemon_lock_manager_impl(self.workspace)
+        manager.clear_stale_state(expected_pid=pid)
+
+    def metadata(self) -> DaemonRegistryEntry | None:
+        """
+        Return the persisted daemon row tagged ``running`` or ``stale``.
+        """
+        manager = _daemon_lock_manager_impl(self.workspace)
+        metadata = manager.read_metadata()
+        if not metadata:
+            return None
+        if manager.is_active():
+            status = "running"
+        else:
+            status = "stale"
+        return DaemonRegistryEntry.from_metadata(metadata, status=status)
+
+    def live_entry(self) -> DaemonRegistryEntry | None:
+        """
+        Return the daemon row only when a live daemon is registered.
+        """
+        metadata = self.metadata()
+        if metadata is None:
+            return None
+        if metadata.status == "running":
+            return metadata
+        return None
+
+    def register(self, pid: int, log_dir: Path) -> None:
+        """
+        Acquire the daemon lock and persist this process as the active daemon.
+        """
+        lock_key = _daemon_lock_key_impl(self.workspace)
+        manager = _daemon_lock_manager_impl(self.workspace)
+        # Remove stale lock file before opening; inherited FDs from dead
+        # processes can hold flocks on the old inode indefinitely.
+        manager.remove_stale_lockfile()
+        handle = manager.lock_manager.open()
+        try:
+            try:
+                manager.lock_manager.lock(handle, nonblocking=True)
+            except BlockingIOError:
+                existing = manager.read_locked_metadata(handle)
+                existing_pid = existing.get("pid")
+                if isinstance(existing_pid, int) and runner_pid_is_alive(existing_pid):
+                    raise RuntimeError(f"daemon already running for {lock_key}: pid={existing_pid}") from None
+                raise RuntimeError(f"daemon already running for {lock_key}: pid={existing_pid}") from None
+            payload = manager.create_base_metadata(
+                pid,
+                {
+                    "workspace": str(lock_key),
+                    "log_dir": str(log_dir),
+                },
+            )
+            manager.write_locked_metadata(handle, payload)
+            with _DAEMON_LOCKS_MUTEX:
+                existing_handle = _DAEMON_LOCKS.get(lock_key)
+                if existing_handle is not None:
+                    raise RuntimeError(f"daemon already registered in-process for {lock_key}")
+                _DAEMON_LOCKS[lock_key] = handle
+            manager.save_process_state(payload)
+        except (OSError, RuntimeError):
+            try:
+                manager.lock_manager.unlock(handle)
+            except OSError:
+                pass
+            handle.close()
+            raise
+
+    def unregister(self, pid: int | None = None) -> None:
+        """
+        Release the daemon lock on shutdown.
+        """
+        lock_key = _daemon_lock_key_impl(self.workspace)
+        manager = _daemon_lock_manager_impl(self.workspace)
+        with _DAEMON_LOCKS_MUTEX:
+            handle = _DAEMON_LOCKS.pop(lock_key, None)
+        if handle is None:
+            self.clear_stale_metadata(pid=pid)
+            return
+        try:
+            metadata = manager.read_locked_metadata(handle)
+            if pid is not None and metadata.get("pid") != pid:
+                return
+        finally:
+            manager.lock_manager.release(handle, clear_metadata=True)
+        manager.clear_process_state()
+
+    def touch(self, pid: int | None = None) -> bool:
+        """
+        Refresh the daemon heartbeat timestamp.
+        """
+        lock_key = _daemon_lock_key_impl(self.workspace)
+        manager = _daemon_lock_manager_impl(self.workspace)
+        with _DAEMON_LOCKS_MUTEX:
+            handle = _DAEMON_LOCKS.get(lock_key)
+            if handle is None:
+                return False
+            metadata = manager.read_locked_metadata(handle)
+            if pid is not None and metadata.get("pid") != pid:
+                return False
+            manager.update_heartbeat(handle)
+            metadata = manager.read_locked_metadata(handle)
+            manager.save_process_state(metadata)
+        return True
+
+    @contextmanager
+    def stale_metadata(self) -> Iterator[DaemonRegistryEntry | None]:
+        """
+        Yield stale daemon metadata without mutating the lock file.
+        """
+        metadata = self.metadata()
+        if metadata is None or metadata.status != "stale":
+            yield None
+            return
+        yield metadata
+
+
 def _optional_text_field(metadata: dict[str, object], key: str) -> str | None:
     value = metadata.get(key)
     if isinstance(value, str):
@@ -82,7 +223,7 @@ def _optional_text_field(metadata: dict[str, object], key: str) -> str | None:
     return None
 
 
-def _daemon_lock_path_for_workspace(workspace: Workspace) -> Path:
+def _daemon_lock_path_impl(workspace: Workspace) -> Path:
     """
     Canonical daemon-lockfile path for ``workspace``.
 
@@ -108,7 +249,7 @@ def _daemon_lock_is_held_in_process(workspace: Path) -> bool:
         return workspace in _DAEMON_LOCKS
 
 
-def _daemon_lock_manager_for_workspace(workspace: Workspace) -> ProcessLockManager:
+def _daemon_lock_manager_impl(workspace: Workspace) -> ProcessLockManager:
     """
     Build a per-call ``ProcessLockManager`` bound to this workspace.
 
@@ -118,199 +259,14 @@ def _daemon_lock_manager_for_workspace(workspace: Workspace) -> ProcessLockManag
     manager itself is the shared primitive; this helper only wires
     up the daemon-specific liveness predicate.
     """
-    lock_key = _daemon_lock_key_for_workspace(workspace)
+    lock_key = _daemon_lock_key_impl(workspace)
     return ProcessLockManager(
         process_name="daemon",
         lock_manager=WorkspaceLockManager(
-            path=_daemon_lock_path_for_workspace(workspace),
+            path=_daemon_lock_path_impl(workspace),
             pid_is_alive=runner_pid_is_alive,
             held_in_process=lambda: _daemon_lock_is_held_in_process(lock_key),
             fsync_writes=True,
         ),
-        runtime_store=runtime_store_for_workspace(workspace),
+        runtime_store=RuntimeStore(workspace),
     )
-
-
-def daemon_lock_is_active_for_workspace(workspace: Workspace) -> bool:
-    """
-    Whether a live daemon currently holds the workspace's daemon lock.
-
-    Used by the CLI status path and the start-guard check in
-    ``daemon.execution``. Differs from the raw lockfile-exists check
-    by also confirming the recorded pid is alive — a leftover lock
-    file from a crashed daemon is not an active daemon.
-    """
-    return _daemon_lock_manager_for_workspace(workspace).is_active()
-
-
-def _clear_stale_daemon_metadata_for_workspace(workspace: Workspace, pid: int | None = None) -> None:
-    """
-    Drop a leftover daemon registration that no live process owns.
-
-    Reached by ``unregister_daemon`` and the start-background reclaim
-    path, so a dead daemon's row never blocks a new registration.
-    The optional ``pid`` guard prevents this from clearing a fresh
-    daemon's row when an older daemon's stop sequence raced an
-    immediate restart.
-    """
-    manager = _daemon_lock_manager_for_workspace(workspace)
-    manager.clear_stale_state(expected_pid=pid)
-
-
-def daemon_metadata_for_workspace(workspace: Workspace) -> DaemonRegistryEntry | None:
-    """
-    Return the persisted daemon row tagged ``running`` or ``stale``.
-
-    Status and health surfaces consume this when they want both
-    "what was registered" and "is it still alive" in one call —
-    distinguishing those two states is the whole point of having a
-    registry, since a dead-but-recorded daemon is not the same as
-    no daemon at all.
-    """
-    manager = _daemon_lock_manager_for_workspace(workspace)
-    metadata = manager.read_metadata()
-    if not metadata:
-        return None
-    if manager.is_active():
-        status = "running"
-    else:
-        status = "stale"
-    return DaemonRegistryEntry.from_metadata(metadata, status=status)
-
-
-def get_workspace_daemon_for_workspace(workspace: Workspace) -> DaemonRegistryEntry | None:
-    """
-    Return the daemon row only when a live daemon is registered.
-
-    The strict counterpart to ``daemon_metadata``: callers that would
-    act on the row (signal it, deduplicate against it, refuse to
-    start) want to skip stale entries automatically rather than
-    branching on ``status`` themselves and risk acting on a corpse.
-    """
-    metadata = daemon_metadata_for_workspace(workspace)
-    if metadata is None:
-        return None
-    if metadata.status == "running":
-        return metadata
-    return None
-
-
-def register_daemon_for_workspace(workspace: Workspace, pid: int, log_dir: Path) -> None:
-    """
-    Acquire the daemon lock and persist this process as the active daemon.
-
-    Called once at the top of ``run_daemon_loop`` so the registration
-    row is in place before the first heartbeat. Raises if another
-    live daemon already owns the lock — two concurrent daemons for
-    one workspace would corrupt task state. The pre-open
-    ``remove_stale_lockfile`` step is load-bearing on Linux where an
-    inherited fd from a dead process can keep the flock alive on the
-    old inode.
-    """
-    lock_key = _daemon_lock_key_for_workspace(workspace)
-    manager = _daemon_lock_manager_for_workspace(workspace)
-    # Remove stale lock file before opening — inherited FDs from dead
-    # processes can hold flocks on the old inode indefinitely.
-    manager.remove_stale_lockfile()
-    handle = manager.lock_manager.open()
-    try:
-        try:
-            manager.lock_manager.lock(handle, nonblocking=True)
-        except BlockingIOError:
-            existing = manager.read_locked_metadata(handle)
-            existing_pid = existing.get("pid")
-            if isinstance(existing_pid, int) and runner_pid_is_alive(existing_pid):
-                raise RuntimeError(f"daemon already running for {lock_key}: pid={existing_pid}") from None
-            raise RuntimeError(f"daemon already running for {lock_key}: pid={existing_pid}") from None
-        payload = manager.create_base_metadata(
-            pid,
-            {
-                "workspace": str(lock_key),
-                "log_dir": str(log_dir),
-            },
-        )
-        manager.write_locked_metadata(handle, payload)
-        with _DAEMON_LOCKS_MUTEX:
-            existing_handle = _DAEMON_LOCKS.get(lock_key)
-            if existing_handle is not None:
-                raise RuntimeError(f"daemon already registered in-process for {lock_key}")
-            _DAEMON_LOCKS[lock_key] = handle
-        manager.save_process_state(payload)
-    except (OSError, RuntimeError):
-        try:
-            manager.lock_manager.unlock(handle)
-        except OSError:
-            pass
-        handle.close()
-        raise
-
-
-def unregister_daemon_for_workspace(workspace: Workspace, pid: int | None = None) -> None:
-    """
-    Release the daemon lock on shutdown.
-
-    Called from ``run_daemon_loop``'s ``finally`` and from the stop
-    path. The ``pid`` guard prevents an old daemon's tear-down from
-    clearing a fresh daemon's row when the two raced on the same
-    workspace path; without it, a slow ``unregister_daemon`` could
-    silently delete an unrelated daemon's registration.
-    """
-    lock_key = _daemon_lock_key_for_workspace(workspace)
-    manager = _daemon_lock_manager_for_workspace(workspace)
-    with _DAEMON_LOCKS_MUTEX:
-        handle = _DAEMON_LOCKS.pop(lock_key, None)
-    if handle is None:
-        _clear_stale_daemon_metadata_for_workspace(workspace, pid=pid)
-        return
-    try:
-        metadata = manager.read_locked_metadata(handle)
-        if pid is not None and metadata.get("pid") != pid:
-            return
-    finally:
-        manager.lock_manager.release(handle, clear_metadata=True)
-    manager.clear_process_state()
-
-
-def touch_daemon_for_workspace(workspace: Workspace, pid: int | None = None) -> bool:
-    """
-    Refresh the daemon heartbeat timestamp.
-
-    External observers (status, the daemon-start guard) read the
-    heartbeat to tell a live daemon from a wedged one. Called by the
-    background heartbeat thread on the configured daemon heartbeat
-    interval so a long iteration of the main loop never lets the
-    daemon look dead. Returns ``False`` when the in-process row has
-    gone (so the heartbeat thread can stop trying after shutdown
-    began).
-    """
-    lock_key = _daemon_lock_key_for_workspace(workspace)
-    manager = _daemon_lock_manager_for_workspace(workspace)
-    with _DAEMON_LOCKS_MUTEX:
-        handle = _DAEMON_LOCKS.get(lock_key)
-        if handle is None:
-            return False
-        metadata = manager.read_locked_metadata(handle)
-        if pid is not None and metadata.get("pid") != pid:
-            return False
-        manager.update_heartbeat(handle)
-        metadata = manager.read_locked_metadata(handle)
-        manager.save_process_state(metadata)
-    return True
-
-
-@contextmanager
-def stale_daemon_metadata_for_workspace(workspace: Workspace):
-    """
-    Yield stale daemon metadata without mutating the lock file.
-
-    Used by recovery and operator-facing diagnostics that want to
-    surface a dead daemon's last known facts (pid, log_dir,
-    started_at) without taking responsibility for clearing the row.
-    Yields ``None`` when the registration is healthy or absent so
-    callers can keep their handler symmetric.
-    """
-    metadata = daemon_metadata_for_workspace(workspace)
-    if metadata is None or metadata.status != "stale":
-        yield None
-        return
-    yield metadata

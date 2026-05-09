@@ -8,6 +8,7 @@ from pathlib import Path
 import warnings
 
 import yaml
+from pytest import CaptureFixture
 
 from heru import get_engine
 from heru.base import CLIExecutionResult
@@ -21,13 +22,10 @@ from litehive.lifecycle.persistence import SqlitePersistence, TaskState
 from litehive.lifecycle.types import FailedReason, PipelineMode
 from litehive.main import dispatch_status
 from litehive.observability.engine_monitoring import record_engine_execution
-from litehive.observability.status_diagnostics import (
-    collect_operational_status_snapshot_for_workspace,
-    collect_status_snapshot_for_workspace,
-)
-from litehive.observability.status_loaders import _load_runner_status_for_status_for_workspace
-from litehive.state.records import create_task_for_workspace, save_task_for_workspace
-from litehive.state.persist import save_state_for_workspace
+from litehive.observability.status_diagnostics import StatusSnapshotCollector
+from litehive.observability.status_loaders import _load_runner_status_for_status_impl
+from litehive.state.records import WorkspaceTasks
+from litehive.state.persist import WorkspaceStateRepository
 from litehive.workspace import Workspace
 
 from tests.support.helpers import _cmd_status
@@ -49,34 +47,45 @@ def test_status_snapshot_does_not_bootstrap_missing_database(tmp_path: Path) -> 
     (workspace_dir(tmp_path) / "config.yaml").write_text("{}", encoding="utf-8")
     state_db = workspace_path(tmp_path, "data.db")
 
-    snapshot = collect_status_snapshot_for_workspace(Workspace.from_path(tmp_path))
+    snapshot = StatusSnapshotCollector(Workspace.from_path(tmp_path)).collect()
 
     assert snapshot.state.queue == []
     assert not state_db.exists()
 
 
+def test_status_uses_defaults_when_workspace_config_is_missing(tmp_path: Path, capsys: CaptureFixture[str]) -> None:
+    create_workspace(tmp_path)
+    config_file = workspace_dir(tmp_path) / "config.yaml"
+    config_file.unlink()
+
+    exit_code, output = _run_dispatch_status(tmp_path, capsys)
+
+    assert exit_code == 0
+    assert f"config: MISSING at {config_file}" not in output
+    assert "runner_status: never_started" in output
+    assert "health:" not in output
+
+
 def test_operational_status_snapshot_does_not_run_doctor_style_probes(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
     monkeypatch.setattr(
-        "litehive.observability.status_diagnostics._probe_daemon_status_for_workspace",
-        lambda workspace: (_ for _ in ()).throw(AssertionError("daemon probe should not run")),
+        "litehive.observability.status_diagnostics.StatusSnapshotCollector.probe_daemon",
+        lambda self: (_ for _ in ()).throw(AssertionError("daemon probe should not run")),
     )
     monkeypatch.setattr(
-        "litehive.observability.status_diagnostics._probe_last_cycle_for_workspace",
-        lambda workspace: (_ for _ in ()).throw(AssertionError("last-cycle probe should not run")),
+        "litehive.observability.status_diagnostics.StatusSnapshotCollector.probe_last_cycle",
+        lambda self: (_ for _ in ()).throw(AssertionError("last-cycle probe should not run")),
     )
     monkeypatch.setattr(
-        "litehive.observability.status_diagnostics._probe_heru_link_for_workspace",
-        lambda workspace: (_ for _ in ()).throw(AssertionError("source checkout probe should not run")),
+        "litehive.observability.status_diagnostics.StatusSnapshotCollector.probe_heru_link",
+        lambda self: (_ for _ in ()).throw(AssertionError("source checkout probe should not run")),
     )
     monkeypatch.setattr(
-        "litehive.observability.status_diagnostics._probe_task_index_references_for_workspace",
-        lambda workspace, state, state_issues: (
-            _ for _ in ()
-        ).throw(AssertionError("task index probe should not run")),
+        "litehive.observability.status_diagnostics.StatusSnapshotCollector.probe_task_index_references",
+        lambda self, state, state_issues: (_ for _ in ()).throw(AssertionError("task index probe should not run")),
     )
 
-    snapshot = collect_operational_status_snapshot_for_workspace(Workspace.from_path(tmp_path))
+    snapshot = StatusSnapshotCollector(Workspace.from_path(tmp_path)).collect_operational()
 
     assert snapshot.state.queue == []
 
@@ -220,7 +229,7 @@ def test_status_reports_never_started_runner_without_lock(tmp_path: Path, capsys
 def test_status_reports_stale_runner_lock(tmp_path: Path, capsys, monkeypatch) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    save_state_for_workspace(workspace, WorkspaceState(active_task_id="T-0001"))
+    WorkspaceStateRepository(workspace).save(WorkspaceState(active_task_id="T-0001"))
     workspace_path(tmp_path, "runtime", ".runner.lock").parent.mkdir(parents=True, exist_ok=True)
     workspace_path(tmp_path, "runtime", ".runner.lock").write_text(
         json.dumps(
@@ -302,8 +311,8 @@ def test_status_reports_stopped_runner_for_empty_lock_file(tmp_path: Path, capsy
 def test_status_reports_queued_task_missing_from_sqlite_index(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Still queued")
-    save_state_for_workspace(workspace, WorkspaceState(queue=[task.id]))
+    task = WorkspaceTasks(workspace).create( title="Still queued")
+    WorkspaceStateRepository(workspace).save(WorkspaceState(queue=[task.id]))
     with connect_workspace_db(tmp_path) as connection:
         connection.execute("DELETE FROM task_state WHERE task_id = ?", (task.id,))
         connection.execute("DELETE FROM task_intent WHERE task_id = ?", (task.id,))
@@ -345,7 +354,7 @@ def test_runner_status_diagnostic_copies_serialize_without_pydantic_warnings(
             lambda pid, alive=pid_is_alive: alive,
         )
 
-        status, issue = _load_runner_status_for_status_for_workspace(workspace)
+        status, issue = _load_runner_status_for_status_impl(workspace)
 
         assert issue is None
         with warnings.catch_warnings():
@@ -441,7 +450,7 @@ heru = { path = "../heru", editable = true }
 def test_status_reports_origin_divergence_as_attention_required(tmp_path: Path, capsys, monkeypatch) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    save_state_for_workspace(workspace, WorkspaceState(pool_stop_reason="diverged_from_origin"))
+    WorkspaceStateRepository(workspace).save(WorkspaceState(pool_stop_reason="diverged_from_origin"))
     monkeypatch.setattr(
         "litehive.observability.status_probes.check_origin_divergence",
         lambda workspace: (
@@ -464,8 +473,7 @@ def test_status_reports_origin_divergence_as_attention_required(tmp_path: Path, 
 def test_full_status_reports_consecutive_task_failures_as_critical(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    save_state_for_workspace(
-        workspace,
+    WorkspaceStateRepository(workspace).save(
         WorkspaceState(
             pool_stop_reason="consecutive_task_failures",
             consecutive_task_failures=3,
@@ -483,13 +491,13 @@ def test_full_status_reports_consecutive_task_failures_as_critical(tmp_path: Pat
 def test_status_omits_recovery_failure_repair_guidance_from_default_path(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Recovery failed task")
+    task = WorkspaceTasks(workspace).create( title="Recovery failed task")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.FLAGGED
     task.flag_reason = "recovery_failed"
     task.runtime.pipeline.last_outcome.stage = PipelineState.IMPLEMENTING
     task.runtime.pipeline.last_outcome.reason = "recovery crashed while repairing the task"
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
     exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
@@ -503,11 +511,11 @@ def test_status_omits_recovery_failure_repair_guidance_from_default_path(tmp_pat
 def test_full_status_reports_terminal_recovery_failure_from_lifecycle_state(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Terminal lifecycle recovery failure")
+    task = WorkspaceTasks(workspace).create( title="Terminal lifecycle recovery failure")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.FLAGGED
     task.flag_reason = "needs_operator_review"
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
     SqlitePersistence(workspace).save(
         TaskState(
             task_id=task.id,
@@ -542,12 +550,12 @@ def test_full_status_reports_terminal_recovery_failure_from_lifecycle_state(tmp_
 def test_status_reports_queued_backlog_task_with_resumable_runtime_stage(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Backlog damaged task")
+    task = WorkspaceTasks(workspace).create( title="Backlog damaged task")
     task.status = TaskStatus.QUEUED
     task.pipeline_status = PipelineStatus.BACKLOG
     task.runtime.pipeline.current_stage.stage = PipelineState.TESTING
     task.runtime.pipeline.current_stage.status = "idle"
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
     exit_code, output = _run_full_status(tmp_path, capsys)
 
@@ -561,13 +569,13 @@ def test_status_reports_queued_backlog_task_with_resumable_runtime_stage(tmp_pat
 def test_status_omits_backlog_runtime_stage_repair_guidance_from_default_path(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Backlog damaged task missing from queue")
+    task = WorkspaceTasks(workspace).create( title="Backlog damaged task missing from queue")
     task.status = TaskStatus.QUEUED
     task.pipeline_status = PipelineStatus.BACKLOG
     task.runtime.pipeline.current_stage.stage = PipelineState.TESTING
     task.runtime.pipeline.current_stage.status = "idle"
-    save_task_for_workspace(workspace, task)
-    save_state_for_workspace(workspace, WorkspaceState(queue=[]))
+    WorkspaceTasks(workspace).save(task)
+    WorkspaceStateRepository(workspace).save(WorkspaceState(queue=[]))
 
     exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
@@ -582,12 +590,12 @@ def test_status_omits_backlog_runtime_stage_repair_guidance_from_default_path(tm
 def test_status_omits_queued_stage_normalization_warning_from_default_path(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Stale queued stage")
+    task = WorkspaceTasks(workspace).create( title="Stale queued stage")
     task.status = TaskStatus.QUEUED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
     task.runtime.pipeline.current_stage.stage = None
     task.runtime.pipeline.current_stage.status = "idle"
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
     exit_code, output = _run_dispatch_status(tmp_path, capsys)
 
@@ -600,7 +608,7 @@ def test_status_omits_queued_stage_normalization_warning_from_default_path(tmp_p
 def test_full_status_tolerates_missing_active_task_record(tmp_path: Path, capsys) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    save_state_for_workspace(workspace, WorkspaceState(active_task_id="T-9999"))
+    WorkspaceStateRepository(workspace).save(WorkspaceState(active_task_id="T-9999"))
 
     exit_code, output = _run_full_status(tmp_path, capsys)
 

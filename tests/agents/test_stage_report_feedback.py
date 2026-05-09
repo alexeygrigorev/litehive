@@ -7,21 +7,21 @@ from pydantic import ValidationError
 from heru.base import CLIExecutionResult
 from heru.types import SubagentRef
 
-from litehive.container import build_subagent_manager_for_workspace
-from litehive.agents.report_extraction import stage_report_from_subagent
+from litehive.container import build_subagent_manager
+from litehive.agents.report_extraction import AgentReportService
 from litehive.config.workspace import create_workspace
 from litehive.domain.agent import EngineFailure, ExecutionTrace, SubagentResult
 from litehive.domain.common import TaskStage
 from litehive.feedback import FEEDBACK_CAP
 from litehive.domain.reports import SEMANTIC_REJECT_CLASSIFICATION, StageReport, TaskActivityEntry
-from litehive.state.records import create_task_for_workspace
-from litehive.tasks.paths import read_text_artifact, resolve_artifact_path, task_dir
+from litehive.state.records import WorkspaceTasks
+from litehive.tasks.paths import read_text_artifact, resolve_artifact_path
 from litehive.tasks.activity_rendering import append_activity_entry
 from litehive.workspace import Workspace
 
 
 def _build_manager(workspace: Workspace, *, execution_root: Path) -> Any:
-    return build_subagent_manager_for_workspace(
+    return build_subagent_manager(
         workspace,
         workspace.load_config(),
         execution_root=execution_root,
@@ -60,13 +60,14 @@ def _subagent_result(
     )
 
 
-def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Path) -> None:
+def test_agent_report_service_preserves_cli_message_verbatim(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Keep CLI summary untouched")
+    workspace = Workspace.from_path(tmp_path)
+    task = WorkspaceTasks(workspace).create(title="Keep CLI summary untouched")
     message = "summary line\n\n" + ("y" * (FEEDBACK_CAP + 250))
 
     append_activity_entry(
-        Workspace.from_path(tmp_path),
+        workspace,
         task,
         TaskActivityEntry(
             role="swe",
@@ -77,11 +78,10 @@ def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Pat
         ),
     )
 
-    report = stage_report_from_subagent(
+    report = AgentReportService(workspace).stage_report_from_subagent(
         task,
         TaskStage.IMPLEMENTING,
         _subagent_result(execution_trace="x" * (FEEDBACK_CAP + 500)),
-        workspace=Workspace.from_path(tmp_path),
     )
 
     assert report.submitted_via_cli is True
@@ -89,12 +89,13 @@ def test_stage_report_from_subagent_preserves_cli_message_verbatim(tmp_path: Pat
     assert report.feedback == message
 
 
-def test_stage_report_from_subagent_preserves_semantic_reject_classification(tmp_path: Path) -> None:
+def test_agent_report_service_preserves_semantic_reject_classification(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Classified reviewer reject")
+    workspace = Workspace.from_path(tmp_path)
+    task = WorkspaceTasks(workspace).create(title="Classified reviewer reject")
 
     append_activity_entry(
-        Workspace.from_path(tmp_path),
+        workspace,
         task,
         TaskActivityEntry(
             role="reviewer",
@@ -106,11 +107,10 @@ def test_stage_report_from_subagent_preserves_semantic_reject_classification(tmp
         ),
     )
 
-    report = stage_report_from_subagent(
+    report = AgentReportService(workspace).stage_report_from_subagent(
         task,
         TaskStage.ACCEPTING,
         _subagent_result(execution_trace="reviewer submitted reject"),
-        workspace=Workspace.from_path(tmp_path),
     )
 
     assert report.submitted_via_cli is True
@@ -179,7 +179,7 @@ def test_subagent_manager_keeps_full_transcript_artifacts(
 ) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Keep full transcript artifacts")
+    task = WorkspaceTasks(workspace).create(title="Keep full transcript artifacts")
     manager = _build_manager(workspace, execution_root=tmp_path)
     transcript = "full transcript\n" + ("z" * (FEEDBACK_CAP + 400))
 
@@ -216,7 +216,7 @@ def test_subagent_manager_keeps_full_transcript_artifacts(
     monkeypatch.setattr("litehive.agents.engine_manager.get_engine", lambda _: FakeEngine())
 
     result = manager.run(task, role="swe", engine_name="codex", prompt="implement it")
-    subagent_dir = task_dir(tmp_path, task) / result.ref.path
+    subagent_dir = workspace.task_dir(task) / result.ref.path
 
     transcript_cache = resolve_artifact_path(subagent_dir, "execution_trace.md")
     assert transcript_cache is not None

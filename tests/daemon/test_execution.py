@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 from litehive.config.workspace import create_workspace
 from litehive.daemon.execution import (
+    DaemonStatusSnapshotCollector,
     _daemon_should_continue_for_stop_reason,
-    _daemon_status_snapshot_for_workspace,
     _runner_is_live,
     run_daemon_loop,
 )
@@ -15,29 +15,29 @@ from litehive.domain.common import RunnerExecutionStatus
 from litehive.domain.pool import PoolStopReason
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import WorkspaceState
-from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
-from litehive.state.records import create_task_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 
 def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    active = create_task_for_workspace(workspace, title="Active runner task")
-    queued = create_task_for_workspace(workspace, title="Queued follow-up task")
+    active = WorkspaceTasks(workspace).create( title="Active runner task")
+    queued = WorkspaceTasks(workspace).create( title="Queued follow-up task")
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.active_task_id = active.id
     state.queue = [queued.id]
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
     runner_checks = 0
     subprocess_calls: list[tuple[str, ...]] = []
     subprocess_cwds: list[Path] = []
     sleep_calls = 0
 
-    def fake_runner_status(workspace: Workspace) -> RunnerStatusState:
-        del workspace
+    def fake_runner_status(runner_lock: object) -> RunnerStatusState:
+        del runner_lock
         nonlocal runner_checks
         runner_checks += 1
         if runner_checks == 1:
@@ -54,21 +54,21 @@ def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monke
         nonlocal sleep_calls
         sleep_calls += 1
         assert seconds == 1.0
-        state = load_state_for_workspace(workspace)
+        state = WorkspaceStateRepository(workspace).load()
         state.active_task_id = None
-        save_state_for_workspace(workspace, state)
+        WorkspaceStateRepository(workspace).save(state)
 
     def fake_run_logged_subprocess(command: list[str], **kwargs) -> int:
         subprocess_calls.append(tuple(command))
         subprocess_cwds.append(kwargs["cwd"])
         if "repair" not in command and "run" in command:
-            state = load_state_for_workspace(workspace)
+            state = WorkspaceStateRepository(workspace).load()
             state.queue = []
             state.active_task_id = None
-            save_state_for_workspace(workspace, state)
+            WorkspaceStateRepository(workspace).save(state)
         return 0
 
-    monkeypatch.setattr("litehive.daemon.execution.runner_status_for_workspace", fake_runner_status)
+    monkeypatch.setattr("litehive.daemon.execution.WorkspaceRunnerLock.status", fake_runner_status)
     monkeypatch.setattr("litehive.daemon.execution.sleep_with_stop", fake_sleep)
     monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
     monkeypatch.setattr("litehive.daemon.execution.maybe_run_workspace_backup", lambda *args, **kwargs: None)
@@ -92,18 +92,18 @@ def test_daemon_waits_for_live_runner_before_repair_or_run(tmp_path: Path, monke
 def test_daemon_processes_queued_tasks_sequentially(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    first = create_task_for_workspace(workspace, title="First queued task")
-    second = create_task_for_workspace(workspace, title="Second queued task")
+    first = WorkspaceTasks(workspace).create( title="First queued task")
+    second = WorkspaceTasks(workspace).create( title="Second queued task")
 
     subprocess_calls: list[tuple[str, ...]] = []
 
     def fake_run_logged_subprocess(command: list[str], **kwargs) -> int:
         del kwargs
         subprocess_calls.append(tuple(command))
-        state = load_state_for_workspace(workspace)
+        state = WorkspaceStateRepository(workspace).load()
         state.active_task_id = None
         state.queue = state.queue[1:]
-        save_state_for_workspace(workspace, state)
+        WorkspaceStateRepository(workspace).save(state)
         return 0
 
     monkeypatch.setattr("litehive.daemon.execution.run_logged_subprocess", fake_run_logged_subprocess)
@@ -120,7 +120,7 @@ def test_daemon_processes_queued_tasks_sequentially(tmp_path: Path, monkeypatch)
     assert all("run" in call for call in subprocess_calls)
     assert first.id in stream.getvalue()
     assert second.id in stream.getvalue()
-    assert load_state_for_workspace(workspace).queue == []
+    assert WorkspaceStateRepository(workspace).load().queue == []
 
 
 def test_daemon_status_snapshot_uses_shared_status_collector(tmp_path: Path, monkeypatch) -> None:
@@ -139,8 +139,8 @@ def test_daemon_status_snapshot_uses_shared_status_collector(tmp_path: Path, mon
     )
     captured: dict[str, object] = {}
 
-    def fake_collect(workspace, *, read_only: bool = False):
-        captured["workspace"] = workspace
+    def fake_collect(self, *, read_only: bool = False):
+        captured["workspace"] = self.workspace
         captured["read_only"] = read_only
         return shared_status
 
@@ -151,10 +151,10 @@ def test_daemon_status_snapshot_uses_shared_status_collector(tmp_path: Path, mon
         captured["retry_on_label"] = retry_on_label
         return ["workspace: shared", "queued_tasks: 1"]
 
-    monkeypatch.setattr("litehive.daemon.execution.collect_task_pipeline_status_for_workspace", fake_collect)
+    monkeypatch.setattr("litehive.daemon.execution.TaskPipelineStatusCollector.collect", fake_collect)
     monkeypatch.setattr("litehive.daemon.execution.render_task_pipeline_status_lines", fake_render)
 
-    snapshot = _daemon_status_snapshot_for_workspace(Workspace.from_path(tmp_path))
+    snapshot = DaemonStatusSnapshotCollector(Workspace.from_path(tmp_path)).snapshot()
 
     assert snapshot.state.active_task_id == "T-0001"
     assert snapshot.state.queue == ["T-0002"]
@@ -182,10 +182,10 @@ def test_daemon_continues_only_for_absent_or_transient_stop_reasons() -> None:
 def test_daemon_stops_for_unknown_persisted_pool_stop_reason(tmp_path: Path, monkeypatch) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    create_task_for_workspace(workspace, title="Queued work")
-    state = load_state_for_workspace(workspace)
+    WorkspaceTasks(workspace).create( title="Queued work")
+    state = WorkspaceStateRepository(workspace).load()
     state.pool_stop_reason = "None"
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
     subprocess_calls = 0
 

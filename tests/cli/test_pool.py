@@ -1,17 +1,16 @@
-from litehive.cli.pool import _write_pool_summary_report, task_stage_outcomes_for_workspace
+from litehive.cli.pool import PoolService
 from litehive.config.workspace import create_workspace
 from litehive.domain.reports import StageReport
-from litehive.state.records import create_task_for_workspace
-from litehive.tasks.report_storage import record_stage_report
+from litehive.state.records import WorkspaceTasks
+from litehive.tasks.report_storage import TaskReportStore
 from litehive.workspace import Workspace
 
 
 def test_pool_reads_canonical_stage_reports(tmp_path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Pool stage metrics")
-    record_stage_report(
-        workspace,
+    task = WorkspaceTasks(workspace).create( title="Pool stage metrics")
+    TaskReportStore(workspace).record_stage_report(
         task,
         StageReport(
             task_id=task.id,
@@ -22,7 +21,7 @@ def test_pool_reads_canonical_stage_reports(tmp_path) -> None:
         ),
     )
 
-    assert task_stage_outcomes_for_workspace(workspace, task.id) == ["implementing=pass"]
+    assert PoolService(workspace).stage_outcomes(task.id) == ["implementing=pass"]
     assert list((tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "reports").glob("*.yaml")) == []
 
 
@@ -48,7 +47,7 @@ def test_pool_summary_writes_operator_text_without_structured_yaml(tmp_path) -> 
     }
 
     workspace = Workspace.from_path(tmp_path)
-    _write_pool_summary_report(workspace=workspace, report=report)
+    PoolService(workspace).write_summary(report)
 
     summary_path = tmp_path / ".litehive" / "pool-summary.txt"
     summary_text = summary_path.read_text(encoding="utf-8")

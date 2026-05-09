@@ -144,6 +144,8 @@ Methods:
 
 - `create(title, goal, acceptance_criteria, constraints, plan, ...)`
 - `list(include_runtime=True, strict=True)`
+- `list_state_first(state=None, include_runtime=False)`
+- `create_follow_ups(parent_task, stage, follow_ups)`
 - `get(task_id)`
 - `get_record(task_id)`
 - `require(task_id)`
@@ -189,6 +191,33 @@ Split internally:
 Reason: `RuntimeStore` is already too broad. Keep it as a facade while the
 call graph is migrated, but do not add new policy or domain decisions to it.
 
+### `WorkspaceStateRepository`
+
+Purpose: workspace-bound policy API for queue/pool `WorkspaceState` reads and
+mutations.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+- `runtime_store: RuntimeStore`
+
+Methods:
+
+- `load(bootstrap=True)`
+- `save(state)`
+- `save_without_runner_guard(state, audit_entries=None)`
+- `set_pool_stop_reason(stop_reason)`
+- `record_task_completion(final_stage)`
+- `merged_state_for_runner_owned_write(state, protected_task_ids=())`
+- `persist_task_and_state(task, state, journal_message=None, protected_task_ids=(), audit_entries=None)`
+- `persist_tasks_and_state(tasks, state, journal_messages=None, protected_task_ids=(), audit_entries=None)`
+- `persist_task_and_state_without_runner_guard(task, state, journal_message=None, protected_task_ids=(), audit_entries=None)`
+- `persist_tasks_and_state_without_runner_guard(tasks, state, journal_messages=None, protected_task_ids=(), audit_entries=None)`
+
+Reason: `litehive.state.store.WorkspaceStateStore` is the low-level SQLite
+adapter. `WorkspaceStateRepository` owns higher-level mutation policy such as
+runner guards, bootstrap validation, and pool stop reason side effects.
+
 ### `WorkspaceRunnerLock`
 
 Purpose: workspace-specific runner lock and reconciliation API.
@@ -201,13 +230,16 @@ Constructor dependencies:
 
 Methods:
 
-- `guard(status)`
+- `guard()`
 - `is_active()`
 - `is_held()`
 - `read_metadata()`
 - `write_metadata(status)`
 - `clear_metadata()`
 - `status()`
+- `owns_current_thread()`
+- `touch(active_task_id=None)`
+- `heartbeat(active_task_id=None, interval_seconds=1.0)`
 - `conflict_message()`
 - `needs_reconciliation()`
 - `pid_is_stale()`
@@ -224,9 +256,67 @@ Methods:
 
 - `hold()`
 - `is_owned_by_current_thread()`
+- `ensure_future_task_mutation_allowed(task_ids, state=None)`
+- `persist_future_task_update(task, journal_message=None, audit_entries=None)`
 
 Reason: mutation locking is a separate responsibility from runner process
 locking.
+
+### `WorkspaceStateLock`
+
+Purpose: short blocking workspace flock for state mutation critical sections.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `hold()`
+
+Reason: this is the blocking `.lock` around brief workspace-state updates. It
+is separate from `WorkspaceRunnerLock`, which owns long-lived runner process
+identity and metadata, and separate from `WorkspaceMutationGuard`, which
+decides when a caller must take the runner guard.
+
+### `WorkspaceBackupService`
+
+Purpose: workspace-bound SQLite database backups.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `list_backups()`
+- `prune()`
+- `create(when=None)`
+- `create_scheduled(now=None)`
+- `restore(timestamp)`
+
+Migrates functions from:
+
+- `litehive/state/backup.py`
+
+### `DatabaseRebuildSafety`
+
+Purpose: workspace-bound guardrails and backup for destructive database rebuilds.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `task_artifact_dir_ids()`
+- `event_log_replay_task_ids()`
+- `assert_safe(db_path, replay_task_ids=None, operation=...)`
+- `backup_before_rebuild(db_path, label)`
+
+Migrates functions from:
+
+- `litehive/state/rebuild_safety.py`
 
 ## `litehive.config`
 
@@ -292,9 +382,9 @@ Purpose: read and validate workspace/global config layers.
 
 Methods:
 
-- `load_effective_data()`
-- `load_config()`
-- `load_context()`
+- `effective_data()`
+- `load()`
+- `context()`
 - `read_layer(path)`
 - `merge_layers(base, overlay)`
 
@@ -354,6 +444,7 @@ Methods:
 - `clear_active(task_id=None)`
 - `is_resumable(task)`
 - `is_runnable(task)`
+- `validate_dependencies(task_id, depends_on)`
 
 Migrates functions from:
 
@@ -361,6 +452,52 @@ Migrates functions from:
 - `litehive/tasks/queue_eligibility.py`
 - `litehive/tasks/queue_mutations.py`
 - `litehive/tasks/queue_selection.py`
+
+### `TaskDependencyValidator`
+
+Purpose: workspace-bound validation for task dependency edges.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `validate(task_id, depends_on)`
+
+Migrates functions from:
+
+- `litehive/tasks/queue_eligibility.py`
+
+### `TaskStatusService`
+
+Purpose: workspace-bound owner for operator task-status transitions.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `abandon(task_id, reason, audit_actor, audit_source)`
+- `close(task_id, outcome, reason, follow_up_task_id, audit_actor, audit_source)`
+- `park(task_id, reason, audit_actor, audit_source)`
+- `requeue(task_id, front, force, audit_actor, audit_source)`
+- `resume(task_id, front)`
+- `recover_completed(task_id)`
+- `stop_current()`
+- `switch_engine(task_id, engine, reason)`
+- `update(task_id, fields..., audit_actor, audit_source)`
+
+Migrates functions from:
+
+- `litehive/tasks/status.py`
+- `litehive/tasks/status_close.py`
+- `litehive/tasks/status_resume.py`
+- `litehive/tasks/status_update.py`
+- `litehive/tasks/completed_task_recovery.py`
+- `litehive/tasks/stop.py`
+- `litehive/tasks/switch_engine.py`
 
 ### `TaskReportStore`
 
@@ -423,6 +560,23 @@ Migrates behavior around:
 - `litehive/tasks/activity.py`
 - current `Workspace.task_activity(...)` convenience method
 
+### `TaskArtifactLocator`
+
+Purpose: workspace-bound lookup for task and runner artifacts.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `latest_run_all_log_path()`
+- `latest_subagent_base(task)`
+
+Migrates functions from:
+
+- `litehive/tasks/paths.py`
+
 ### `PoolService`
 
 Purpose: runner-level queue drain attempt and summary reporting.
@@ -448,6 +602,67 @@ Migrates functions from:
 
 - `litehive/cli/pool.py`
 - pool report builders that currently live as free functions
+
+## `litehive.cli`
+
+### `TaskEvidencePresenter`
+
+Purpose: workspace-bound presenter for `litehive task evidence` and
+`litehive task debug` output.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `render_task_evidence(task)`
+- `debug_all(task)`
+- `debug_latest(task)`
+- `debug_worktree(task)`
+
+Migrates functions from:
+
+- `litehive/cli/task_debug_support.py`
+
+### `TaskLogsPresenter`
+
+Purpose: workspace-bound presenter for `litehive task logs` output.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `show_latest_daemon_log()`
+- `list_daemon_sessions()`
+- `show_task_journal(task)`
+- `show_latest_subagent(task)`
+- `list_task_subagents(task)`
+- `follow_active_subagent(task_id=None)`
+- `resolve_follow_task(task_id)`
+- `load_task_with_runtime(task_id)`
+
+Migrates functions from:
+
+- `litehive/cli/task_logs_support.py`
+
+### `WorkspaceHealthPresenter`
+
+Purpose: workspace-bound presenter for the `litehive health` command.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `daemon_status()`
+
+Migrates functions from:
+
+- `litehive/cli/workspace.py`
 
 ## `litehive.agents`
 
@@ -554,6 +769,20 @@ Do not add:
 
 ## `litehive.lifecycle`
 
+### `TaskOrchestrator`
+
+Purpose: workspace-bound entry point that wires lifecycle collaborators and
+runs one task through the state machine.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+- `config: LitehiveConfig`
+
+Methods:
+
+- `run(task, engine_factory=None, engine_override=None, model_override=None)`
+
 ### `StateMachineRunner`
 
 Purpose: run the lifecycle state machine over one task.
@@ -582,6 +811,24 @@ Methods:
 - `append(...)`
 - `load(...)`
 - `latest(...)`
+
+### `PipelineWorktreeSetup`
+
+Purpose: bind one workspace to the lifecycle worktree collaborators used by
+runner orchestration.
+
+Methods:
+
+- `resolve_worktree(state)`
+- `resolve_hook_execution_root(state)`
+- `task_recorded_worktree(task_id)`
+- `build_commit_node()`
+- `build_worktree_sync_node()`
+- `worktree_missing_probe()`
+- `worktree_metadata_repair()`
+- `mark_task_interrupted_on_crash(task)`
+- `cleanup_terminal_worktree(task)`
+- `reconcile_terminal_commit_sha(task, final_state, persistence)`
 
 ### `GitCommitNode`
 
@@ -630,24 +877,26 @@ Methods:
 
 ## `litehive.worktree`
 
-### `WorktreeService`
+### `WorktreePaths`
 
-Purpose: temporary facade for worktree operations shared by lifecycle,
-recovery, and CLI.
+Purpose: workspace-bound path policy for managed task worktrees.
 
-Keep as a temporary facade while callers migrate:
+Constructor dependencies:
 
-- `sync_task_worktree(...)`
-- `inspect_task_worktree(...)`
-- `cleanup_terminal_task_worktree(...)`
-- `collect_rescue_candidates(...)`
+- `workspace: Workspace`
 
-Split into:
+Methods:
 
-- `WorktreeSyncService`
-- `WorktreeCleanupService`
-- `WorktreeRescueService`
-- `WorktreeInspector`
+- `task_worktree_path(task)`
+- `is_managed_worktree_path(worktree_path)`
+- `resolve_recorded_worktree_path(worktree_path)`
+- `ensure_venv_link(worktree_path)`
+
+Reason: path layout, managed-path safety checks, legacy recorded-path
+resolution, and the shared `.venv` link all belong to the workspace's
+worktree path policy. Keeping these as methods avoids scattering
+workspace-first helper functions through sync, cleanup, rescue, lifecycle, and
+tests.
 
 ### `WorktreeSyncService`
 
@@ -659,6 +908,22 @@ Methods:
 - `registered_worktree_for_branch(branch)`
 - `task_has_missing_recorded_worktree(task_id)`
 - `clear_missing_recorded_worktree(task_id)`
+
+### `TaskExecutionRootResolver`
+
+Purpose: resolve the directory a task subagent should run in.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `resolve(task, config=None)`
+
+Migrates functions from:
+
+- `litehive/worktree/execution_root.py`
 
 ### `WorktreeCleanupService`
 
@@ -689,12 +954,82 @@ Purpose: read-only inspection of worktree status.
 Methods:
 
 - `inspect_task_worktree(task)`
+- `inspect_dirty_gate()`
+- `committed_changes(worktree)`
 - `is_dirty(worktree)`
 - `has_origin(worktree)`
 - `head(worktree)`
 - `unresolved(worktree)`
 
+## `litehive.attention`
+
+### `AttentionRepository`
+
+Purpose: SQLite repository for append-only operator attention diagnostics.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `append(message)`
+- `read(limit=None)`
+
+### `OperatorAttentionProjector`
+
+Purpose: workspace-bound projection and rendering of "operator needed" state.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `collect_state()`
+- `waiting_lines(limit=5, reconcile=True)`
+
+Migrates functions from:
+
+- `litehive/attention.py`
+
+## `litehive.recovery`
+
+### `RunnerRecoveryService`
+
+Purpose: workspace-bound recovery of stale runner and active-task state.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `recover_stale_runner_state(summary=None)`
+
+Migrates functions from:
+
+- `litehive/recovery/execution_recovery.py`
+
 ## `litehive.observability`
+
+### `WorkspaceVenvHealth`
+
+Purpose: workspace-bound discovery and probing of Python virtualenv entrypoints.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `discover_venvs()`
+- `probe_broken_executables()`
+- `ensure_ready()`
+
+Migrates functions from:
+
+- `litehive/observability/venv_health.py`
 
 ### `StatusSnapshotCollector`
 
@@ -715,9 +1050,26 @@ Methods:
 - `collect_operational()`
 - `load_config()`
 - `load_state()`
+- `load_runner()`
 - `probe_runner()`
 - `probe_daemon()`
+- `probe_last_cycle()`
+- `probe_heru_link()`
 - `probe_origin_divergence()`
+- `probe_task_index_references()`
+
+### `TaskPipelineStatusCollector`
+
+Purpose: collect the workspace snapshot rendered by CLI status commands and
+daemon status logging.
+
+Constructor dependencies:
+
+- `workspace: Workspace`
+
+Methods:
+
+- `collect(read_only=False, diagnostics=False)`
 - `probe_recovery_failure()`
 
 Migrates functions from:
@@ -751,6 +1103,21 @@ Methods:
 
 ## `litehive.daemon`
 
+### `DaemonRegistry`
+
+Purpose: workspace-bound daemon registration, lock metadata, heartbeat, and
+process-state mirror.
+
+Methods:
+
+- `lock_is_active()`
+- `metadata()`
+- `live_entry()`
+- `register(pid, log_dir)`
+- `unregister(pid=None)`
+- `touch(pid=None)`
+- `stale_metadata()`
+
 ### `WorkspaceDaemon`
 
 Purpose: object that owns one daemon process for one workspace.
@@ -783,6 +1150,24 @@ Methods:
 - `handle_result(result)`
 - `record_cycle_start()`
 - `record_cycle_finish()`
+
+### `DaemonStatusPresenter`
+
+Purpose: render daemon registration, runner liveness, and latest daemon-log
+paths for the operator-facing daemon status block.
+
+Methods:
+
+- `status_lines()`
+
+### `DaemonStatusSnapshotCollector`
+
+Purpose: capture read-only daemon-loop before/after task pipeline snapshots
+for iteration logs and stop-reason decisions.
+
+Methods:
+
+- `snapshot()`
 
 ### `DaemonLogs`
 
@@ -847,7 +1232,7 @@ Examples:
 - `build_container(...)`
 - `build_pipeline_container(...)`
 - `build_daemon_container(...)`
-- `build_subagent_manager_for_workspace(...)`
+- `build_subagent_manager(...)`
 
 Why not classes:
 
@@ -888,7 +1273,7 @@ Why not classes:
 3. Add `ExecutionTraceRenderer`.
 4. Add `TaskRuntimeTransitions`.
 5. Add `StatusSnapshotCollector`.
-6. Split `WorktreeService` behind a facade.
+6. Keep worktree behavior split across focused services.
 7. Split `RuntimeStore` internally while preserving the existing facade.
 8. Trim `Workspace` convenience methods after call sites use container-owned
    services.

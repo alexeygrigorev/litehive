@@ -7,8 +7,9 @@ from typer.testing import CliRunner
 
 from litehive.cli.app import app
 from litehive.cli.workspace import (
+    DaemonHealthStatus,
+    WorkspaceHealthPresenter,
     collect_quota_health,
-    health_daemon_status_for_workspace,
     quota_health,
     repair_summary_lines,
     status_command,
@@ -22,9 +23,9 @@ from litehive.domain.reports import StageReport
 from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import WorkspaceState
 from litehive.domain.task_ops import WorkspaceRepairSummary
-from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
-from litehive.state.records import create_task_for_workspace, require_task_for_workspace, save_task_for_workspace
-from litehive.tasks.report_storage import record_stage_report
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.records import WorkspaceTasks
+from litehive.tasks.report_storage import TaskReportStore
 from litehive.workspace import Workspace
 from litehive.domain.common import PipelineStatus, TaskStatus
 
@@ -32,25 +33,31 @@ _RUNNER = CliRunner()
 
 
 def test_health_daemon_status_defaults_to_stopped(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("litehive.cli.workspace.daemon_metadata_for_workspace", lambda workspace: None)
+    monkeypatch.setattr("litehive.cli.workspace.DaemonRegistry.metadata", lambda self: None)
 
-    assert health_daemon_status_for_workspace(Workspace.from_path(tmp_path)) == ("stopped", "-")
+    assert WorkspaceHealthPresenter(Workspace.from_path(tmp_path)).daemon_status() == DaemonHealthStatus(
+        status="stopped",
+        pid="-",
+    )
 
 
 def test_health_daemon_status_reports_running_pid(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
-        "litehive.cli.workspace.daemon_metadata_for_workspace",
-        lambda workspace: DaemonRegistryEntry(
+        "litehive.cli.workspace.DaemonRegistry.metadata",
+        lambda self: DaemonRegistryEntry(
             status="running",
             pid=4242,
-            workspace=str(workspace.root),
+            workspace=str(self.workspace.root),
             started_at=None,
             heartbeat_at=None,
             log_dir=None,
         ),
     )
 
-    assert health_daemon_status_for_workspace(Workspace.from_path(tmp_path)) == ("running", "4242")
+    assert WorkspaceHealthPresenter(Workspace.from_path(tmp_path)).daemon_status() == DaemonHealthStatus(
+        status="running",
+        pid="4242",
+    )
 
 
 def test_repair_summary_lines_omit_empty_fields() -> None:
@@ -160,18 +167,18 @@ def test_collect_quota_health_reuses_shared_statuses(monkeypatch) -> None:
 def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Repair stale resumable task")
+    task = WorkspaceTasks(workspace).create( title="Repair stale resumable task")
     task.status = TaskStatus.IN_PROGRESS
     task.pipeline_status = PipelineStatus.TESTING
     task.runtime.pipeline.execution_status = "idle"
     task.runtime.pipeline.current_stage.stage = "testing"
     task.runtime.pipeline.current_stage.status = "idle"
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.active_task_id = task.id
     state.queue = []
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
     result = _RUNNER.invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
 
@@ -183,20 +190,20 @@ def test_repair_requeues_idle_in_progress_task_into_canonical_resumable_state(tm
     assert "active_task_id: None" in result.output
     assert "queue_length: 1" in result.output
 
-    refreshed = require_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).require(task.id)
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "testing"
     assert refreshed.runtime.pipeline.execution_status == "idle"
     assert refreshed.runtime.pipeline.current_stage.stage == "testing"
     assert refreshed.runtime.pipeline.current_stage.status == "idle"
-    assert load_state_for_workspace(workspace).queue == [task.id]
+    assert WorkspaceStateRepository(workspace).load().queue == [task.id]
 
 
 def test_repair_skips_legacy_disk_only_tasks_missing_runtime_state(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Repair stale resumable task")
-    legacy = create_task_for_workspace(workspace, title="Legacy disk-only task")
+    task = WorkspaceTasks(workspace).create( title="Repair stale resumable task")
+    legacy = WorkspaceTasks(workspace).create( title="Legacy disk-only task")
 
     with connect_workspace_db(tmp_path) as connection:
         connection.execute("DELETE FROM task_state WHERE task_id = ?", (legacy.id,))
@@ -206,35 +213,34 @@ def test_repair_skips_legacy_disk_only_tasks_missing_runtime_state(tmp_path: Pat
     task.runtime.pipeline.execution_status = "idle"
     task.runtime.pipeline.current_stage.stage = "testing"
     task.runtime.pipeline.current_stage.status = "idle"
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.active_task_id = task.id
     state.queue = []
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
     result = _RUNNER.invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
 
     assert result.return_value == 0
     assert "repaired: yes" in result.output
     assert f"requeued_tasks: {task.id}" in result.output
-    assert load_state_for_workspace(workspace).queue == [task.id]
-    refreshed = require_task_for_workspace(workspace, task.id)
+    assert WorkspaceStateRepository(workspace).load().queue == [task.id]
+    refreshed = WorkspaceTasks(workspace).require(task.id)
     assert refreshed.status == "queued"
 
 
 def test_repair_normalizes_stale_queued_terminal_task(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Already accepted task")
+    task = WorkspaceTasks(workspace).create( title="Already accepted task")
     task.status = TaskStatus.QUEUED
     task.pipeline_status = PipelineStatus.BACKLOG
     task.runtime.pipeline.execution_status = "interrupted"
     task.runtime.pipeline.current_stage.stage = "backlog"
     task.runtime.pipeline.current_stage.status = "idle"
-    save_task_for_workspace(workspace, task)
-    record_stage_report(
-        workspace,
+    WorkspaceTasks(workspace).save(task)
+    TaskReportStore(workspace).record_stage_report(
         task,
         StageReport(
             task_id=task.id,
@@ -244,10 +250,10 @@ def test_repair_normalizes_stale_queued_terminal_task(tmp_path: Path) -> None:
         ),
     )
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.active_task_id = None
     state.queue = []
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
     result = _RUNNER.invoke(app, ["repair", "--workspace", str(tmp_path)], standalone_mode=False)
 
@@ -256,7 +262,7 @@ def test_repair_normalizes_stale_queued_terminal_task(tmp_path: Path) -> None:
     assert f"normalized_terminal_tasks: {task.id}" in result.output
     assert "queue_length: 0" in result.output
 
-    refreshed = require_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).require(task.id)
     assert refreshed.status == "done"
     assert refreshed.pipeline_status == "done"
     assert refreshed.close_reason == "done"
@@ -302,8 +308,8 @@ def test_status_command_prefers_runner_active_task_id(tmp_path: Path, monkeypatc
     )
     status.active_task = active_task
 
-    monkeypatch.setattr("litehive.cli.workspace.collect_task_pipeline_status_for_workspace", lambda workspace, **kwargs: status)
-    monkeypatch.setattr("litehive.cli.workspace.list_tasks_state_first", lambda workspace, state=None: [])
+    monkeypatch.setattr("litehive.cli.workspace.TaskPipelineStatusCollector.collect", lambda self, **kwargs: status)
+    monkeypatch.setattr("litehive.state.records.WorkspaceTasks.list_state_first", lambda self, state=None: [])
     monkeypatch.setattr("litehive.cli.workspace.find_last_completed_task", lambda tasks: None)
     monkeypatch.setattr("litehive.cli.workspace.collect_recent_activity", lambda root: [])
     monkeypatch.setattr("litehive.cli.workspace.render_recent_activity_section", lambda events: [])
@@ -324,7 +330,7 @@ def test_full_status_command_lists_tasks_with_strict_false(tmp_path: Path, monke
     )
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr("litehive.cli.workspace.collect_task_pipeline_status_for_workspace", lambda workspace, **kwargs: status)
+    monkeypatch.setattr("litehive.cli.workspace.TaskPipelineStatusCollector.collect", lambda self, **kwargs: status)
     monkeypatch.setattr(
         "litehive.cli.workspace.render_task_pipeline_status_lines",
         lambda task_status, *, workspace, mode, retry_on_label=None: ["workspace: demo"],
@@ -334,7 +340,7 @@ def test_full_status_command_lists_tasks_with_strict_false(tmp_path: Path, monke
         captured["strict"] = strict
         return []
 
-    monkeypatch.setattr("litehive.cli.workspace.Workspace.list_tasks", fake_list_tasks)
+    monkeypatch.setattr("litehive.state.records.WorkspaceTasks.list", fake_list_tasks)
     monkeypatch.setattr("litehive.cli.workspace.print_status_issues", lambda issues: 0)
 
     exit_code = status_command(tmp_path, full=True)

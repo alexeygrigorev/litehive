@@ -24,13 +24,13 @@ from litehive.agents.task_mutation import (
     AgentTaskMutationTarget,
     AgentTaskUpdateRequest,
 )
-from litehive.container import build_agent_report_submitter, build_agent_task_mutator_for_workspace, build_workspace
+from litehive.container import build_agent_report_submitter, build_agent_task_mutator, build_workspace
 from litehive.config.environment import LitehiveEnvironment
 from litehive.domain.agent import SubagentId
 from litehive.domain.common import Verdict
 
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
-from litehive.state.persist import load_state_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
 
 
 agent_app = typer.Typer(
@@ -178,7 +178,7 @@ def agent_report_command(
     workspace_obj = build_workspace(root)
     root = workspace_obj.root
     if not tid:
-        state = load_state_for_workspace(workspace_obj)
+        state = WorkspaceStateRepository(workspace_obj).load()
         tid = state.active_task_id
     if not tid:
         print("report failed: no task id")
@@ -261,7 +261,7 @@ def _agent_task_mutator(target: AgentTaskMutationTarget):
     """
     Build the authorized mutation service for one resolved agent target.
     """
-    return build_agent_task_mutator_for_workspace(target.workspace, target.task_id)
+    return build_agent_task_mutator(target.workspace, target.task_id)
 
 
 @agent_app.command("update", help="Update task fields (planner/reviewer only)")

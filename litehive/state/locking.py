@@ -6,8 +6,9 @@ import sqlite3
 import sys
 import threading
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, TextIO, cast
 
 from litehive.domain.common import RunnerStatus, TaskExecutionStatus, utcnow
@@ -15,7 +16,7 @@ from litehive.domain.runtime import RunnerStatusState
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.state.lock_manager import WorkspaceLockManager
 from litehive.state.process_lock import ProcessLockManager
-from litehive.state.store import runtime_store_for_workspace
+from litehive.state.store import RuntimeStore
 from litehive.workspace import Workspace
 
 from litehive.tasks.constants import (
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _runner_lock_key_for_workspace(workspace: Workspace) -> Path:
+def _runner_lock_key_impl(workspace: Workspace) -> Path:
     """
     Return the normalized key for the in-process runner-lock registry.
     """
@@ -56,7 +57,7 @@ def _pid_is_zombie(pid: int) -> bool:
     return len(fields) > 2 and fields[2] == "Z"
 
 
-def _runner_lock_manager_for_workspace(
+def _runner_lock_manager_impl(
     workspace: Workspace,
     held_in_process: Callable[[], bool] | None = None,
 ) -> ProcessLockManager:
@@ -75,29 +76,350 @@ def _runner_lock_manager_for_workspace(
             pid_is_alive=runner_pid_is_alive,
             held_in_process=held_in_process,
         ),
-        runtime_store=runtime_store_for_workspace(workspace),
+        runtime_store=RuntimeStore(workspace),
     )
 
 
-@contextmanager
-def workspace_lock_for_workspace(workspace: Workspace):
+@dataclass(frozen=True, slots=True)
+class WorkspaceRunnerLock:
     """
-    Hold the workspace-level flock for short, blocking critical sections.
+    Workspace-bound runner lock API.
+
+    This is the object boundary for runner lockfile behavior. Existing
+    free functions are being migrated in small slices so each caller can
+    be verified before the corresponding wrapper is deleted.
+    """
+
+    workspace: Workspace
+
+    def read_metadata(self) -> RunnerStatusState:
+        data = _runner_lock_manager_impl(self.workspace).read_metadata(strict=True)
+        if data is None:
+            return RunnerStatusState()
+        return RunnerStatusState.model_validate(data)
+
+    def is_active(self) -> bool:
+        lock_key = _runner_lock_key_impl(self.workspace)
+        return _runner_lock_manager_impl(
+            self.workspace,
+            held_in_process=lambda: lock_key in RUNNER_LOCKS,
+        ).is_active()
+
+    def clear_metadata(self) -> None:
+        lock_key = _runner_lock_key_impl(self.workspace)
+        manager = _runner_lock_manager_impl(
+            self.workspace,
+            held_in_process=lambda: lock_key in RUNNER_LOCKS,
+        )
+        if manager.clear_metadata_if_unlocked():
+            self._clear_process_state()
+
+    def status(self) -> RunnerStatusState:
+        status = self.read_metadata()
+        if self.is_active():
+            if heartbeat_is_late(status.heartbeat_at):
+                return status.model_copy(update={"status": RunnerStatus.LATE})
+            return status.model_copy(update={"status": RunnerStatus.RUNNING})
+        if not runner_metadata_present(status):
+            return RunnerStatusState()
+        if self.needs_reconciliation():
+            return status.model_copy(update={"status": RunnerStatus.STALE})
+        self.clear_metadata()
+        return RunnerStatusState()
+
+    def needs_reconciliation(self) -> bool:
+        """
+        Detect leftover running markers when no runner holds the lock.
+        """
+        # inline: state.records and state.persist top-level-import state.locking (would cycle).
+        from litehive.state.persist import WorkspaceStateRepository  # noqa: PLC0415
+        from litehive.state.records import WorkspaceTasks  # noqa: PLC0415
+
+        state = WorkspaceStateRepository(self.workspace).load()
+        if state.active_task_id is not None:
+            return True
+        return any(
+            task.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING
+            for task in WorkspaceTasks(self.workspace).list(strict=False)
+        )
+
+    def owns_current_thread(self) -> bool:
+        lock_key = _runner_lock_key_impl(self.workspace)
+        owner_thread_id = threading.get_ident()
+        with RUNNER_LOCKS_MUTEX:
+            existing = RUNNER_LOCKS.get(lock_key)
+        return existing is not None and existing.owner_thread_id == owner_thread_id
+
+    def is_held(self) -> bool:
+        return _runner_lock_manager_impl(
+            self.workspace,
+            held_in_process=self.owns_current_thread,
+        ).is_active()
+
+    def pid_is_stale(self) -> bool:
+        return _runner_lock_manager_impl(self.workspace).pid_is_stale()
+
+    def touch(self, active_task_id: str | None | object = MISSING) -> None:
+        lock_key = _runner_lock_key_impl(self.workspace)
+        lock_state = RUNNER_LOCKS.get(lock_key)
+        if lock_state is None:
+            return
+        with lock_state.metadata_lock:
+            lock_state.status.heartbeat_at = utcnow()
+            lock_state.status.status = RunnerStatus.RUNNING
+            if active_task_id is not MISSING:
+                lock_state.status.active_task_id = cast(str | None, active_task_id)
+            write_runner_lock_metadata(lock_state.handle, lock_state.status)
+            self._save_process_state(lock_state.status)
+
+    @contextmanager
+    def heartbeat(
+        self,
+        active_task_id: str | None = None,
+        interval_seconds: float = 1.0,
+    ) -> Iterator[None]:
+        """
+        Run a background thread refreshing the runner heartbeat while a task runs.
+
+        Entered by the runner around each task so the status reporter doesn't
+        escalate a busy runner to LATE just because the foreground thread is
+        blocked on a long subagent call; the daemon thread name keeps stack
+        traces stable when debugging.
+        """
+        stop_event = threading.Event()
+
+        def _heartbeat_loop() -> None:
+            """
+            Background-thread body refreshing runner status on a fixed cadence.
+            """
+            while not stop_event.wait(interval_seconds):
+                self.touch(active_task_id=active_task_id)
+
+        self.touch(active_task_id=active_task_id)
+        thread = threading.Thread(target=_heartbeat_loop, name="litehive-runner-heartbeat", daemon=True)
+        thread.start()
+        try:
+            yield
+        finally:
+            stop_event.set()
+            thread.join(timeout=max(interval_seconds, 0.1) * 2)
+            self.touch(active_task_id=None)
+
+    def conflict_message(self) -> str:
+        metadata = self.read_metadata()
+        pid = metadata.pid
+        started_at = metadata.started_at
+        heartbeat_at = metadata.heartbeat_at
+        command = metadata.command
+        details = []
+        if pid is not None:
+            details.append(f"pid={pid}")
+        if started_at:
+            details.append(f"started_at={started_at}")
+        if heartbeat_at:
+            details.append(f"heartbeat_at={heartbeat_at}")
+        if command:
+            details.append(f"command={command}")
+        if details:
+            suffix = f" ({', '.join(details)})"
+        else:
+            suffix = ""
+        return (
+            f"workspace is already being mutated by another runner{suffix}. "
+            "Wait for the active run to finish before changing this workspace."
+        )
+
+    @contextmanager
+    def guard(self) -> Iterator[None]:
+        """
+        Long-lived workspace guard wrapping a runner's whole lifetime.
+
+        Takes the exclusive flock, auto-repairs stale state left by a crashed
+        predecessor, and supports reentry from the same thread so nested
+        mutation guards work without deadlocking.
+        """
+        lock_key = _runner_lock_key_impl(self.workspace)
+        owner_thread_id = threading.get_ident()
+        manager = _runner_lock_manager_impl(
+            self.workspace,
+            held_in_process=lambda: lock_key in RUNNER_LOCKS,
+        )
+        with RUNNER_LOCKS_MUTEX:
+            existing = RUNNER_LOCKS.get(lock_key)
+            if existing is not None:
+                if existing.owner_thread_id != owner_thread_id:
+                    raise WorkspaceConflictError(self.conflict_message())
+                existing.depth += 1
+        if existing is not None:
+            try:
+                yield
+            finally:
+                with RUNNER_LOCKS_MUTEX:
+                    lock_state = RUNNER_LOCKS[lock_key]
+                    if lock_state.depth <= 1:
+                        RUNNER_LOCKS.pop(lock_key, None)
+                        should_close = True
+                    else:
+                        lock_state.depth -= 1
+                        should_close = False
+                if should_close:
+                    manager.lock_manager.release(lock_state.handle, clear_metadata=True)
+                    self._clear_process_state()
+            return
+
+        handle: TextIO | None = None
+        try:
+            try:
+                handle = manager.lock_manager.acquire(nonblocking=True)
+            except BlockingIOError as exc:
+                raise WorkspaceConflictError(self.conflict_message()) from exc
+            _auto_repair_stale_state(self.workspace)
+            now = utcnow()
+            status = RunnerStatusState(
+                status=RunnerStatus.RUNNING,
+                pid=os.getpid(),
+                workspace=str(lock_key),
+                command=" ".join(sys.argv),
+                started_at=now,
+                heartbeat_at=now,
+            )
+            write_runner_lock_metadata(handle, status)
+            self._save_process_state(status)
+            with RUNNER_LOCKS_MUTEX:
+                RUNNER_LOCKS[lock_key] = RunnerLockState(
+                    handle=handle,
+                    depth=1,
+                    status=status,
+                    owner_thread_id=owner_thread_id,
+                )
+        except (OSError, RuntimeError, ValueError):
+            if handle is not None and not handle.closed:
+                handle.close()
+            raise
+
+        try:
+            yield
+        finally:
+            with RUNNER_LOCKS_MUTEX:
+                RUNNER_LOCKS.pop(lock_key, None)
+            manager.lock_manager.release(handle, clear_metadata=True)
+            self._clear_process_state()
+
+    def _save_process_state(self, status: RunnerStatusState) -> None:
+        RuntimeStore(self.workspace).save_process_state(
+            "runner",
+            status=status.status or RunnerStatus.RUNNING,
+            payload=status.model_dump(mode="json"),
+        )
+
+    def _clear_process_state(self) -> None:
+        RuntimeStore(self.workspace).clear_process_state("runner")
+
+
+@dataclass(frozen=True, slots=True)
+class WorkspaceMutationGuard:
+    """
+    Workspace-bound short mutation guard.
+    """
+
+    workspace: Workspace
+
+    def is_owned_by_current_thread(self) -> bool:
+        return WorkspaceRunnerLock(self.workspace).owns_current_thread()
+
+    @contextmanager
+    def hold(self) -> Iterator[None]:
+        if self.is_owned_by_current_thread():
+            yield
+            return
+        with WorkspaceRunnerLock(self.workspace).guard():
+            yield
+
+    def ensure_future_task_mutation_allowed(
+        self,
+        task_ids: list[str],
+        state: WorkspaceState | None = None,
+    ) -> None:
+        # inline: tasks.queue top-level-imports state.locking (would cycle).
+        from litehive.tasks.queue import is_task_eligible_for_execution, TaskQueueService  # noqa: PLC0415
+        from litehive.state.records import WorkspaceTasks  # noqa: PLC0415
+
+        tasks = WorkspaceTasks(self.workspace)
+        markers = TaskQueueService(self.workspace).active_task_markers(state)
+        conflicts: list[str] = []
+        for task_id in task_ids:
+            if task_id not in markers:
+                continue
+
+            task = tasks.get(task_id)
+            marker_set = set(markers[task_id])
+            if (
+                marker_set == {"workspace.active_task_id"}
+                and task is not None
+                and not is_task_eligible_for_execution(task)
+                and task.runtime.pipeline.execution_status != TaskExecutionStatus.RUNNING
+            ):
+                continue
+            if (
+                marker_set == {"task.status=in_progress"}
+                and task is not None
+                and task.runtime.pipeline.execution_status != TaskExecutionStatus.RUNNING
+            ):
+                continue
+            conflicts.append(f"{task_id} ({', '.join(markers[task_id])})")
+        if conflicts:
+            details = "; ".join(conflicts)
+            raise WorkspaceConflictError(
+                f"runner is actively using task state that cannot be changed concurrently: {details}"
+            )
+
+    def persist_future_task_update(
+        self,
+        task: TaskRecord,
+        journal_message: str | None = None,
+        audit_entries: list["TaskAuditEntry"] | None = None,
+    ) -> None:
+        # inline: state.records top-level-imports state.locking (would cycle).
+        from litehive.state.records import task_state_for_storage, WorkspaceTasks  # noqa: PLC0415
+
+        task.updated_at = utcnow()
+        if journal_message is None:
+            task_journal_messages = None
+        else:
+            task_journal_messages = {task.id: journal_message}
+        RuntimeStore(self.workspace).save_runtime_transaction(
+            task_intents={task.id: task.to_intent_record()},
+            task_states={task.id: task_state_for_storage(task)},
+            task_journal_messages=task_journal_messages,
+            audit_entries=audit_entries,
+        )
+        WorkspaceTasks(self.workspace).ensure_runtime_ignored()
+
+
+@dataclass(frozen=True, slots=True)
+class WorkspaceStateLock:
+    """
+    Workspace-bound short blocking flock for state mutations.
 
     Used by callers that mutate workspace state without owning the
     long-lived runner guard (CLI mutations, recovery probes, state
     repair); blocking acquisition is intentional so a second writer waits
     rather than failing.
     """
-    lock_path = workspace.control_dir() / ".lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("w", encoding="utf-8") as handle:
-        manager = WorkspaceLockManager(lock_path, pid_is_alive=runner_pid_is_alive)
-        manager.lock(handle, nonblocking=False)
-        try:
-            yield
-        finally:
-            manager.unlock(handle)
+
+    workspace: Workspace
+
+    @contextmanager
+    def hold(self) -> Iterator[None]:
+        lock_path = self.workspace.control_dir() / ".lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("w", encoding="utf-8") as handle:
+            manager = WorkspaceLockManager(lock_path, pid_is_alive=runner_pid_is_alive)
+            manager.lock(handle, nonblocking=False)
+            try:
+                yield
+            finally:
+                manager.unlock(handle)
 
 
 def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> None:
@@ -105,8 +427,8 @@ def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> Non
     Persist runner identity into the held lockfile.
 
     Records pid, command, and heartbeat so other processes can diagnose
-    who owns the workspace; the metadata is what makes
-    ``runner_conflict_message_for_workspace`` informative instead of just "lock held".
+    who owns the workspace; the metadata is what makes runner lock conflict
+    messages informative instead of just "lock held".
     """
     ProcessLockManager(
         process_name="runner",
@@ -118,46 +440,6 @@ def write_runner_lock_metadata(handle: TextIO, status: RunnerStatusState) -> Non
         handle,
         status.model_dump(mode="json"),
     )
-
-
-def _save_runner_process_state_for_workspace(workspace: Workspace, status: RunnerStatusState) -> None:
-    """
-    Mirror runner status into the SQLite runtime store.
-
-    Lets dashboards and read-only consumers see runner identity without
-    taking the flock; the lockfile remains the source of truth, but the
-    SQLite mirror is what the web dashboard polls.
-    """
-    runtime_store_for_workspace(workspace).save_process_state(
-        "runner",
-        status=status.status or RunnerStatus.RUNNING,
-        payload=status.model_dump(mode="json"),
-    )
-
-
-def _clear_runner_process_state_for_workspace(workspace: Workspace) -> None:
-    """
-    Drop the SQLite runner-status mirror after the lockfile is released.
-
-    Without the explicit clear, dashboards would keep reporting a phantom
-    runner identity after the real process has gone; the lockfile-side
-    metadata is gone but the SQLite mirror would survive across restarts.
-    """
-    runtime_store_for_workspace(workspace).clear_process_state("runner")
-
-
-def read_runner_lock_metadata_for_workspace(workspace: Workspace) -> RunnerStatusState:
-    """
-    Read recorded runner identity without taking the flock.
-
-    Returns an empty ``RunnerStatusState`` when nothing is recorded; the
-    non-blocking read is what lets status surfaces probe ownership without
-    contending with a live runner that holds the lock.
-    """
-    data = _runner_lock_manager_for_workspace(workspace).read_metadata(strict=True)
-    if data is None:
-        return RunnerStatusState()
-    return RunnerStatusState.model_validate(data)
 
 
 def runner_metadata_present(status: RunnerStatusState) -> bool:
@@ -180,49 +462,6 @@ def runner_metadata_present(status: RunnerStatusState) -> bool:
     )
 
 
-def runner_lock_is_active_for_workspace(workspace: Workspace) -> bool:
-    """
-    Probe whether this workspace's runner lock is currently held.
-    """
-    lock_key = _runner_lock_key_for_workspace(workspace)
-    return _runner_lock_manager_for_workspace(workspace, held_in_process=lambda: lock_key in RUNNER_LOCKS).is_active()
-
-
-def runner_status_needs_reconciliation_for_workspace(workspace: Workspace) -> bool:
-    """
-    Detect leftover "running" markers when no runner holds the lock.
-
-    Lets the status reporter surface STALE instead of falsely reporting
-    idle: an active_task_id pointer or a running ``execution_status``
-    without a matching live runner is the unambiguous signal that a prior
-    runner crashed and left the workspace wedged.
-    """
-    # inline: state.records and state.persist top-level-import state.locking (would cycle).
-    from litehive.state.persist import load_state_for_workspace  # noqa: PLC0415
-
-    state = load_state_for_workspace(workspace)
-    if state.active_task_id is not None:
-        return True
-    return any(
-        task.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING
-        for task in workspace.list_tasks(strict=False)
-    )
-
-
-def clear_runner_lock_metadata_for_workspace(workspace: Workspace) -> None:
-    """
-    Wipe stale lockfile metadata when no runner is alive.
-
-    Called by the status reporter once it has confirmed the recorded PID
-    is gone; without the cleanup the next status query would still see
-    the dead runner's identity and spend cycles re-reconciling nothing.
-    """
-    lock_key = _runner_lock_key_for_workspace(workspace)
-    manager = _runner_lock_manager_for_workspace(workspace, held_in_process=lambda: lock_key in RUNNER_LOCKS)
-    if manager.clear_metadata_if_unlocked():
-        _clear_runner_process_state_for_workspace(workspace)
-
-
 def heartbeat_is_late(heartbeat_at: str | None) -> bool:
     """
     Decide whether a recorded heartbeat is old enough to mark the runner LATE.
@@ -241,103 +480,6 @@ def heartbeat_is_late(heartbeat_at: str | None) -> bool:
         return age > HEARTBEAT_LATE_THRESHOLD_SECONDS
     except (ValueError, TypeError):
         return False
-
-
-def runner_status_for_workspace(workspace: Workspace) -> RunnerStatusState:
-    """
-    Resolve the workspace's authoritative runner status.
-
-    Returns RUNNING/LATE/STALE/empty and opportunistically clears
-    lockfile metadata when the runner is gone but workspace state is
-    already clean. The canonical entry point used by the CLI status
-    command and the runner guard before it tries to acquire.
-    """
-    status = read_runner_lock_metadata_for_workspace(workspace)
-    if runner_lock_is_active_for_workspace(workspace):
-        if heartbeat_is_late(status.heartbeat_at):
-            return status.model_copy(update={"status": RunnerStatus.LATE})
-        return status.model_copy(update={"status": RunnerStatus.RUNNING})
-    if not runner_metadata_present(status):
-        return RunnerStatusState()
-    if runner_status_needs_reconciliation_for_workspace(workspace):
-        return status.model_copy(update={"status": RunnerStatus.STALE})
-    clear_runner_lock_metadata_for_workspace(workspace)
-    return RunnerStatusState()
-
-
-def touch_runner_status_for_workspace(
-    workspace: Workspace,
-    active_task_id: str | None | object = MISSING,
-) -> None:
-    """
-    Refresh heartbeat (and optionally active task pointer) under the metadata mutex.
-
-    Used by the heartbeat thread and by stage transitions that change
-    which task the runner is currently executing; the mutex is what stops
-    the background heartbeat from racing the foreground stage transition
-    when both write the lockfile.
-    """
-    lock_key = _runner_lock_key_for_workspace(workspace)
-    lock_state = RUNNER_LOCKS.get(lock_key)
-    if lock_state is None:
-        return
-    with lock_state.metadata_lock:
-        lock_state.status.heartbeat_at = utcnow()
-        lock_state.status.status = RunnerStatus.RUNNING
-        if active_task_id is not MISSING:
-            lock_state.status.active_task_id = cast(str | None, active_task_id)
-        write_runner_lock_metadata(lock_state.handle, lock_state.status)
-        _save_runner_process_state_for_workspace(workspace, lock_state.status)
-
-
-@contextmanager
-def runner_heartbeat_for_workspace(
-    workspace: Workspace,
-    active_task_id: str | None = None,
-    interval_seconds: float = 1.0,
-):
-    """
-    Run a background thread refreshing the runner heartbeat while a task runs.
-
-    Entered by the runner around each task so the status reporter doesn't
-    escalate a busy runner to LATE just because the foreground thread is
-    blocked on a long subagent call; the daemon thread name keeps stack
-    traces stable when debugging.
-    """
-    stop_event = threading.Event()
-
-    def _heartbeat_loop() -> None:
-        """
-        Background-thread body refreshing ``runner_status`` on a fixed cadence.
-
-        Loops every ``interval_seconds`` until ``stop_event`` fires; held
-        as a named closure so the daemon thread shows up by name in stack
-        traces and the ``stop_event``/``active_task_id`` captures are
-        explicit rather than implicit lambdas.
-        """
-        while not stop_event.wait(interval_seconds):
-            touch_runner_status_for_workspace(workspace, active_task_id=active_task_id)
-
-    touch_runner_status_for_workspace(workspace, active_task_id=active_task_id)
-    thread = threading.Thread(target=_heartbeat_loop, name="litehive-runner-heartbeat", daemon=True)
-    thread.start()
-    try:
-        yield
-    finally:
-        stop_event.set()
-        thread.join(timeout=max(interval_seconds, 0.1) * 2)
-        touch_runner_status_for_workspace(workspace, active_task_id=None)
-
-
-def current_thread_owns_runner_guard_for_workspace(workspace: Workspace) -> bool:
-    """
-    Distinguish reentrant calls from foreign threads for an injected workspace.
-    """
-    lock_key = _runner_lock_key_for_workspace(workspace)
-    owner_thread_id = threading.get_ident()
-    with RUNNER_LOCKS_MUTEX:
-        existing = RUNNER_LOCKS.get(lock_key)
-    return existing is not None and existing.owner_thread_id == owner_thread_id
 
 
 def runner_pid_is_alive(pid: object) -> bool:
@@ -383,55 +525,6 @@ def subagent_process_is_stale(task: "TaskRecord") -> bool:
     return not runner_pid_is_alive(active.pid)
 
 
-def runner_lock_pid_is_stale_for_workspace(workspace: Workspace) -> bool:
-    """
-    True when the injected workspace's runner lock records a dead PID.
-    """
-    return _runner_lock_manager_for_workspace(workspace).pid_is_stale()
-
-
-def runner_lock_is_held_for_workspace(workspace: Workspace) -> bool:
-    """
-    Probe whether this thread or another process holds the injected workspace's runner guard.
-    """
-    return _runner_lock_manager_for_workspace(
-        workspace,
-        held_in_process=lambda: current_thread_owns_runner_guard_for_workspace(workspace),
-    ).is_active()
-
-
-def runner_conflict_message_for_workspace(workspace: Workspace) -> str:
-    """
-    Build the human-readable message attached to ``WorkspaceConflictError``.
-
-    Operators must see who is holding the workspace lock so they can
-    decide whether to wait, kill, or repair; consumed by the runner guard
-    and by CLI mutation commands when the lock is busy.
-    """
-    metadata = read_runner_lock_metadata_for_workspace(workspace)
-    pid = metadata.pid
-    started_at = metadata.started_at
-    heartbeat_at = metadata.heartbeat_at
-    command = metadata.command
-    details = []
-    if pid is not None:
-        details.append(f"pid={pid}")
-    if started_at:
-        details.append(f"started_at={started_at}")
-    if heartbeat_at:
-        details.append(f"heartbeat_at={heartbeat_at}")
-    if command:
-        details.append(f"command={command}")
-    if details:
-        suffix = f" ({', '.join(details)})"
-    else:
-        suffix = ""
-    return (
-        f"workspace is already being mutated by another runner{suffix}. "
-        "Wait for the active run to finish before changing this workspace."
-    )
-
-
 def _auto_repair_stale_state(workspace: "Workspace") -> None:
     """
     Clear stale ``active_task_id`` and running execution statuses on startup.
@@ -458,177 +551,3 @@ def _auto_repair_stale_state(workspace: "Workspace") -> None:
             )
     except (OSError, sqlite3.DatabaseError, RuntimeError, ValueError):
         logger.exception("auto-repair of stale runner state failed")
-
-
-@contextmanager
-def workspace_runner_guard(workspace: Workspace):
-    """
-    Long-lived workspace guard wrapping a runner's whole lifetime.
-
-    Takes the exclusive flock, auto-repairs stale state left by a crashed
-    predecessor, and supports reentry from the same thread so nested
-    mutation guards work without deadlocking. The single canonical
-    entry-point — every other guard helper layers on top of this.
-    """
-    lock_key = _runner_lock_key_for_workspace(workspace)
-    owner_thread_id = threading.get_ident()
-    manager = _runner_lock_manager_for_workspace(workspace, held_in_process=lambda: lock_key in RUNNER_LOCKS)
-    with RUNNER_LOCKS_MUTEX:
-        existing = RUNNER_LOCKS.get(lock_key)
-        if existing is not None:
-            if existing.owner_thread_id != owner_thread_id:
-                raise WorkspaceConflictError(runner_conflict_message_for_workspace(workspace))
-            existing.depth += 1
-    if existing is not None:
-        try:
-            yield
-        finally:
-            with RUNNER_LOCKS_MUTEX:
-                lock_state = RUNNER_LOCKS[lock_key]
-                if lock_state.depth <= 1:
-                    RUNNER_LOCKS.pop(lock_key, None)
-                    should_close = True
-                else:
-                    lock_state.depth -= 1
-                    should_close = False
-            if should_close:
-                manager.lock_manager.release(lock_state.handle, clear_metadata=True)
-                _clear_runner_process_state_for_workspace(workspace)
-        return
-
-    handle: TextIO | None = None
-    try:
-        try:
-            handle = manager.lock_manager.acquire(nonblocking=True)
-        except BlockingIOError as exc:
-            raise WorkspaceConflictError(runner_conflict_message_for_workspace(workspace)) from exc
-        # Auto-repair stale state left by a crashed runner.  We hold the
-        # exclusive flock, so no other runner is alive — any active_task_id
-        # or "running" execution_status is leftover from a dead process.
-        _auto_repair_stale_state(workspace)
-        now = utcnow()
-        status = RunnerStatusState(
-            status=RunnerStatus.RUNNING,
-            pid=os.getpid(),
-            workspace=str(lock_key),
-            command=" ".join(sys.argv),
-            started_at=now,
-            heartbeat_at=now,
-        )
-        write_runner_lock_metadata(handle, status)
-        _save_runner_process_state_for_workspace(workspace, status)
-        with RUNNER_LOCKS_MUTEX:
-            RUNNER_LOCKS[lock_key] = RunnerLockState(
-                handle=handle,
-                depth=1,
-                status=status,
-                owner_thread_id=owner_thread_id,
-            )
-    except (OSError, RuntimeError, ValueError):
-        if handle is not None and not handle.closed:
-            handle.close()
-        raise
-
-    try:
-        yield
-    finally:
-        with RUNNER_LOCKS_MUTEX:
-            RUNNER_LOCKS.pop(lock_key, None)
-        manager.lock_manager.release(handle, clear_metadata=True)
-        _clear_runner_process_state_for_workspace(workspace)
-
-
-@contextmanager
-def workspace_mutation_guard_for_workspace(workspace: Workspace):
-    """
-    Wrap individual workspace writes with injected workspace dependencies.
-
-    A no-op when the current thread already owns the runner guard;
-    otherwise acquires the runner guard for the duration of the
-    mutation. CLI mutation commands rely on this so they can run
-    correctly with or without an active runner.
-    """
-    lock_key = _runner_lock_key_for_workspace(workspace)
-    owner_thread_id = threading.get_ident()
-    with RUNNER_LOCKS_MUTEX:
-        existing = RUNNER_LOCKS.get(lock_key)
-    if existing is not None and existing.owner_thread_id == owner_thread_id:
-        yield
-        return
-    with workspace_runner_guard(workspace):
-        yield
-
-
-def ensure_future_task_mutation_allowed_for_workspace(
-    workspace: Workspace,
-    task_ids: list[str],
-    state: WorkspaceState | None = None,
-) -> None:
-    """
-    Guard CLI edits against tasks the runner is actively driving.
-
-    Raises ``WorkspaceConflictError`` when the user tries to mutate a
-    task that is currently executing. Called by ``litehive update``,
-    queue reorder, and similar mutation entrypoints so an in-flight
-    transition cannot have its inputs changed mid-run.
-    """
-    # inline: tasks.queue top-level-imports state.locking (would cycle).
-    from litehive.tasks.queue import active_task_markers_for_workspace, is_task_eligible_for_execution  # noqa: PLC0415
-
-    markers = active_task_markers_for_workspace(workspace, state)
-    conflicts: list[str] = []
-    for task_id in task_ids:
-        if task_id not in markers:
-            continue
-        task = workspace.get_task(task_id)
-        marker_set = set(markers[task_id])
-        if (
-            marker_set == {"workspace.active_task_id"}
-            and task is not None
-            and not is_task_eligible_for_execution(task)
-            and task.runtime.pipeline.execution_status != TaskExecutionStatus.RUNNING
-        ):
-            continue
-        if (
-            marker_set == {"task.status=in_progress"}
-            and task is not None
-            and task.runtime.pipeline.execution_status != TaskExecutionStatus.RUNNING
-        ):
-            continue
-        conflicts.append(f"{task_id} ({', '.join(markers[task_id])})")
-    if conflicts:
-        details = "; ".join(conflicts)
-        raise WorkspaceConflictError(
-            f"runner is actively using task state that cannot be changed concurrently: {details}"
-        )
-
-
-def persist_future_task_update_for_workspace(
-    workspace: Workspace,
-    task: TaskRecord,
-    journal_message: str | None = None,
-    audit_entries: list["TaskAuditEntry"] | None = None,
-) -> None:
-    """
-    Save a single task edit without touching workspace-level state.
-
-    Used by CLI edit commands after ``ensure_future_task_mutation_allowed``
-    has cleared the change; preserves the workspace queue/counters so a
-    metadata edit cannot accidentally reorder runtime state in the same
-    transaction.
-    """
-    # inline: state.records top-level-imports state.locking (would cycle).
-    from litehive.state.records import ensure_runtime_ignored_for_workspace, task_state_for_storage  # noqa: PLC0415
-
-    task.updated_at = utcnow()
-    if journal_message is None:
-        task_journal_messages = None
-    else:
-        task_journal_messages = {task.id: journal_message}
-    runtime_store_for_workspace(workspace).save_runtime_transaction(
-        task_intents={task.id: task.to_intent_record()},
-        task_states={task.id: task_state_for_storage(task)},
-        task_journal_messages=task_journal_messages,
-        audit_entries=audit_entries,
-    )
-    ensure_runtime_ignored_for_workspace(workspace)

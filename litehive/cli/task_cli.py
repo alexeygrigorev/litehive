@@ -12,29 +12,16 @@ from litehive.cli.parse import (
     parse_dependency_ids,
     parse_text_list_option,
 )
-from litehive.cli.task_debug_support import (
-    debug_all_for_workspace,
-    debug_latest_for_workspace,
-    debug_worktree_for_workspace,
-    render_task_evidence_for_workspace,
-)
-from litehive.cli.task_logs_support import (
-    follow_active_subagent_for_workspace,
-    list_daemon_sessions_for_workspace,
-    list_task_subagents_for_workspace,
-    load_task_with_runtime_for_workspace,
-    show_latest_daemon_log_for_workspace,
-    show_latest_subagent_for_workspace,
-    show_task_journal_for_workspace,
-)
+from litehive.cli.task_debug_support import TaskEvidencePresenter
+from litehive.cli.task_logs_support import TaskLogsPresenter
 from litehive.config.workspace import create_workspace
 from litehive.container import build_workspace
-from litehive.state.records import create_task_for_workspace
+from litehive.state.records import WorkspaceTasks
 from litehive.domain.common import TaskStatus
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.tasks.normalization import missing_acceptance_criteria_cli_warning
 from litehive.tasks.constants import VALID_TASK_PRIORITIES
-from litehive.tasks.status import abandon_task_for_workspace, close_task_for_workspace, update_task_for_workspace
+from litehive.tasks.status import TaskStatusService
 from litehive.workspace import Workspace
 
 app = make_typer(invoke_without_command=True)
@@ -84,7 +71,7 @@ def _show_dependency_label(workspace: Workspace, task) -> str:
 
     active_statuses = {
         record.id: record.status
-        for record in workspace.list_tasks(include_runtime=True, strict=False)
+        for record in WorkspaceTasks(workspace).list(include_runtime=True, strict=False)
     }
     labels: list[str] = []
     for dependency_id in task.depends_on:
@@ -148,6 +135,7 @@ def add(
     """
     create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
+    tasks_service = WorkspaceTasks(workspace_obj)
     try:
         depends_on_parsed = parse_dependency_ids(depends_on)
         acceptance_criteria_parsed = parse_acceptance_criteria(acceptance_criteria)
@@ -157,8 +145,7 @@ def add(
         acceptance_criteria_arg: list[str] | None = (
             acceptance_criteria_parsed if isinstance(acceptance_criteria_parsed, list) else None
         )
-        task = create_task_for_workspace(
-            workspace_obj,
+        task = tasks_service.create(
             title=title,
             depends_on=depends_on_arg,
             goal=goal,
@@ -202,11 +189,11 @@ def evidence(
     create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
-        task = workspace_obj.require_task(task_id)
+        task = WorkspaceTasks(workspace_obj).require(task_id)
     except ValueError:
         print(f"task not found: {task_id}")
         return 1
-    return render_task_evidence_for_workspace(workspace_obj, task)
+    return TaskEvidencePresenter(workspace_obj).render_task_evidence(task)
 
 
 @app.command("debug", help="Compatibility alias for `task evidence`")
@@ -228,15 +215,16 @@ def debug(
     create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
-        task = workspace_obj.require_task(task_id)
+        task = WorkspaceTasks(workspace_obj).require(task_id)
     except ValueError:
         print(f"task not found: {task_id}")
         return 1
+    evidence_presenter = TaskEvidencePresenter(workspace_obj)
     if worktree:
-        return debug_worktree_for_workspace(workspace_obj, task)
+        return evidence_presenter.debug_worktree(task)
     if all_:
-        return debug_all_for_workspace(workspace_obj, task)
-    return debug_latest_for_workspace(workspace_obj, task)
+        return evidence_presenter.debug_all(task)
+    return evidence_presenter.debug_latest(task)
 
 
 @app.command("logs", help="Show daemon logs, task journal, and compact subagent evidence")
@@ -260,21 +248,22 @@ def logs(
     """
     create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
+    logs_presenter = TaskLogsPresenter(workspace_obj)
     if follow:
-        return follow_active_subagent_for_workspace(workspace_obj, task_id=task_id)
+        return logs_presenter.follow_active_subagent(task_id=task_id)
     if daemon:
-        return list_daemon_sessions_for_workspace(workspace_obj)
+        return logs_presenter.list_daemon_sessions()
     if task_id:
-        task = load_task_with_runtime_for_workspace(workspace_obj, task_id)
+        task = logs_presenter.load_task_with_runtime(task_id)
         if task is None:
             print(f"task not found: {task_id}")
             return 1
         if agent:
             if all_:
-                return list_task_subagents_for_workspace(workspace_obj, task)
-            return show_latest_subagent_for_workspace(workspace_obj, task)
-        return show_task_journal_for_workspace(workspace_obj, task)
-    return show_latest_daemon_log_for_workspace(workspace_obj)
+                return logs_presenter.list_task_subagents(task)
+            return logs_presenter.show_latest_subagent(task)
+        return logs_presenter.show_task_journal(task)
+    return logs_presenter.show_latest_daemon_log()
 
 
 @app.command("list", help="Compact task listing")
@@ -292,7 +281,7 @@ def list_tasks_command(
     """
     create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
-    tasks = workspace_obj.list_tasks(strict=False)
+    tasks = WorkspaceTasks(workspace_obj).list(strict=False)
     filtered = []
     for task in tasks:
         if not show_all and task.status == TaskStatus.DONE:
@@ -324,7 +313,7 @@ def show(task_id: Annotated[str, typer.Argument(help="Task ID")], workspace: Wor
     """
     create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
-    task = workspace_obj.get_task(task_id)
+    task = WorkspaceTasks(workspace_obj).get(task_id)
     if task is None:
         print(f"task not found: {task_id}")
         return 1
@@ -388,7 +377,7 @@ def abandon(task_id: Annotated[str, typer.Argument(help="Task id")], workspace: 
     create_workspace(workspace)
     workspace_obj = build_workspace(workspace)
     try:
-        task = abandon_task_for_workspace(workspace_obj, task_id)
+        task = TaskStatusService(workspace_obj).abandon(task_id)
     except ValueError as exc:
         print(f"abandon failed: {exc}")
         return 1
@@ -431,8 +420,7 @@ def close(
     create_workspace(mutation_workspace)
     workspace_obj = build_workspace(mutation_workspace)
     try:
-        task = close_task_for_workspace(
-            workspace_obj,
+        task = TaskStatusService(workspace_obj).close(
             mutation_task_id,
             outcome=outcome,
             reason=reason,
@@ -510,8 +498,7 @@ def update(
         title_arg: str | EllipsisType = title if title is not None else ...
         priority_arg: str | EllipsisType = priority if priority is not None else ...
         goal_arg: str | EllipsisType = goal if goal is not None else ...
-        task = update_task_for_workspace(
-            workspace_obj,
+        task = TaskStatusService(workspace_obj).update(
             mutation_task_id,
             title=title_arg,
             depends_on=depends_on_arg,

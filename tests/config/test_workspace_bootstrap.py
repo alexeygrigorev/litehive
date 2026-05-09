@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from litehive.config.loading import load_config_for_workspace
+from litehive.config.loading import WorkspaceConfigLoader
 from litehive.config.model import (
     ExternalEngineSandboxConfig,
     ExternalEngineSandboxPolicy,
@@ -14,12 +14,12 @@ from litehive.config.model import (
 from litehive.config.profiles.defaults import PROCESS_PROFILE_OVERLAYS, SHARED_PROCESS_PROFILE
 from litehive.config.profiles.loader import resolve_process_profile
 from litehive.config.workspace import create_workspace
-from litehive.state.persist import load_state_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
 from litehive.workspace import Workspace
 
 
 def _load_config(root: Path) -> LitehiveConfig:
-    return load_config_for_workspace(Workspace.from_path(root))
+    return WorkspaceConfigLoader(Workspace.from_path(root)).load()
 
 
 def test_create_workspace_creates_layout(tmp_path: Path) -> None:
@@ -111,7 +111,7 @@ def test_create_workspace_bootstraps_runtime_db(tmp_path: Path, monkeypatch: pyt
 
 def test_load_state_requires_existing_workspace_without_creating_it(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="not an existing Litehive project"):
-        load_state_for_workspace(Workspace.from_path(tmp_path))
+        WorkspaceStateRepository(Workspace.from_path(tmp_path)).load()
 
     assert not (tmp_path / ".litehive").exists()
 
@@ -171,18 +171,18 @@ def test_workspace_load_config_is_workspace_bound_entrypoint(tmp_path: Path) -> 
     config = workspace.load_config()
 
     assert config.default_engine == "gemini"
-    assert workspace.config() is config
+    assert workspace.load_config() is config
 
 
 def test_create_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
     tmp_path: Path,
 ) -> None:
     from litehive.db.schema import connect_workspace_db
-    from litehive.state.records import create_task_for_workspace
+    from litehive.state.records import WorkspaceTasks
 
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Current runtime state")
+    task = WorkspaceTasks(workspace).create( title="Current runtime state")
 
     with connect_workspace_db(tmp_path) as connection:
         connection.execute("DELETE FROM task_state WHERE task_id = ?", (task.id,))
@@ -198,13 +198,13 @@ def test_create_workspace_skips_task_yaml_rescan_when_runtime_state_is_current(
 def test_create_workspace_rebuilds_fresh_database_from_task_event_log(tmp_path: Path) -> None:
     from litehive.config.paths import workspace_path
     from litehive.db.schema import connect_workspace_db
-    from litehive.state.records import create_task_for_workspace
-    from litehive.tasks.event_log import task_event_log_path
+    from litehive.state.records import WorkspaceTasks
+    from litehive.tasks.event_log import TaskEventLog
 
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Recovered from event log")
-    assert task_event_log_path(workspace).exists()
+    task = WorkspaceTasks(workspace).create( title="Recovered from event log")
+    assert TaskEventLog(workspace).path().exists()
 
     db_path = workspace_path(tmp_path, "data.db")
     for path in (db_path, db_path.with_name(db_path.name + "-wal"), db_path.with_name(db_path.name + "-shm")):

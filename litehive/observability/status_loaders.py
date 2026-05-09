@@ -29,11 +29,11 @@ from litehive.observability.status_io import (
 )
 from litehive.observability.status_types import StatusIssue
 from litehive.state.locking import runner_metadata_present, runner_pid_is_alive
-from litehive.state.store import runtime_store_for_workspace
+from litehive.state.store import RuntimeStore
 from litehive.workspace import Workspace
 
 
-def _load_config_for_status_for_workspace(workspace: Workspace) -> tuple[LitehiveConfig, list[StatusIssue]]:
+def _load_config_for_status_impl(workspace: Workspace) -> tuple[LitehiveConfig, list[StatusIssue]]:
     """
     Merge the layered config the way the runtime loader does, but tolerantly.
 
@@ -170,7 +170,7 @@ def _load_state_for_status(workspace: Workspace) -> tuple[WorkspaceState, list[S
             )
             return WorkspaceState(), issues
     try:
-        store_state = runtime_store_for_workspace(workspace).load_workspace_state_read_only()
+        store_state = RuntimeStore(workspace).load_workspace_state_read_only()
     except (OSError, sqlite3.DatabaseError, ValueError, ValidationError) as exc:
         detail = str(exc).strip() or type(exc).__name__
         issues.append(
@@ -214,7 +214,7 @@ def _load_engine_monitoring_for_status(
         return WorkspaceEngineMonitoring(), [issue]
 
 
-def _load_runner_status_for_status_for_workspace(
+def _load_runner_status_for_status_impl(
     workspace: Workspace,
 ) -> tuple[RunnerStatusState, StatusIssue | None]:
     """

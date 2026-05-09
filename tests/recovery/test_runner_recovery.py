@@ -4,13 +4,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from litehive.agents.session_store import SubagentArtifactPayload, load_subagent_report, subagent_artifacts
+from litehive.agents.session_store import SubagentArtifactPayload, subagent_artifacts
 from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.domain.runtime import RuntimeStageState, RuntimeSubagentState
-from litehive.recovery.execution_recovery import prepare_interrupted_task, recover_stale_runner_state_for_workspace
-from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
-from litehive.state.records import create_task_for_workspace, get_task_for_workspace, save_task_for_workspace
+from litehive.recovery.execution_recovery import RunnerRecoveryService, prepare_interrupted_task
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 from litehive.domain.common import PipelineStatus, TaskStatus
 
@@ -18,7 +18,7 @@ from litehive.domain.common import PipelineStatus, TaskStatus
 def _seed_running_task(tmp_path: Path, *, stage: str, active: bool) -> tuple[Workspace, str, str]:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title=f"{stage} recovery")
+    task = WorkspaceTasks(workspace).create( title=f"{stage} recovery")
     task.status = TaskStatus.IN_PROGRESS
     task.pipeline_status = PipelineStatus(stage)
     task.runtime.pipeline.execution_status = "running"
@@ -26,11 +26,11 @@ def _seed_running_task(tmp_path: Path, *, stage: str, active: bool) -> tuple[Wor
     task.runtime.pipeline.current_stage.stage = stage
     task.runtime.pipeline.current_stage.status = "running"
     task.runtime.pipeline.current_stage.started_at = "2026-04-12T10:00:00Z"
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.active_task_id = task.id if active else None
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
     return workspace, task.id, stage
 
 
@@ -74,9 +74,9 @@ def _assert_runtime_stage_has_no_removed_fields(stage: RuntimeStageState) -> Non
 def test_recover_stale_runner_state_requeues_running_task(tmp_path: Path, stage: str, active: bool) -> None:
     workspace, task_id, expected_stage = _seed_running_task(tmp_path, stage=stage, active=active)
 
-    assert recover_stale_runner_state_for_workspace(workspace) is True
+    assert RunnerRecoveryService(workspace).recover_stale_runner_state() is True
 
-    refreshed = get_task_for_workspace(workspace, task_id)
+    refreshed = WorkspaceTasks(workspace).get(task_id)
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == expected_stage
@@ -88,7 +88,7 @@ def test_recover_stale_runner_state_requeues_running_task(tmp_path: Path, stage:
     assert refreshed.runtime.execution.interruption.resume_stage == expected_stage
     _assert_runtime_stage_has_no_removed_fields(refreshed.runtime.pipeline.current_stage)
 
-    refreshed_state = load_state_for_workspace(workspace)
+    refreshed_state = WorkspaceStateRepository(workspace).load()
     assert refreshed_state.active_task_id is None
     assert refreshed_state.queue[0] == task_id
 
@@ -97,16 +97,16 @@ def test_recover_stale_runner_state_does_not_use_flat_runtime_payload(tmp_path: 
     workspace, task_id, _ = _seed_running_task(tmp_path, stage="implementing", active=True)
     _rewrite_runtime_payload_as_legacy_flat(tmp_path, task_id)
 
-    assert recover_stale_runner_state_for_workspace(workspace) is False
+    assert RunnerRecoveryService(workspace).recover_stale_runner_state() is False
 
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-        get_task_for_workspace(workspace, task_id)
+        WorkspaceTasks(workspace).get(task_id)
 
     raw_payload = _task_state_runtime_payload(tmp_path, task_id)
     assert "execution_status" in raw_payload
     assert "pipeline" not in raw_payload
 
-    refreshed_state = load_state_for_workspace(workspace)
+    refreshed_state = WorkspaceStateRepository(workspace).load()
     assert refreshed_state.active_task_id == task_id
 
 
@@ -114,14 +114,14 @@ def test_recover_stale_runner_state_preserves_runtime_stage_when_pipeline_status
     tmp_path: Path,
 ) -> None:
     workspace, task_id, _ = _seed_running_task(tmp_path, stage="testing", active=True)
-    task = get_task_for_workspace(workspace, task_id)
+    task = WorkspaceTasks(workspace).get(task_id)
     assert task is not None
     task.pipeline_status = PipelineStatus.BACKLOG
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
-    assert recover_stale_runner_state_for_workspace(workspace) is True
+    assert RunnerRecoveryService(workspace).recover_stale_runner_state() is True
 
-    refreshed = get_task_for_workspace(workspace, task_id)
+    refreshed = WorkspaceTasks(workspace).get(task_id)
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "testing"
@@ -131,7 +131,7 @@ def test_recover_stale_runner_state_preserves_runtime_stage_when_pipeline_status
     assert refreshed.runtime.execution.interruption is not None
     assert refreshed.runtime.execution.interruption.resume_stage == "testing"
 
-    refreshed_state = load_state_for_workspace(workspace)
+    refreshed_state = WorkspaceStateRepository(workspace).load()
     assert refreshed_state.active_task_id is None
     assert refreshed_state.queue[0] == task_id
 
@@ -141,8 +141,7 @@ def test_recover_stale_runner_state_canonicalizes_nonrunning_stranded_task(
 ) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(
-        workspace,
+    task = WorkspaceTasks(workspace).create(
         title="Stranded non-running task",
         acceptance_criteria=["resume from testing"],
     )
@@ -151,16 +150,16 @@ def test_recover_stale_runner_state_canonicalizes_nonrunning_stranded_task(
     task.runtime.pipeline.execution_status = "idle"
     task.runtime.pipeline.current_stage.stage = "testing"
     task.runtime.pipeline.current_stage.status = "idle"
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.active_task_id = None
     state.queue = []
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
-    assert recover_stale_runner_state_for_workspace(workspace) is True
+    assert RunnerRecoveryService(workspace).recover_stale_runner_state() is True
 
-    refreshed = get_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "testing"
@@ -168,7 +167,7 @@ def test_recover_stale_runner_state_canonicalizes_nonrunning_stranded_task(
     assert refreshed.runtime.pipeline.current_stage.stage == "testing"
     assert refreshed.runtime.pipeline.current_stage.status == "idle"
 
-    refreshed_state = load_state_for_workspace(workspace)
+    refreshed_state = WorkspaceStateRepository(workspace).load()
     assert refreshed_state.active_task_id is None
     assert refreshed_state.queue[0] == task.id
 
@@ -178,8 +177,7 @@ def test_recover_stale_runner_state_canonicalizes_queued_interrupted_marker(
 ) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(
-        workspace,
+    task = WorkspaceTasks(workspace).create(
         title="Queued interrupted task",
         acceptance_criteria=["resume from grooming"],
     )
@@ -188,16 +186,16 @@ def test_recover_stale_runner_state_canonicalizes_queued_interrupted_marker(
     task.runtime.pipeline.execution_status = "interrupted"
     task.runtime.pipeline.current_stage.stage = "grooming"
     task.runtime.pipeline.current_stage.status = "running"
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.active_task_id = None
     state.queue = [task.id]
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
-    assert recover_stale_runner_state_for_workspace(workspace) is True
+    assert RunnerRecoveryService(workspace).recover_stale_runner_state() is True
 
-    refreshed = get_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
     assert refreshed is not None
     assert refreshed.status == "queued"
     assert refreshed.pipeline_status == "grooming"
@@ -205,7 +203,7 @@ def test_recover_stale_runner_state_canonicalizes_queued_interrupted_marker(
     assert refreshed.runtime.pipeline.current_stage.stage == "grooming"
     assert refreshed.runtime.pipeline.current_stage.status == "idle"
 
-    refreshed_state = load_state_for_workspace(workspace)
+    refreshed_state = WorkspaceStateRepository(workspace).load()
     assert refreshed_state.active_task_id is None
     assert refreshed_state.queue == [task.id]
 
@@ -213,25 +211,25 @@ def test_recover_stale_runner_state_canonicalizes_queued_interrupted_marker(
 def test_recover_stale_runner_state_clears_non_running_active_task_id(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Flagged but not running")
+    task = WorkspaceTasks(workspace).create( title="Flagged but not running")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.FLAGGED
     task.runtime.pipeline.execution_status = "idle"
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.active_task_id = task.id
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
-    assert recover_stale_runner_state_for_workspace(workspace) is True
-    assert get_task_for_workspace(workspace, task.id).runtime.pipeline.execution_status == "idle"  # type: ignore[union-attr]
-    assert load_state_for_workspace(workspace).active_task_id is None
+    assert RunnerRecoveryService(workspace).recover_stale_runner_state() is True
+    assert WorkspaceTasks(workspace).get(task.id).runtime.pipeline.execution_status == "idle"  # type: ignore[union-attr]
+    assert WorkspaceStateRepository(workspace).load().active_task_id is None
 
 
 def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Interrupted run")
+    task = WorkspaceTasks(workspace).create( title="Interrupted run")
     subagent_path = tmp_path / ".litehive" / "tasks" / f"{task.id}-{task.slug}" / "subagents" / "SA-1234-swe"
     subagent_path.mkdir(parents=True)
     subagent_artifacts(workspace, task.id, "SA-1234").save(
@@ -274,8 +272,8 @@ def test_prepare_interrupted_task_writes_resume_bookkeeping(tmp_path: Path) -> N
     assert task.runtime.execution.interruption.subagent.status == "interrupted"
     _assert_runtime_stage_has_no_removed_fields(task.runtime.pipeline.current_stage)
 
-    session = workspace.load_subagent_session(task.id, "SA-1234")
-    report = load_subagent_report(workspace, task.id, "SA-1234")
+    session = subagent_artifacts(workspace, task.id, "SA-1234").load_session_record()
+    report = subagent_artifacts(workspace, task.id, "SA-1234").load_report()
     assert session.values["status"] == report["status"] == "interrupted"
     assert session.values["resume_stage"] == report["resume_stage"] == "implementing"
     assert session.values["interruption_reason"] == report["interruption_reason"] == "received ctrl-c"

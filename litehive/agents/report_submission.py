@@ -8,6 +8,9 @@ from litehive.domain.common import Verdict
 from litehive.domain.reports import TaskActivityEntry, classify_task_activity_verdict
 from litehive.domain.roles import agent_activity_verdicts_for_role, agent_verdict_requires_target_stage
 from litehive.domain.task import TaskRecord
+from litehive.agents.session_store import subagent_artifacts
+from litehive.state.records import WorkspaceTasks
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.workspace import Workspace
 
 
@@ -79,7 +82,7 @@ class AgentReportSubmitter:
             source_subagent_id=identity.subagent_id,
             follow_up_task_id=normalized_follow_up_task,
         )
-        self.workspace.task_activity(task).append(entry)
+        task_activity_store_for_task(self.workspace, task).append(entry)
         return AgentReportSubmission(
             task_id=task.id,
             stage=actual_stage,
@@ -92,7 +95,7 @@ class AgentReportSubmitter:
         )
 
     def _load_task(self, task_id: str) -> TaskRecord:
-        task = self.workspace.get_task_record(task_id)
+        task = WorkspaceTasks(self.workspace).get_record(task_id)
         if task is None:
             raise AgentReportSubmissionError(f"task {task_id} not found")
         return task
@@ -101,7 +104,7 @@ class AgentReportSubmitter:
         if self.env_subagent_id is None:
             raise AgentReportSubmissionError("LITEHIVE_SUBAGENT_ID not set")
 
-        session = self.workspace.load_subagent_session_record(task.id, self.env_subagent_id)
+        session = subagent_artifacts(self.workspace, task.id, self.env_subagent_id).load_session_record()
         if not session:
             raise AgentReportSubmissionError(f"subagent session {self.env_subagent_id} not found for task {task.id}")
 
@@ -135,7 +138,7 @@ class AgentReportSubmitter:
             return None
         if normalized_follow_up_task == task.id:
             raise AgentReportSubmissionError("follow-up task id cannot reference the current task")
-        if self.workspace.get_task_record(normalized_follow_up_task) is None:
+        if WorkspaceTasks(self.workspace).get_record(normalized_follow_up_task) is None:
             raise AgentReportSubmissionError(f"follow-up task {normalized_follow_up_task} not found")
         return normalized_follow_up_task
 

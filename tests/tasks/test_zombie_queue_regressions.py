@@ -11,14 +11,11 @@ from litehive.db.schema import connect_workspace_db
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.domain.outcomes import TaskOutcomeKind
 from litehive.git.ops import has_non_litehive_changes
-from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
 from litehive.state.records import (
-    create_task_for_workspace,
-    get_task_for_workspace,
-    require_task_for_workspace,
-    save_task_for_workspace,
-)
-from litehive.tasks.queue import dequeue_next_task_selection, peek_next_task_selection
+    WorkspaceTasks,
+            )
+from litehive.tasks.queue import TaskQueueService
 from litehive.workspace import Workspace
 
 
@@ -53,12 +50,12 @@ def _queue_task(
     execution_status: str = "idle",
     outcome_kind: TaskOutcomeKind | None = None,
 ) -> None:
-    task = require_task_for_workspace(workspace, task_id)
+    task = WorkspaceTasks(workspace).require(task_id)
     task.status = TaskStatus(status)
     task.pipeline_status = PipelineStatus(pipeline_status)
     task.runtime.pipeline.execution_status = execution_status
     task.runtime.pipeline.last_outcome.kind = outcome_kind
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
 
 def test_dequeue_filter_skips_terminal_runtime_execution_statuses(tmp_path: Path) -> None:
@@ -66,7 +63,7 @@ def test_dequeue_filter_skips_terminal_runtime_execution_statuses(tmp_path: Path
     workspace = Workspace.from_path(tmp_path)
     zombie_ids: list[str] = []
     for execution_status in ("done", "cancelled", "failed", "blocked", "interrupted"):
-        zombie = create_task_for_workspace(workspace, title=f"Zombie {execution_status}")
+        zombie = WorkspaceTasks(workspace).create( title=f"Zombie {execution_status}")
         zombie_ids.append(zombie.id)
         _queue_task(
             workspace,
@@ -74,18 +71,18 @@ def test_dequeue_filter_skips_terminal_runtime_execution_statuses(tmp_path: Path
             pipeline_status="implementing",
             execution_status=execution_status,
         )
-    runnable = create_task_for_workspace(workspace, title="Runnable")
+    runnable = WorkspaceTasks(workspace).create( title="Runnable")
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.queue = [*zombie_ids, runnable.id]
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
-    selection = dequeue_next_task_selection(workspace)
+    selection = TaskQueueService(workspace).select_next()
 
     assert selection.task is not None
     assert selection.task.id == runnable.id
 
-    refreshed_state = load_state_for_workspace(workspace)
+    refreshed_state = WorkspaceStateRepository(workspace).load()
     assert refreshed_state.active_task_id == runnable.id
     assert refreshed_state.queue == []
 
@@ -93,8 +90,8 @@ def test_dequeue_filter_skips_terminal_runtime_execution_statuses(tmp_path: Path
 def test_queued_task_with_done_execution_status_is_not_selected(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    zombie = create_task_for_workspace(workspace, title="Done zombie")
-    runnable = create_task_for_workspace(workspace, title="Runnable")
+    zombie = WorkspaceTasks(workspace).create( title="Done zombie")
+    runnable = WorkspaceTasks(workspace).create( title="Runnable")
     _queue_task(
         workspace,
         zombie.id,
@@ -102,11 +99,11 @@ def test_queued_task_with_done_execution_status_is_not_selected(tmp_path: Path) 
         execution_status="done",
     )
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.queue = [zombie.id, runnable.id]
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
-    selection = dequeue_next_task_selection(workspace)
+    selection = TaskQueueService(workspace).select_next()
 
     assert selection.task is not None
     assert selection.task.id == runnable.id
@@ -115,22 +112,22 @@ def test_queued_task_with_done_execution_status_is_not_selected(tmp_path: Path) 
 def test_dequeue_selection_skips_tasks_missing_runtime_rows(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    legacy = create_task_for_workspace(workspace, title="Legacy disk-only task")
-    runnable = create_task_for_workspace(workspace, title="Runnable")
+    legacy = WorkspaceTasks(workspace).create( title="Legacy disk-only task")
+    runnable = WorkspaceTasks(workspace).create( title="Runnable")
 
     with connect_workspace_db(tmp_path) as connection:
         connection.execute("DELETE FROM task_state WHERE task_id = ?", (legacy.id,))
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.queue = [legacy.id, runnable.id]
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
-    selection = dequeue_next_task_selection(workspace)
+    selection = TaskQueueService(workspace).select_next()
 
     assert selection.task is not None
     assert selection.task.id == runnable.id
 
-    refreshed_state = load_state_for_workspace(workspace)
+    refreshed_state = WorkspaceStateRepository(workspace).load()
     assert refreshed_state.active_task_id == runnable.id
     assert refreshed_state.queue == [legacy.id]
 
@@ -140,7 +137,7 @@ def test_dequeue_filter_skips_terminal_last_outcome_kinds(tmp_path: Path) -> Non
     workspace = Workspace.from_path(tmp_path)
     zombie_ids: list[str] = []
     for outcome_kind in (TaskOutcomeKind.DUPLICATE, TaskOutcomeKind.DEFERRED, TaskOutcomeKind.WONT_DO):
-        zombie = create_task_for_workspace(workspace, title=f"Zombie {outcome_kind.value}")
+        zombie = WorkspaceTasks(workspace).create( title=f"Zombie {outcome_kind.value}")
         zombie_ids.append(zombie.id)
         _queue_task(
             workspace,
@@ -148,18 +145,18 @@ def test_dequeue_filter_skips_terminal_last_outcome_kinds(tmp_path: Path) -> Non
             pipeline_status="implementing",
             outcome_kind=outcome_kind,
         )
-    runnable = create_task_for_workspace(workspace, title="Runnable")
+    runnable = WorkspaceTasks(workspace).create( title="Runnable")
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.queue = [*zombie_ids, runnable.id]
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
-    selection = dequeue_next_task_selection(workspace)
+    selection = TaskQueueService(workspace).select_next()
 
     assert selection.task is not None
     assert selection.task.id == runnable.id
 
-    refreshed_state = load_state_for_workspace(workspace)
+    refreshed_state = WorkspaceStateRepository(workspace).load()
     assert refreshed_state.active_task_id == runnable.id
     assert refreshed_state.queue == []
 
@@ -167,7 +164,7 @@ def test_dequeue_filter_skips_terminal_last_outcome_kinds(tmp_path: Path) -> Non
 def test_selector_resets_stale_queued_pipeline_status_to_backlog(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Stale stage")
+    task = WorkspaceTasks(workspace).create( title="Stale stage")
     _queue_task(
         workspace,
         task.id,
@@ -175,16 +172,16 @@ def test_selector_resets_stale_queued_pipeline_status_to_backlog(tmp_path: Path)
         execution_status="idle",
     )
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.queue = [task.id]
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
-    selection = peek_next_task_selection(workspace)
+    selection = TaskQueueService(workspace).peek_next_selection()
 
     assert selection.task is not None
     assert selection.task.id == task.id
 
-    refreshed = require_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).require(task.id)
     assert refreshed.pipeline_status == "backlog"
     assert refreshed.runtime.pipeline.current_stage.stage == "backlog"
     assert refreshed.runtime.pipeline.current_stage.status == "idle"
@@ -205,11 +202,11 @@ def test_run_drain_skips_zombie_queue_entries_and_leaves_main_clean(
     _git_ok(workspace_root, "add", "tracked.txt")
     _git_ok(workspace_root, "commit", "-m", "initial")
 
-    done_task = create_task_for_workspace(workspace, title="Done zombie")
-    cancelled_task = create_task_for_workspace(workspace, title="Cancelled zombie")
-    duplicate_task = create_task_for_workspace(workspace, title="Duplicate zombie")
-    deferred_task = create_task_for_workspace(workspace, title="Deferred zombie")
-    wont_do_task = create_task_for_workspace(workspace, title="Won't do zombie")
+    done_task = WorkspaceTasks(workspace).create( title="Done zombie")
+    cancelled_task = WorkspaceTasks(workspace).create( title="Cancelled zombie")
+    duplicate_task = WorkspaceTasks(workspace).create( title="Duplicate zombie")
+    deferred_task = WorkspaceTasks(workspace).create( title="Deferred zombie")
+    wont_do_task = WorkspaceTasks(workspace).create( title="Won't do zombie")
 
     _queue_task(workspace, done_task.id, pipeline_status="implementing", execution_status="done")
     _queue_task(workspace, cancelled_task.id, pipeline_status="testing", execution_status="cancelled")
@@ -217,7 +214,7 @@ def test_run_drain_skips_zombie_queue_entries_and_leaves_main_clean(
     _queue_task(workspace, deferred_task.id, pipeline_status="grooming", outcome_kind=TaskOutcomeKind.DEFERRED)
     _queue_task(workspace, wont_do_task.id, pipeline_status="commit_to_git", outcome_kind=TaskOutcomeKind.WONT_DO)
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.queue = [
         done_task.id,
         cancelled_task.id,
@@ -225,7 +222,7 @@ def test_run_drain_skips_zombie_queue_entries_and_leaves_main_clean(
         deferred_task.id,
         wont_do_task.id,
     ]
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
     called = {"count": 0}
 
@@ -247,7 +244,7 @@ def test_run_drain_skips_zombie_queue_entries_and_leaves_main_clean(
     assert called["count"] == 0
     assert not (workspace_root / "orphan.txt").exists()
 
-    refreshed_state = load_state_for_workspace(workspace)
+    refreshed_state = WorkspaceStateRepository(workspace).load()
     assert refreshed_state.active_task_id is None
     assert refreshed_state.queue == []
     assert has_non_litehive_changes(workspace_root) is False
@@ -262,7 +259,7 @@ def test_task_with_hook_rejection_and_recovery_has_terminal_execution_status(tmp
     from litehive.config.model import LitehiveConfig
     from litehive.config.workspace_files import config_path
     from litehive.lifecycle.nodes.agent import AgentVerdict
-    from litehive.lifecycle.orchestration import run_task_for_workspace
+    from litehive.lifecycle.orchestration import TaskOrchestrator
     import yaml
 
     workspace_root = tmp_path / "workspace"
@@ -277,7 +274,7 @@ def test_task_with_hook_rejection_and_recovery_has_terminal_execution_status(tmp
     _git_ok(workspace_root, "add", "tracked.txt")
     _git_ok(workspace_root, "commit", "-m", "initial commit")
 
-    task = create_task_for_workspace(workspace, title="Hook rejection and recovery test", pipeline_mode="single")
+    task = WorkspaceTasks(workspace).create( title="Hook rejection and recovery test", pipeline_mode="single")
 
     # Configure hook that fails twice then passes (based on successful pattern in test_hook_reject_circuit_breaker.py)
     def _fail_twice_then_pass_command(task_id: str) -> str:
@@ -326,10 +323,7 @@ def test_task_with_hook_rejection_and_recovery_has_terminal_execution_status(tmp
                 return AgentVerdict(outcome="pass")
 
     # Run the task through the pipeline
-    result = run_task_for_workspace(
-        workspace,
-        workspace.load_config(),
-        task,
+    result = TaskOrchestrator(workspace, workspace.load_config()).run(task,
         engine_factory=lambda engine_name: MockEngine(engine_name),
     )
 
@@ -337,7 +331,7 @@ def test_task_with_hook_rejection_and_recovery_has_terminal_execution_status(tmp
     assert result.final_stage == "done"
 
     # Verify the task has the correct terminal state - this is the key regression test
-    completed_task = get_task_for_workspace(workspace, task.id)
+    completed_task = WorkspaceTasks(workspace).get(task.id)
     assert completed_task is not None
     assert completed_task.status == "done"
     assert completed_task.pipeline_status == "done"
@@ -351,16 +345,16 @@ def test_task_with_hook_rejection_and_recovery_has_terminal_execution_status(tmp
 
     # Additional verification: create a simple queue test to confirm it would be skipped
     # Create a fresh runnable task for comparison
-    runnable_task = create_task_for_workspace(workspace, title="Runnable task")
+    runnable_task = WorkspaceTasks(workspace).create( title="Runnable task")
 
     # Manually set up a scenario to test queue selection
     _queue_task(workspace, completed_task.id, status="done", pipeline_status="done", execution_status="done")
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.queue = [completed_task.id, runnable_task.id]
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
     # Verify queue selection correctly skips the completed task
-    selection = dequeue_next_task_selection(workspace)
+    selection = TaskQueueService(workspace).select_next()
     assert selection.task is not None
     assert selection.task.id == runnable_task.id

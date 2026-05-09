@@ -16,7 +16,7 @@ from typing import Any
 from litehive.domain.common import RuntimeStageStatus, TaskExecutionStatus, TaskStage, TaskStatus
 from litehive.domain.reports import ExecutionEstimate
 from litehive.domain.task import TaskRecord
-from litehive.tasks.report_storage import load_workspace_stage_reports
+from litehive.tasks.report_storage import TaskReportStore
 from litehive.workspace import Workspace
 
 # Ordered pipeline stages for remaining-time estimation.
@@ -76,7 +76,7 @@ def _collect_report_durations(workspace: Workspace) -> list[float]:
     """
     return [
         float(report.duration_seconds)
-        for report in load_workspace_stage_reports(workspace)
+        for report in TaskReportStore(workspace).load_workspace_stage_reports()
         if report.duration_seconds > 0
     ]
 
@@ -123,9 +123,7 @@ def _latest_stage_report_for_task(workspace: Workspace, task: TaskRecord) -> Any
     is the dashboard-only gentle path.
     """
     try:
-        from litehive.tasks.report_storage import latest_stage_report  # noqa: PLC0415
-
-        return latest_stage_report(workspace, task)
+        return TaskReportStore(workspace).latest_stage_report(task)
     except (OSError, sqlite3.DatabaseError, ValueError):
         return None
 
@@ -183,12 +181,7 @@ def _latest_stage_failure_classification(workspace: Workspace, task: TaskRecord)
     state. Status prints both side-by-side, so this report-
     side accessor lives separately and tolerates missing rows.
     """
-    try:
-        from litehive.tasks.report_storage import latest_stage_report  # noqa: PLC0415
-
-        report = latest_stage_report(workspace, task)
-    except (OSError, sqlite3.DatabaseError, ValueError):
-        return None
+    report = _latest_stage_report_for_task(workspace, task)
     if report is None:
         return None
     return report.failure_classification

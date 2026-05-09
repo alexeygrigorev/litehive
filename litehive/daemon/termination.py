@@ -16,7 +16,7 @@ from litehive.config.model import DaemonConfig
 from litehive.state.locking import runner_pid_is_alive
 from litehive.workspace import Workspace
 
-from .registry import unregister_daemon_for_workspace
+from .registry import DaemonRegistry
 
 
 def wait_for_pid_exit(pid: int, timeout_seconds: float, poll_interval_seconds: float) -> bool:
@@ -49,12 +49,12 @@ def force_kill_recorded_daemon(workspace: Workspace, pid: int, config: DaemonCon
     the workspace is free for a new daemon to register.
     """
     if not runner_pid_is_alive(pid):
-        unregister_daemon_for_workspace(workspace, pid=pid)
+        DaemonRegistry(workspace).unregister(pid=pid)
         return
     try:
         os.kill(pid, signal.SIGKILL)
     except ProcessLookupError:
-        unregister_daemon_for_workspace(workspace, pid=pid)
+        DaemonRegistry(workspace).unregister(pid=pid)
         return
     except PermissionError as exc:
         raise RuntimeError(f"failed to send SIGKILL to daemon pid={pid}: {exc}") from exc
@@ -64,7 +64,7 @@ def force_kill_recorded_daemon(workspace: Workspace, pid: int, config: DaemonCon
         poll_interval_seconds=config.exit_poll_interval_seconds,
     ):
         raise RuntimeError(f"daemon pid={pid} did not exit after SIGKILL")
-    unregister_daemon_for_workspace(workspace, pid=pid)
+    DaemonRegistry(workspace).unregister(pid=pid)
 
 
 def terminate_recorded_daemon(workspace: Workspace, pid: int, config: DaemonConfig) -> None:
@@ -77,12 +77,12 @@ def terminate_recorded_daemon(workspace: Workspace, pid: int, config: DaemonConf
     SIGKILL via ``force_kill_recorded_daemon``.
     """
     if not runner_pid_is_alive(pid):
-        unregister_daemon_for_workspace(workspace, pid=pid)
+        DaemonRegistry(workspace).unregister(pid=pid)
         return
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
-        unregister_daemon_for_workspace(workspace, pid=pid)
+        DaemonRegistry(workspace).unregister(pid=pid)
         return
     except PermissionError as exc:
         raise RuntimeError(f"failed to send SIGTERM to daemon pid={pid}: {exc}") from exc
@@ -91,7 +91,7 @@ def terminate_recorded_daemon(workspace: Workspace, pid: int, config: DaemonConf
         timeout_seconds=config.stop_grace_period_seconds,
         poll_interval_seconds=config.exit_poll_interval_seconds,
     ):
-        unregister_daemon_for_workspace(workspace, pid=pid)
+        DaemonRegistry(workspace).unregister(pid=pid)
         return
     force_kill_recorded_daemon(workspace, pid=pid, config=config)
 

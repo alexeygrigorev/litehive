@@ -6,8 +6,8 @@ from pathlib import Path
 
 from litehive.config.workspace import normalize_workspace_root, resolve_workspace
 from litehive.domain.task import TaskRecord
-from litehive.state.persist import load_state_for_workspace
-from litehive.tasks.status import close_task_for_workspace, update_task_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.tasks.status import TaskStatusService
 from litehive.workspace import Workspace
 
 
@@ -66,7 +66,7 @@ class AgentTaskMutationAuthorizer:
             raise AgentTaskMutationError("LITEHIVE_TASK_ID is not set")
 
         workspace = self._resolve_workspace(task_id)
-        state = load_state_for_workspace(workspace)
+        state = WorkspaceStateRepository(workspace).load()
         if (
             env_task_id is not None
             and state.active_task_id == env_task_id
@@ -133,8 +133,7 @@ class AgentTaskMutator:
             priority = request.priority
         else:
             priority = sentinel
-        return update_task_for_workspace(
-            self.workspace,
+        return TaskStatusService(self.workspace).update(
             self.task_id,
             goal=goal,
             acceptance_criteria=acceptance_criteria,
@@ -147,8 +146,7 @@ class AgentTaskMutator:
         )
 
     def close(self, request: AgentTaskCloseRequest) -> TaskRecord:
-        return close_task_for_workspace(
-            self.workspace,
+        return TaskStatusService(self.workspace).close(
             self.task_id,
             outcome=request.outcome,
             reason=request.reason,

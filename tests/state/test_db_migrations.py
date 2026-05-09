@@ -5,15 +5,15 @@ import sqlite3
 import pytest
 from typer.testing import CliRunner
 
-from litehive.agents.session_store import SubagentArtifactPayload, load_subagent_report, subagent_artifacts
+from litehive.agents.session_store import SubagentArtifactPayload, subagent_artifacts
 from litehive.cli.app import app
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import create_workspace
 from litehive.domain.task import TaskStateRecord, WorkspaceState
 from litehive.recovery.detection import TaskLaunchFailure
-from litehive.state.records import create_task_for_workspace, get_task_for_workspace, list_tasks_for_workspace
-from litehive.state.store import runtime_store_for_workspace
-from litehive.tasks.queue import peek_next_task
+from litehive.state.records import WorkspaceTasks
+from litehive.state.store import RuntimeStore
+from litehive.tasks.queue import TaskQueueService
 from litehive.workspace import Workspace
 from litehive.db import schema as schema_module
 from litehive.db.schema import (
@@ -24,7 +24,7 @@ from litehive.db.schema import (
     connect_workspace_db,
 )
 from litehive.state.rebuild_safety import RebuildSafetyError
-from litehive.tasks.event_log import task_event_log_path
+from litehive.tasks.event_log import TaskEventLog
 
 
 def _install_workspace_db_schema(root: Path, *, through_version: int) -> None:
@@ -212,7 +212,7 @@ def test_migration_0005_does_not_import_deprecated_task_yaml(tmp_path: Path) -> 
         connection.commit()
 
     apply_pending_migrations(tmp_path)
-    runtime_store_for_workspace(Workspace.from_path(tmp_path)).bootstrap()
+    RuntimeStore(Workspace.from_path(tmp_path)).bootstrap()
 
     with connect_workspace_db(tmp_path) as connection:
         intent_rows = connection.execute("SELECT task_id, payload FROM task_intent ORDER BY task_id").fetchall()
@@ -222,10 +222,10 @@ def test_migration_0005_does_not_import_deprecated_task_yaml(tmp_path: Path) -> 
         ]
 
     workspace = Workspace.from_path(tmp_path)
-    loaded = get_task_for_workspace(workspace, "T-0001")
-    listed = list_tasks_for_workspace(workspace, strict=False)
+    loaded = WorkspaceTasks(workspace).get("T-0001")
+    listed = WorkspaceTasks(workspace).list(strict=False)
     with pytest.raises(TaskLaunchFailure, match="missing from SQLite task_intent"):
-        peek_next_task(workspace)
+        TaskQueueService(workspace).peek_next()
 
     assert applied_versions == _migration_versions()
     assert intent_rows == []
@@ -281,7 +281,7 @@ def test_daemon_run_reports_broken_worktree_venv_before_start(
     tmp_path: Path,
 ) -> None:
     create_workspace(tmp_path)
-    create_task_for_workspace(Workspace.from_path(tmp_path), title="Queued work")
+    WorkspaceTasks(Workspace.from_path(tmp_path)).create( title="Queued work")
     broken_worktree = workspace_path(tmp_path, "worktrees") / "T-0001-demo"
     _create_broken_venv_binary(broken_worktree, "ruff", tmp_path / "fake-home" / ".cache" / "uv")
 
@@ -301,7 +301,7 @@ def test_daemon_run_reports_broken_worktree_venv_before_start(
 def test_legacy_workspace_db_rebuild_replays_task_event_log_without_task_yaml_rescan(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Keep me")
+    task = WorkspaceTasks(workspace).create( title="Keep me")
     db_path = workspace_path(tmp_path, "data.db")
     db_path.unlink()
 
@@ -345,8 +345,8 @@ def test_legacy_workspace_db_rebuild_replays_task_event_log_without_task_yaml_re
 def test_migration_rebuild_refuses_to_drop_tasks_missing_from_event_log(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Historical task before event log")
-    task_event_log_path(workspace).unlink()
+    task = WorkspaceTasks(workspace).create( title="Historical task before event log")
+    TaskEventLog(workspace).path().unlink()
     db_path = workspace_path(tmp_path, "data.db")
 
     with sqlite3.connect(db_path) as connection:
@@ -381,7 +381,7 @@ def test_connect_workspace_db_rebuilds_replaced_cached_db(tmp_path: Path) -> Non
         report=SubagentArtifactPayload({"summary": "recovered"}),
     )
 
-    report = load_subagent_report(Workspace.from_path(tmp_path), "T-0001", "SA-0001")
+    report = subagent_artifacts(Workspace.from_path(tmp_path), "T-0001", "SA-0001").load_report()
     assert report["summary"] == "recovered"
 
     with sqlite3.connect(db_path) as connection:

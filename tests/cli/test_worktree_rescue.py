@@ -13,9 +13,9 @@ from litehive.cli.app import app
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import create_workspace
 from litehive.domain.task import UnmergedWorktree
-from litehive.state.locking import runner_lock_is_held_for_workspace
-from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
-from litehive.state.records import create_task_for_workspace, get_task_for_workspace, save_task_for_workspace
+from litehive.state.locking import WorkspaceRunnerLock
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.records import WorkspaceTasks
 from litehive.worktree.paths import serialize_worktree_path, task_worktree_branch
 from litehive.domain.common import PipelineStatus, TaskStatus
 from litehive.workspace import Workspace
@@ -30,7 +30,7 @@ _FAKE_RUNNER_SCRIPT = textwrap.dedent(
     import sys
     from pathlib import Path
 
-    from litehive.state.locking import runner_heartbeat_for_workspace, workspace_runner_guard
+    from litehive.state.locking import WorkspaceRunnerLock
     from litehive.workspace import Workspace
 
     root = Path(sys.argv[1])
@@ -43,8 +43,8 @@ _FAKE_RUNNER_SCRIPT = textwrap.dedent(
         stop.set()
 
     signal.signal(signal.SIGINT, _handle_signal)
-    with workspace_runner_guard(workspace):
-        with runner_heartbeat_for_workspace(workspace, active_task_id=active_task_id, interval_seconds=0.05):
+    with WorkspaceRunnerLock(workspace).guard():
+        with WorkspaceRunnerLock(workspace).heartbeat(active_task_id=active_task_id, interval_seconds=0.05):
             ready_file.write_text("ready\\n", encoding="utf-8")
             while not stop.wait(0.05):
                 pass
@@ -76,7 +76,7 @@ def _bootstrap_git_workspace(workspace: Path) -> None:
 
 
 def _create_merge_failed_worktree_task(workspace: Path):
-    task = create_task_for_workspace(Workspace.from_path(workspace), title="Rescue me", auto_commit=False)
+    task = WorkspaceTasks(Workspace.from_path(workspace)).create( title="Rescue me", auto_commit=False)
     worktree_path = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
     _git_ok(workspace, "worktree", "add", "-b", task_worktree_branch(task), str(worktree_path), "HEAD")
@@ -89,11 +89,11 @@ def _create_merge_failed_worktree_task(workspace: Path):
     task.flag_reason = "merge_failed"
     task.runtime.pipeline.git.worktree_path = serialize_worktree_path(worktree_path)
     task.git.worktree_path = None
-    save_task_for_workspace(Workspace.from_path(workspace), task)
+    WorkspaceTasks(Workspace.from_path(workspace)).save(task)
 
-    state = load_state_for_workspace(Workspace.from_path(workspace))
+    state = WorkspaceStateRepository(Workspace.from_path(workspace)).load()
     state.unmerged_worktrees = [UnmergedWorktree(task_id=task.id, worktree_path=str(worktree_path))]
-    save_state_for_workspace(Workspace.from_path(workspace), state)
+    WorkspaceStateRepository(Workspace.from_path(workspace)).save(state)
     return task, worktree_path
 
 
@@ -103,11 +103,11 @@ def _flag_for_rescue(workspace: Path, task, worktree_path: Path) -> None:
     task.flag_reason = "merge_failed"
     task.runtime.pipeline.git.worktree_path = serialize_worktree_path(worktree_path)
     task.git.worktree_path = None
-    save_task_for_workspace(Workspace.from_path(workspace), task)
+    WorkspaceTasks(Workspace.from_path(workspace)).save(task)
 
-    state = load_state_for_workspace(Workspace.from_path(workspace))
+    state = WorkspaceStateRepository(Workspace.from_path(workspace)).load()
     state.unmerged_worktrees = [UnmergedWorktree(task_id=task.id, worktree_path=str(worktree_path))]
-    save_state_for_workspace(Workspace.from_path(workspace), state)
+    WorkspaceStateRepository(Workspace.from_path(workspace)).save(state)
 
 
 def _spawn_fake_runner(workspace: Path, *, active_task_id: str, ready_file: Path) -> subprocess.Popen[str]:
@@ -138,7 +138,7 @@ def _wait_for_runner_lock(proc: subprocess.Popen[str], workspace: Path, ready_fi
                 "fake runner exited before acquiring the runner lock "
                 f"(returncode={returncode}, stdout={stdout!r}, stderr={stderr!r})"
             )
-        if ready_file.exists() and runner_lock_is_held_for_workspace(workspace_context):
+        if ready_file.exists() and WorkspaceRunnerLock(workspace_context).is_held():
             return
         time.sleep(0.05)
     raise AssertionError("fake runner did not acquire the runner lock within 15s")
@@ -151,7 +151,7 @@ def _stop_runner(proc: subprocess.Popen[str], workspace: Path) -> None:
             proc.send_signal(signal.SIGINT)
             proc.wait(timeout=5)
     finally:
-        assert not runner_lock_is_held_for_workspace(workspace_context)
+        assert not WorkspaceRunnerLock(workspace_context).is_held()
 
 
 def test_worktree_rescue_apply_completes_while_another_runner_holds_the_lock(tmp_path: Path) -> None:
@@ -160,14 +160,14 @@ def test_worktree_rescue_apply_completes_while_another_runner_holds_the_lock(tmp
     _bootstrap_git_workspace(workspace)
     rescue_task, _ = _create_merge_failed_worktree_task(workspace)
 
-    busy_task = create_task_for_workspace(Workspace.from_path(workspace), title="Busy runner", auto_commit=False)
+    busy_task = WorkspaceTasks(Workspace.from_path(workspace)).create( title="Busy runner", auto_commit=False)
     busy_task.status = TaskStatus.IN_PROGRESS
     busy_task.pipeline_status = PipelineStatus.IMPLEMENTING
-    save_task_for_workspace(Workspace.from_path(workspace), busy_task)
+    WorkspaceTasks(Workspace.from_path(workspace)).save(busy_task)
 
-    state = load_state_for_workspace(Workspace.from_path(workspace))
+    state = WorkspaceStateRepository(Workspace.from_path(workspace)).load()
     state.active_task_id = busy_task.id
-    save_state_for_workspace(Workspace.from_path(workspace), state)
+    WorkspaceStateRepository(Workspace.from_path(workspace)).save(state)
 
     ready_file = tmp_path / "runner-ready"
     proc = _spawn_fake_runner(workspace, active_task_id=busy_task.id, ready_file=ready_file)
@@ -186,14 +186,14 @@ def test_worktree_rescue_apply_completes_while_another_runner_holds_the_lock(tmp
         assert "active_task_count: 0" in result.output
         assert (workspace / "feature.txt").read_text(encoding="utf-8") == "rescued\n"
 
-        refreshed = get_task_for_workspace(Workspace.from_path(workspace), rescue_task.id)
+        refreshed = WorkspaceTasks(Workspace.from_path(workspace)).get(rescue_task.id)
         assert refreshed is not None
         assert refreshed.status == "done"
         assert refreshed.pipeline_status == "done"
         assert refreshed.runtime.pipeline.git.worktree_path is None
         assert refreshed.runtime.pipeline.git.commit_sha == _git_ok(workspace, "rev-parse", "HEAD")
 
-        refreshed_state = load_state_for_workspace(Workspace.from_path(workspace))
+        refreshed_state = WorkspaceStateRepository(Workspace.from_path(workspace)).load()
         assert refreshed_state.active_task_id == busy_task.id
         assert all(entry.task_id != rescue_task.id for entry in refreshed_state.unmerged_worktrees)
     finally:
@@ -205,7 +205,7 @@ def test_worktree_rescue_apply_reports_missing_worktree(tmp_path: Path) -> None:
     workspace.mkdir()
     _bootstrap_git_workspace(workspace)
 
-    task = create_task_for_workspace(Workspace.from_path(workspace), title="Missing rescue", auto_commit=False)
+    task = WorkspaceTasks(Workspace.from_path(workspace)).create( title="Missing rescue", auto_commit=False)
     missing_worktree = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
     _flag_for_rescue(workspace, task, missing_worktree)
 
@@ -227,7 +227,7 @@ def test_worktree_rescue_apply_reconciles_already_landed_patch(tmp_path: Path) -
     workspace.mkdir()
     _bootstrap_git_workspace(workspace)
 
-    task = create_task_for_workspace(Workspace.from_path(workspace), title="Already landed", auto_commit=False)
+    task = WorkspaceTasks(Workspace.from_path(workspace)).create( title="Already landed", auto_commit=False)
     worktree_path = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
     _git_ok(workspace, "worktree", "add", "-b", task_worktree_branch(task), str(worktree_path), "HEAD")
@@ -253,7 +253,7 @@ def test_worktree_rescue_apply_reconciles_already_landed_patch(tmp_path: Path) -
     assert "message: worktree patch already landed on main" in result.output
     assert "already_landed_count: 1" in result.output
 
-    refreshed = get_task_for_workspace(Workspace.from_path(workspace), task.id)
+    refreshed = WorkspaceTasks(Workspace.from_path(workspace)).get(task.id)
     assert refreshed is not None
     assert refreshed.status == "done"
     assert refreshed.runtime.pipeline.git.worktree_path is None
@@ -265,7 +265,7 @@ def test_worktree_rescue_apply_keeps_manual_conflict_pending(tmp_path: Path) -> 
     workspace.mkdir()
     _bootstrap_git_workspace(workspace)
 
-    task = create_task_for_workspace(Workspace.from_path(workspace), title="Manual conflict", auto_commit=False)
+    task = WorkspaceTasks(Workspace.from_path(workspace)).create( title="Manual conflict", auto_commit=False)
     worktree_path = workspace_path(workspace, "worktrees") / f"{task.id}-{task.slug}"
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
     _git_ok(workspace, "worktree", "add", "-b", task_worktree_branch(task), str(worktree_path), "HEAD")
@@ -290,7 +290,7 @@ def test_worktree_rescue_apply_keeps_manual_conflict_pending(tmp_path: Path) -> 
     assert "manual_conflict_count: 1" in result.output
     assert not (workspace / ".git" / "CHERRY_PICK_HEAD").exists()
 
-    refreshed = get_task_for_workspace(Workspace.from_path(workspace), task.id)
+    refreshed = WorkspaceTasks(Workspace.from_path(workspace)).get(task.id)
     assert refreshed is not None
     assert refreshed.status == "flagged"
     assert refreshed.runtime.pipeline.git.worktree_path == serialize_worktree_path(worktree_path)
@@ -302,9 +302,9 @@ def test_worktree_rescue_apply_refuses_to_race_the_active_task(tmp_path: Path) -
     _bootstrap_git_workspace(workspace)
     rescue_task, worktree_path = _create_merge_failed_worktree_task(workspace)
 
-    state = load_state_for_workspace(Workspace.from_path(workspace))
+    state = WorkspaceStateRepository(Workspace.from_path(workspace)).load()
     state.active_task_id = rescue_task.id
-    save_state_for_workspace(Workspace.from_path(workspace), state)
+    WorkspaceStateRepository(Workspace.from_path(workspace)).save(state)
 
     ready_file = tmp_path / "runner-ready"
     proc = _spawn_fake_runner(workspace, active_task_id=rescue_task.id, ready_file=ready_file)
@@ -326,7 +326,7 @@ def test_worktree_rescue_apply_refuses_to_race_the_active_task(tmp_path: Path) -
         assert "active_task_count: 1" in result.output
         assert not (workspace / "feature.txt").exists()
 
-        refreshed = get_task_for_workspace(Workspace.from_path(workspace), rescue_task.id)
+        refreshed = WorkspaceTasks(Workspace.from_path(workspace)).get(rescue_task.id)
         assert refreshed is not None
         assert refreshed.status == "flagged"
         assert refreshed.pipeline_status == "flagged"

@@ -104,9 +104,9 @@ def _task_exists_in_workspace(workspace: "Workspace", task_id: str) -> bool:
     """
     # inline: state.store transitively imports config.* during
     # bootstrap, so keep this boundary probe local to avoid import cycles.
-    from litehive.state.store import runtime_store_for_workspace  # noqa: PLC0415
+    from litehive.state.store import RuntimeStore  # noqa: PLC0415
 
-    return runtime_store_for_workspace(workspace).load_task_intent(task_id) is not None
+    return RuntimeStore(workspace).load_task_intent(task_id) is not None
 
 
 def resolve_workspace(
@@ -187,9 +187,9 @@ def create_workspace(
     workspace_path(root, "data.db").parent.mkdir(parents=True, exist_ok=True)
     # inline: state.store transitively pulls db.schema which loads config.*
     # back through litehive/config/__init__.py during partial init.
-    from litehive.state.store import runtime_store_for_workspace  # noqa: PLC0415
+    from litehive.state.store import RuntimeStore  # noqa: PLC0415
     from litehive.workspace import Workspace  # noqa: PLC0415
 
-    runtime_store_for_workspace(Workspace(root)).bootstrap()
+    RuntimeStore(Workspace(root)).bootstrap()
 
     return base

@@ -4,7 +4,7 @@ import pytest
 
 from heru import extract_engine_continuation, get_engine
 from heru.base import CLIExecutionResult
-from litehive.agents.execution_trace import render_execution_trace
+from litehive.agents.execution_trace import execution_trace_renderer
 from litehive.agents.session import SubagentSessionManager
 from litehive.domain.engine import LiveEventStream
 from heru.types import RuntimeEngineContinuation
@@ -48,7 +48,7 @@ def test_heru_extract_engine_continuation_prefers_unified_events(monkeypatch) ->
 def test_subagent_session_manager_does_not_parse_native_engine_jsonl_fallback_for_supported_engines(engine_name: str) -> None:
     execution = _execution('{"type":"message","role":"assistant","content":"legacy output"}\n')
 
-    execution_trace = render_execution_trace(execution)
+    execution_trace = execution_trace_renderer().render(execution)
     continuation = SubagentSessionManager.extract_execution_continuation(engine_name, execution)
     event_stream = SubagentSessionManager.extract_execution_event_stream(engine_name, execution.stdout)
 
@@ -97,7 +97,7 @@ def test_subagent_session_manager_consumes_unified_event_types_for_supported_eng
         )
     )
 
-    execution_trace = render_execution_trace(execution)
+    execution_trace = execution_trace_renderer().render(execution)
     continuation = SubagentSessionManager.extract_execution_continuation(engine_name, execution)
     event_stream = SubagentSessionManager.extract_execution_event_stream(
         engine_name,

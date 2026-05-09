@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import json
 
 from litehive.domain.task import TaskRecord
-from litehive.state.store import runtime_store_for_workspace
+from litehive.state.store import RuntimeStore
 from litehive.workspace import Workspace
 
 
@@ -33,7 +33,7 @@ def append_journal(workspace: Workspace, task: TaskRecord, message: str) -> None
     same store via this helper so the SQLite-side and event-log-side journals
     stay aligned.
     """
-    runtime_store_for_workspace(workspace).append_task_journal(task.id, message)
+    RuntimeStore(workspace).append_task_journal(task.id, message)
 
 
 def load_task_journal(workspace: Workspace, task_id: str) -> list[TaskJournalEntry]:

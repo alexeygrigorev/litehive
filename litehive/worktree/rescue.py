@@ -6,7 +6,7 @@ When the normal merge path fails (the lifecycle layer flags the task
 The rescue flow cherry-picks those commits onto main so the operator
 doesn't lose the work, with conflict detection and metadata-only
 auto-resolution. Sibling of ``litehive.worktree`` so callers that
-only need rescue don't pull in the full ``WorktreeService`` graph.
+only need rescue don't pull in sync or cleanup code.
 """
 
 from pathlib import Path
@@ -36,42 +36,67 @@ from litehive.git.ops import (
     stdout_or_none as git_stdout_or_none,
     unmerged_files,
 )
-from litehive.state.locking import ensure_future_task_mutation_allowed_for_workspace, workspace_lock_for_workspace
-from litehive.state.persist import (
-    load_state_for_workspace,
-    persist_task_and_state_without_runner_guard_for_workspace,
-    save_state_for_workspace,
-)
+from litehive.state.locking import WorkspaceMutationGuard, WorkspaceStateLock
+from litehive.state.persist import WorkspaceStateRepository
 from litehive.state.records import (
     clear_task_worktree_path,
     get_task_worktree_path,
     set_task_commit_sha,
+    WorkspaceTasks,
 )
-from litehive.worktree.paths import is_managed_worktree_path_for_workspace, resolve_recorded_worktree_path_for_workspace
+from litehive.worktree.paths import WorktreePaths
 from litehive.workspace import Workspace
 
 
-def collect_rescue_candidates_for_workspace(workspace: Workspace) -> list[RescueCandidate]:
+class WorktreeRescueService:
+    """
+    Workspace-bound rescue of stranded task worktree commits onto main.
+    """
+
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
+
+    def collect_rescue_candidates(self) -> list[RescueCandidate]:
+        """
+        Return flagged merge-failed worktrees that may need rescue.
+        """
+        return _collect_rescue_candidates(self.workspace)
+
+    def require_clean_main_checkout(self) -> None:
+        """
+        Refuse rescue unless the main checkout is clean.
+        """
+        _require_clean_main_checkout(self.workspace)
+
+    def apply_rescue_candidate(self, candidate: RescueCandidate) -> RescueResult:
+        """
+        Cherry-pick one candidate's commits onto main and finalize metadata.
+        """
+        return _apply_rescue_candidate(self.workspace, candidate)
+
+
+def _collect_rescue_candidates(workspace: Workspace) -> list[RescueCandidate]:
     """
     Return tasks flagged ``merge_failed`` whose worktrees still hold commits.
 
-    Used by ``litehive worktree rescue`` (CLI) and ``WorktreeService`` to
+    Used by ``litehive worktree rescue`` (CLI) and ``WorktreeRescueService`` to
     list candidates for an operator-driven cherry-pick onto main.
     Sorted by task id so the CLI output is stable and the operator
     can re-invoke against the same ordering.
     """
     candidates: list[RescueCandidate] = []
-    for task in workspace.list_tasks(strict=False):
+    paths = WorktreePaths(workspace)
+    for task in WorkspaceTasks(workspace).list(strict=False):
         if task.status != TaskStatus.FLAGGED or task.flag_reason != "merge_failed":
             continue
         worktree_rel = get_task_worktree_path(task)
-        if not is_managed_worktree_path_for_workspace(workspace, worktree_rel):
+        if not paths.is_managed_worktree_path(worktree_rel):
             continue
-        worktree_path = resolve_recorded_worktree_path_for_workspace(workspace, worktree_rel)
+        worktree_path = paths.resolve_recorded_worktree_path(worktree_rel)
         if worktree_path is None or worktree_rel is None:
             continue
         if worktree_path.exists():
-            commit_shas = _worktree_commits_ahead_of_main_for_workspace(workspace, worktree_path)
+            commit_shas = _worktree_commits_ahead_of_main_impl(workspace, worktree_path)
         else:
             commit_shas = []
         candidates.append(
@@ -85,11 +110,11 @@ def collect_rescue_candidates_for_workspace(workspace: Workspace) -> list[Rescue
     return sorted(candidates, key=lambda item: item.task_id)
 
 
-def require_clean_main_checkout_for_workspace(workspace: Workspace) -> None:
+def _require_clean_main_checkout(workspace: Workspace) -> None:
     """
     Refuse to rescue unless ``main`` is checked out clean.
 
-    Called by ``WorktreeService.require_clean_main_checkout`` before
+    Called by ``WorktreeRescueService.require_clean_main_checkout`` before
     any cherry-pick mutates the main checkout's working tree —
     rescuing onto a dirty main would mix unrelated edits into the
     rescued commit and confuse later git history. Raises ``GitError``
@@ -103,11 +128,11 @@ def require_clean_main_checkout_for_workspace(workspace: Workspace) -> None:
         raise GitError("worktree rescue --apply requires a clean checkout on branch 'main'")
 
 
-def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: RescueCandidate) -> RescueResult:
+def _apply_rescue_candidate(workspace: Workspace, candidate: RescueCandidate) -> RescueResult:
     """
     Cherry-pick a candidate's commits onto main and finalize the task record.
 
-    Called once per candidate by ``WorktreeService.apply_rescue_candidate``.
+    Called once per candidate by ``WorktreeRescueService.apply_rescue_candidate``.
     Caller must have run :func:`require_clean_main_checkout` first;
     this function will not enforce that itself because the rescue CLI
     runs the check once for the whole batch. Returns a
@@ -115,7 +140,7 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
     ``already_landed``, ``manual_conflict``, …) so the CLI can render
     a per-row status table.
     """
-    task = workspace.get_task(candidate.task_id)
+    task = WorkspaceTasks(workspace).get(candidate.task_id)
     if task is None:
         return RescueResult(
             task_id=candidate.task_id,
@@ -132,7 +157,7 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
             commit_shas=candidate.commit_shas,
             message="recorded worktree is missing",
         )
-    if load_state_for_workspace(workspace).active_task_id == task.id:
+    if WorkspaceStateRepository(workspace).load().active_task_id == task.id:
         return RescueResult(
             task_id=candidate.task_id,
             worktree_rel=candidate.worktree_rel,
@@ -149,10 +174,10 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
             worktree_head
             and main_head
             and worktree_head != main_head
-            and _worktree_patch_already_on_main_for_workspace(workspace, worktree_head, main_head)
+            and _worktree_patch_already_on_main_impl(workspace, worktree_head, main_head)
         ):
             try:
-                _finalize_rescue_for_workspace(workspace, task, outcome="already-landed", head_sha=main_head)
+                _finalize_rescue_impl(workspace, task, outcome="already-landed", head_sha=main_head)
             except WorkspaceConflictError as exc:
                 return RescueResult(
                     task_id=candidate.task_id,
@@ -173,10 +198,10 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
             worktree_head
             and main_head
             and worktree_head != main_head
-            and _worktree_has_non_metadata_changes_for_workspace(workspace, candidate.worktree_path, task.id)
+            and _worktree_has_non_metadata_changes_impl(workspace, candidate.worktree_path, task.id)
         ):
             try:
-                _finalize_rescue_for_workspace(workspace, task, outcome="already-landed", head_sha=main_head)
+                _finalize_rescue_impl(workspace, task, outcome="already-landed", head_sha=main_head)
             except WorkspaceConflictError as exc:
                 return RescueResult(
                     task_id=candidate.task_id,
@@ -194,7 +219,7 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
                 message="worktree patch already landed on main",
             )
         try:
-            _finalize_rescue_for_workspace(workspace, task, outcome="no-op", head_sha=main_head)
+            _finalize_rescue_impl(workspace, task, outcome="no-op", head_sha=main_head)
         except WorkspaceConflictError as exc:
             return RescueResult(
                 task_id=candidate.task_id,
@@ -212,9 +237,9 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
             message="no worktree commits ahead of main",
         )
 
-    if worktree_head and main_head and _worktree_patch_already_on_main_for_workspace(workspace, worktree_head, main_head):
+    if worktree_head and main_head and _worktree_patch_already_on_main_impl(workspace, worktree_head, main_head):
         try:
-            _finalize_rescue_for_workspace(workspace, task, outcome="already-landed", head_sha=main_head)
+            _finalize_rescue_impl(workspace, task, outcome="already-landed", head_sha=main_head)
         except WorkspaceConflictError as exc:
             return RescueResult(
                 task_id=candidate.task_id,
@@ -232,19 +257,19 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
             message="worktree patch already landed on main",
         )
 
-    stashed_metadata = _stash_litehive_changes_for_workspace(workspace)
+    stashed_metadata = _stash_litehive_changes_impl(workspace)
     for commit_sha in candidate.commit_shas:
         ok, pick_message = cherry_pick_no_commit(workspace.root, commit_sha)
         if not ok:
             conflicts = unmerged_files(workspace.root)
             metadata_conflicts = [path for path in conflicts if _is_task_metadata_path(path, task.id)]
             if conflicts and len(metadata_conflicts) == len(conflicts):
-                _resolve_metadata_conflicts_for_workspace(workspace, metadata_conflicts)
+                _resolve_metadata_conflicts_impl(workspace, metadata_conflicts)
             else:
                 cherry_pick_abort(workspace.root)
-                _restore_litehive_changes_for_workspace(workspace, stashed_metadata)
-                workspace.save_task(task)
-                _ensure_unmerged_worktree_state_for_workspace(workspace, task.id, candidate.worktree_rel)
+                _restore_litehive_changes_impl(workspace, stashed_metadata)
+                WorkspaceTasks(workspace).save(task)
+                _ensure_unmerged_worktree_state_impl(workspace, task.id, candidate.worktree_rel)
                 return RescueResult(
                     task_id=candidate.task_id,
                     worktree_rel=candidate.worktree_rel,
@@ -253,14 +278,14 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
                     message=pick_message or "git cherry-pick failed",
                 )
 
-        _drop_task_metadata_changes_for_workspace(workspace, task.id)
+        _drop_task_metadata_changes_impl(workspace, task.id)
         try:
             has_staged = index_has_staged_changes(workspace.root)
         except GitError:
             cherry_pick_abort(workspace.root)
-            _restore_litehive_changes_for_workspace(workspace, stashed_metadata)
-            workspace.save_task(task)
-            _ensure_unmerged_worktree_state_for_workspace(workspace, task.id, candidate.worktree_rel)
+            _restore_litehive_changes_impl(workspace, stashed_metadata)
+            WorkspaceTasks(workspace).save(task)
+            _ensure_unmerged_worktree_state_impl(workspace, task.id, candidate.worktree_rel)
             return RescueResult(
                 task_id=candidate.task_id,
                 worktree_rel=candidate.worktree_rel,
@@ -274,9 +299,9 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
         committed, commit_message = commit_reuse_message(workspace.root, commit_sha)
         if not committed:
             cherry_pick_abort(workspace.root)
-            _restore_litehive_changes_for_workspace(workspace, stashed_metadata)
-            workspace.save_task(task)
-            _ensure_unmerged_worktree_state_for_workspace(workspace, task.id, candidate.worktree_rel)
+            _restore_litehive_changes_impl(workspace, stashed_metadata)
+            WorkspaceTasks(workspace).save(task)
+            _ensure_unmerged_worktree_state_impl(workspace, task.id, candidate.worktree_rel)
             return RescueResult(
                 task_id=candidate.task_id,
                 worktree_rel=candidate.worktree_rel,
@@ -285,10 +310,10 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
                 message=commit_message or "git commit failed after rescue cherry-pick",
             )
 
-    _restore_litehive_changes_for_workspace(workspace, stashed_metadata)
+    _restore_litehive_changes_impl(workspace, stashed_metadata)
     head_sha = current_head(workspace.root)
     try:
-        _finalize_rescue_for_workspace(workspace, task, outcome="rescued", head_sha=head_sha)
+        _finalize_rescue_impl(workspace, task, outcome="rescued", head_sha=head_sha)
     except WorkspaceConflictError as exc:
         return RescueResult(
             task_id=candidate.task_id,
@@ -308,7 +333,7 @@ def apply_rescue_candidate_for_workspace(workspace: Workspace, candidate: Rescue
     )
 
 
-def _worktree_commits_ahead_of_main_for_workspace(workspace: Workspace, worktree_path: Path) -> list[str]:
+def _worktree_commits_ahead_of_main_impl(workspace: Workspace, worktree_path: Path) -> list[str]:
     """
     Return commit SHAs the worktree carries past its fork-point with main, oldest-first.
 
@@ -325,7 +350,7 @@ def _worktree_commits_ahead_of_main_for_workspace(workspace: Workspace, worktree
     return git_stdout_lines(worktree_path, "rev-list", "--reverse", f"{fork_point}..HEAD")
 
 
-def _worktree_patch_already_on_main_for_workspace(workspace: Workspace, wt_head: str, main_head: str) -> bool:
+def _worktree_patch_already_on_main_impl(workspace: Workspace, wt_head: str, main_head: str) -> bool:
     """
     True when the worktree's diff is already represented on main.
 
@@ -354,7 +379,7 @@ def _is_task_metadata_path(path: str, task_id: str) -> bool:
     return path.startswith(metadata_prefix)
 
 
-def _resolve_metadata_conflicts_for_workspace(workspace: Workspace, paths: list[str]) -> None:
+def _resolve_metadata_conflicts_impl(workspace: Workspace, paths: list[str]) -> None:
     """
     Auto-resolve metadata-only cherry-pick conflicts by taking ``ours``.
 
@@ -376,7 +401,7 @@ def _resolve_metadata_conflicts_for_workspace(workspace: Workspace, paths: list[
         pass
 
 
-def _drop_task_metadata_changes_for_workspace(workspace: Workspace, task_id: str) -> None:
+def _drop_task_metadata_changes_impl(workspace: Workspace, task_id: str) -> None:
     """
     Strip the task's metadata files out of the staged cherry-pick.
 
@@ -390,7 +415,7 @@ def _drop_task_metadata_changes_for_workspace(workspace: Workspace, task_id: str
     restore_paths(workspace.root, metadata_paths, source="HEAD", staged=True, worktree=True)
 
 
-def _finalize_rescue_for_workspace(workspace: Workspace, task: TaskRecord, outcome: str, head_sha: str | None) -> None:
+def _finalize_rescue_impl(workspace: Workspace, task: TaskRecord, outcome: str, head_sha: str | None) -> None:
     """
     Commit the rescue result to task + workspace state under the workspace lock.
 
@@ -407,13 +432,13 @@ def _finalize_rescue_for_workspace(workspace: Workspace, task: TaskRecord, outco
     elif outcome == "already-landed" and head_sha:
         journal_message = f"Worktree rescue reconciled: patch already landed on main at {head_sha}."
 
-    with workspace_lock_for_workspace(workspace):
-        state = load_state_for_workspace(workspace)
+    with WorkspaceStateLock(workspace).hold():
+        state = WorkspaceStateRepository(workspace).load()
         if state.active_task_id == task.id:
             raise WorkspaceConflictError(
                 f"task {task.id} is still state.active_task_id; worktree rescue refuses to race with the runner"
             )
-        ensure_future_task_mutation_allowed_for_workspace(workspace, [task.id], state=state)
+        WorkspaceMutationGuard(workspace).ensure_future_task_mutation_allowed([task.id], state=state)
 
         state.unmerged_worktrees = [entry for entry in state.unmerged_worktrees if entry.task_id != task.id]
         clear_task_worktree_path(task)
@@ -421,15 +446,14 @@ def _finalize_rescue_for_workspace(workspace: Workspace, task: TaskRecord, outco
             task.status = TaskStatus.DONE
             task.pipeline_status = PipelineStatus.DONE
             set_task_commit_sha(task, head_sha)
-        persist_task_and_state_without_runner_guard_for_workspace(
-            workspace,
+        WorkspaceStateRepository(workspace).persist_task_and_state_without_runner_guard(
             task=task,
             state=state,
             journal_message=journal_message,
         )
 
 
-def _ensure_unmerged_worktree_state_for_workspace(workspace: Workspace, task_id: str, worktree_rel: str) -> None:
+def _ensure_unmerged_worktree_state_impl(workspace: Workspace, task_id: str, worktree_rel: str) -> None:
     """
     Re-record the task in ``state.unmerged_worktrees`` after a manual_conflict.
 
@@ -439,15 +463,15 @@ def _ensure_unmerged_worktree_state_for_workspace(workspace: Workspace, task_id:
     idempotent check (skip when already present) keeps repeated
     rescue attempts from duplicating the entry.
     """
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     for entry in state.unmerged_worktrees:
         if entry.task_id == task_id:
             return
     state.unmerged_worktrees.append(UnmergedWorktree(task_id=task_id, worktree_path=worktree_rel))
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
 
-def _stash_litehive_changes_for_workspace(workspace: Workspace) -> str | None:
+def _stash_litehive_changes_impl(workspace: Workspace) -> str | None:
     """
     Set pending ``.litehive/`` workspace edits aside before the cherry-pick.
 
@@ -473,7 +497,7 @@ def _stash_litehive_changes_for_workspace(workspace: Workspace) -> str | None:
     return None
 
 
-def _restore_litehive_changes_for_workspace(workspace: Workspace, stash_ref: str | None) -> None:
+def _restore_litehive_changes_impl(workspace: Workspace, stash_ref: str | None) -> None:
     """
     Reapply the ``.litehive/`` stash captured by :func:`_stash_litehive_changes`.
 
@@ -492,7 +516,7 @@ def _restore_litehive_changes_for_workspace(workspace: Workspace, stash_ref: str
     stash_drop(workspace.root, stash_ref)
 
 
-def _worktree_has_non_metadata_changes_for_workspace(workspace: Workspace, worktree_path: Path, task_id: str) -> bool:
+def _worktree_has_non_metadata_changes_impl(workspace: Workspace, worktree_path: Path, task_id: str) -> bool:
     """
     True when the worktree's diff against main contains anything besides task metadata.
 

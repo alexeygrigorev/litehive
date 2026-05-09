@@ -9,7 +9,7 @@ from litehive.cli.app import app
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import create_workspace
 from litehive.domain.runtime import RunnerStatusState
-from litehive.state.backup import create_workspace_backup_for_workspace, list_workspace_backups_for_workspace
+from litehive.state.backup import WorkspaceBackupService
 from litehive.workspace import Workspace
 
 
@@ -34,7 +34,7 @@ def test_create_backup_and_restore_backup_cli(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
     _seed_workspace_db(tmp_path, ["before"])
-    backup = create_workspace_backup_for_workspace(workspace, when=datetime(2026, 4, 11, 2, tzinfo=UTC))
+    backup = WorkspaceBackupService(workspace).create(when=datetime(2026, 4, 11, 2, tzinfo=UTC))
     _seed_workspace_db(tmp_path, ["after"])
 
     result = CliRunner().invoke(
@@ -54,7 +54,7 @@ def test_restore_command_refuses_when_daemon_running(
 ) -> None:
     create_workspace(tmp_path)
 
-    monkeypatch.setattr("litehive.cli.runner.get_workspace_daemon_for_workspace", lambda workspace: {"pid": 123})
+    monkeypatch.setattr("litehive.cli.runner.DaemonRegistry.live_entry", lambda self: {"pid": 123})
 
     result = CliRunner().invoke(
         app,
@@ -72,10 +72,10 @@ def test_restore_command_refuses_when_runner_active(
 ) -> None:
     create_workspace(tmp_path)
 
-    monkeypatch.setattr("litehive.cli.runner.get_workspace_daemon_for_workspace", lambda workspace: None)
+    monkeypatch.setattr("litehive.cli.runner.DaemonRegistry.live_entry", lambda self: None)
     monkeypatch.setattr(
-        "litehive.cli.runner.runner_status_for_workspace",
-        lambda workspace: RunnerStatusState(status="running", pid=321),
+        "litehive.cli.runner.WorkspaceRunnerLock.status",
+        lambda runner_lock: RunnerStatusState(status="running", pid=321),
     )
 
     result = CliRunner().invoke(
@@ -110,12 +110,11 @@ def test_backup_rotation_keeps_seven_daily_and_four_weekly(tmp_path: Path) -> No
     ]
 
     for timestamp in reversed(timestamps):
-        create_workspace_backup_for_workspace(
-            workspace,
+        WorkspaceBackupService(workspace).create(
             when=datetime.strptime(timestamp, "%Y-%m-%dT%H").replace(tzinfo=UTC),
         )
 
-    backups = list_workspace_backups_for_workspace(workspace)
+    backups = WorkspaceBackupService(workspace).list_backups()
 
     assert [backup.timestamp for backup in backups] == [
         "2026-04-11T02",
@@ -142,6 +141,6 @@ def test_daemon_loop_creates_scheduled_backup(tmp_path: Path) -> None:
     exit_code = run_daemon_loop(workspace, output_stream=None)
 
     assert exit_code == 0
-    backups = list_workspace_backups_for_workspace(Workspace.from_path(workspace))
+    backups = WorkspaceBackupService(Workspace.from_path(workspace)).list_backups()
     assert len(backups) == 1
     assert backups[0].path.parent == workspace_path(workspace, "backups")

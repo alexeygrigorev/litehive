@@ -9,15 +9,13 @@ from litehive.domain.common import (
 )
 from litehive.domain.outcomes import OutcomeReasonCode, TaskOutcomeKind
 from litehive.domain.task_ops import WorkspaceRepairSummary
-from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
-from litehive.state.locking import workspace_lock_for_workspace
-from litehive.state.persist import (
-    load_state_for_workspace,
-    persist_task_and_state_without_runner_guard_for_workspace,
-)
+from litehive.recovery.execution_recovery import RunnerRecoveryService
+from litehive.state.locking import WorkspaceStateLock
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.records import WorkspaceTasks
 from litehive.tasks.audit import build_task_audit_entry, snapshot_task_audit_state
 from litehive.tasks.queue import idle_stage_state
-from litehive.tasks.report_storage import latest_stage_report
+from litehive.tasks.report_storage import TaskReportStore
 from litehive.tasks.runtime import apply_task_outcome, clear_task_run_activity
 from litehive.workspace import Workspace
 
@@ -34,7 +32,7 @@ def repair_workspace_state(workspace: Workspace) -> WorkspaceRepairSummary:
     pass report shows it actually finished.
     """
     summary = WorkspaceRepairSummary()
-    summary.stale_runner_recovered = recover_stale_runner_state_for_workspace(workspace, summary=summary)
+    summary.stale_runner_recovered = RunnerRecoveryService(workspace).recover_stale_runner_state(summary=summary)
     summary.mutated = summary.stale_runner_recovered
     normalized = _normalize_stale_terminal_tasks(workspace, summary=summary)
     summary.mutated = summary.mutated or normalized
@@ -51,16 +49,17 @@ def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepa
     summary reports each touched task id so the action is auditable.
     """
     mutated = False
-    with workspace_lock_for_workspace(workspace):
-        state = load_state_for_workspace(workspace, bootstrap=False)
+    with WorkspaceStateLock(workspace).hold():
+        state = WorkspaceStateRepository(workspace).load(bootstrap=False)
+        reports = TaskReportStore(workspace)
         queued_ids = set(state.queue)
         for task_id in _stale_terminal_candidate_ids(workspace):
             if state.active_task_id == task_id or task_id in queued_ids:
                 continue
-            task = workspace.get_task_record(task_id)
+            task = WorkspaceTasks(workspace).get_record(task_id)
             if task is None:
                 continue
-            report = latest_stage_report(workspace, task)
+            report = reports.latest_stage_report(task)
             if report is None or report.verdict != "pass" or report.pipeline_state not in _TERMINAL_REPAIR_STAGES:
                 continue
             before_task = snapshot_task_audit_state(task)
@@ -89,8 +88,7 @@ def _normalize_stale_terminal_tasks(workspace: Workspace, summary: WorkspaceRepa
             state.queue = [queued_id for queued_id in state.queue if queued_id != task.id]
             if state.active_task_id == task.id:
                 state.active_task_id = None
-            persist_task_and_state_without_runner_guard_for_workspace(
-                workspace,
+            WorkspaceStateRepository(workspace).persist_task_and_state_without_runner_guard(
                 task=task,
                 state=state,
                 journal_message=(

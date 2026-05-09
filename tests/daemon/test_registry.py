@@ -12,12 +12,8 @@ from litehive.config.model import DaemonConfig, LitehiveConfig
 from litehive.config.workspace import create_workspace
 from litehive.daemon.execution import start_background_daemon, stop_workspace_daemon
 from litehive.daemon.registry import (
+    DaemonRegistry,
     DaemonRegistryEntry,
-    daemon_lock_is_active_for_workspace,
-    daemon_metadata_for_workspace,
-    get_workspace_daemon_for_workspace,
-    register_daemon_for_workspace,
-    unregister_daemon_for_workspace,
 )
 from litehive.workspace import Workspace
 
@@ -72,11 +68,11 @@ def _wait_for_daemon_metadata(
     workspace_obj = Workspace.from_path(workspace)
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        entry = daemon_metadata_for_workspace(workspace_obj)
+        entry = DaemonRegistry(workspace_obj).metadata()
         if entry is not None:
             return entry
         time.sleep(poll_interval_seconds)
-    return daemon_metadata_for_workspace(workspace_obj)
+    return DaemonRegistry(workspace_obj).metadata()
 
 
 def test_register_and_unregister_daemon_uses_shared_lock_manager(tmp_path: Path, monkeypatch) -> None:
@@ -87,21 +83,22 @@ def test_register_and_unregister_daemon_uses_shared_lock_manager(tmp_path: Path,
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
 
-    register_daemon_for_workspace(workspace_obj, pid=os.getpid(), log_dir=log_dir)
+    registry = DaemonRegistry(workspace_obj)
+    registry.register(pid=os.getpid(), log_dir=log_dir)
 
-    entry = daemon_metadata_for_workspace(workspace_obj)
+    entry = registry.metadata()
     assert entry is not None
     assert entry.status == "running"
     assert entry.pid == os.getpid()
     assert entry.log_dir == str(log_dir)
-    assert daemon_lock_is_active_for_workspace(workspace_obj) is True
-    assert get_workspace_daemon_for_workspace(workspace_obj) == entry
+    assert registry.lock_is_active() is True
+    assert registry.live_entry() == entry
 
-    unregister_daemon_for_workspace(workspace_obj, pid=os.getpid())
+    registry.unregister(pid=os.getpid())
 
-    assert daemon_metadata_for_workspace(workspace_obj) is None
-    assert daemon_lock_is_active_for_workspace(workspace_obj) is False
-    assert get_workspace_daemon_for_workspace(workspace_obj) is None
+    assert registry.metadata() is None
+    assert registry.lock_is_active() is False
+    assert registry.live_entry() is None
     assert workspace_obj.runtime_path("runtime", ".daemon.lock").read_text(encoding="utf-8") == ""
 
 
@@ -123,7 +120,7 @@ def test_unregister_daemon_clears_stale_metadata_without_daemon_registry_yaml(tm
     )
     monkeypatch.setattr("litehive.daemon.registry.runner_pid_is_alive", lambda pid: False)
 
-    unregister_daemon_for_workspace(Workspace.from_path(workspace), pid=424242)
+    DaemonRegistry(Workspace.from_path(workspace)).unregister(pid=424242)
 
     assert lock_path.read_text(encoding="utf-8") == ""
     assert not list((tmp_path / "data-home" / "litehive").glob("daemons.y*ml"))
@@ -134,9 +131,9 @@ def test_start_background_daemon_strips_agent_env(tmp_path: Path, monkeypatch) -
     monkeypatch.setenv("LITEHIVE_AGENT_ROLE", "swe")
     monkeypatch.setenv("LITEHIVE_STAGE", "implementing")
     monkeypatch.setenv("LITEHIVE_TASK_ID", "T-0446")
-    monkeypatch.setattr("litehive.daemon.execution.daemon_metadata_for_workspace", lambda workspace: None)
-    monkeypatch.setattr("litehive.daemon.execution.unregister_daemon_for_workspace", lambda workspace: None)
-    monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready_for_workspace", lambda *args, **kwargs: None)
+    monkeypatch.setattr("litehive.daemon.execution.DaemonRegistry.metadata", lambda self: None)
+    monkeypatch.setattr("litehive.daemon.execution.DaemonRegistry.unregister", lambda self: None)
+    monkeypatch.setattr("litehive.observability.venv_health.WorkspaceVenvHealth.ensure_ready", lambda *args, **kwargs: None)
 
     captured: dict[str, object] = {}
 
@@ -153,11 +150,11 @@ def test_start_background_daemon_strips_agent_env(tmp_path: Path, monkeypatch) -
 
     monkeypatch.setattr("litehive.daemon.execution.subprocess.Popen", fake_popen)
     monkeypatch.setattr(
-        "litehive.daemon.execution.get_workspace_daemon_for_workspace",
-        lambda workspace: DaemonRegistryEntry(
+        "litehive.daemon.execution.DaemonRegistry.live_entry",
+        lambda self: DaemonRegistryEntry(
             status="running",
             pid=4321,
-            workspace=str(workspace.root),
+            workspace=str(self.workspace.root),
             started_at=None,
             heartbeat_at=None,
             log_dir=None,
@@ -195,7 +192,7 @@ def test_stop_workspace_daemon_escalates_to_sigkill_when_sigterm_ignored(tmp_pat
     )
     try:
         entry = _wait_for_daemon_metadata(workspace)
-        assert daemon_lock_is_active_for_workspace(Workspace.from_path(workspace)) is True
+        assert DaemonRegistry(Workspace.from_path(workspace)).lock_is_active() is True
         assert entry is not None
         assert entry.status == "running"
         assert entry.pid == sleeper.pid
@@ -208,7 +205,7 @@ def test_stop_workspace_daemon_escalates_to_sigkill_when_sigterm_ignored(tmp_pat
         sleeper.wait(timeout=5)
         assert sleeper.returncode == -signal.SIGKILL
         assert elapsed < 3.0
-        assert daemon_metadata_for_workspace(Workspace.from_path(workspace)) is None
+        assert DaemonRegistry(Workspace.from_path(workspace)).metadata() is None
         assert lock_path.read_text(encoding="utf-8") == ""
     finally:
         if sleeper.poll() is None:
@@ -246,7 +243,7 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
         assert entry is not None
         assert entry.status == "running"
         assert entry.pid == sleeper.pid
-        monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready_for_workspace", lambda *args, **kwargs: None)
+        monkeypatch.setattr("litehive.observability.venv_health.WorkspaceVenvHealth.ensure_ready", lambda *args, **kwargs: None)
         class FakeProcess:
             pid = 4321
 
@@ -255,11 +252,11 @@ def test_start_background_daemon_force_kills_unresponsive_live_daemon(
 
         monkeypatch.setattr("litehive.daemon.execution.subprocess.Popen", lambda *args, **kwargs: FakeProcess())
         monkeypatch.setattr(
-            "litehive.daemon.execution.get_workspace_daemon_for_workspace",
-            lambda workspace: DaemonRegistryEntry(
+            "litehive.daemon.execution.DaemonRegistry.live_entry",
+            lambda self: DaemonRegistryEntry(
                 status="running",
                 pid=4321,
-                workspace=str(workspace.root),
+                workspace=str(self.workspace.root),
                 started_at=None,
                 heartbeat_at=None,
                 log_dir=None,
@@ -303,12 +300,13 @@ def test_start_background_daemon_does_not_kill_live_pid_from_stale_metadata(tmp_
             encoding="utf-8",
         )
         workspace_obj = Workspace.from_path(workspace)
-        assert daemon_lock_is_active_for_workspace(workspace_obj) is False
-        entry = daemon_metadata_for_workspace(workspace_obj)
+        registry = DaemonRegistry(workspace_obj)
+        assert registry.lock_is_active() is False
+        entry = registry.metadata()
         assert entry is not None
         assert entry.status == "stale"
         assert entry.pid == sleeper.pid
-        monkeypatch.setattr("litehive.daemon.execution.create_workspace_venvs_ready_for_workspace", lambda *args, **kwargs: None)
+        monkeypatch.setattr("litehive.observability.venv_health.WorkspaceVenvHealth.ensure_ready", lambda *args, **kwargs: None)
 
         class FakeProcess:
             pid = 4321
@@ -318,11 +316,11 @@ def test_start_background_daemon_does_not_kill_live_pid_from_stale_metadata(tmp_
 
         monkeypatch.setattr("litehive.daemon.execution.subprocess.Popen", lambda *args, **kwargs: FakeProcess())
         monkeypatch.setattr(
-            "litehive.daemon.execution.get_workspace_daemon_for_workspace",
-            lambda workspace: DaemonRegistryEntry(
+            "litehive.daemon.execution.DaemonRegistry.live_entry",
+            lambda self: DaemonRegistryEntry(
                 status="running",
                 pid=4321,
-                workspace=str(workspace.root),
+                workspace=str(self.workspace.root),
                 started_at=None,
                 heartbeat_at=None,
                 log_dir=None,

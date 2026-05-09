@@ -8,8 +8,8 @@ from pathlib import Path
 
 from litehive.domain.common import PipelineState, utcnow
 from litehive.domain.task import TaskRecord, WorkspaceState
-from litehive.state.locking import workspace_lock_for_workspace, workspace_mutation_guard_for_workspace
-from litehive.state.store import runtime_store_for_workspace
+from litehive.state.locking import WorkspaceMutationGuard, WorkspaceStateLock
+from litehive.state.store import RuntimeStore
 from litehive.tasks.audit import TaskAuditEntry
 from litehive.workspace import Workspace
 
@@ -20,6 +20,226 @@ _SKIP_BOOTSTRAP_LOAD_STATE: ContextVar[bool] = ContextVar(
 )
 CONSECUTIVE_TASK_FAILURE_LIMIT = 3
 CONSECUTIVE_TASK_FAILURE_STOP_REASON = "consecutive_task_failures"
+
+
+class WorkspaceStateRepository:
+    """
+    Workspace-bound persistence API for workspace queue/pool state.
+
+    Owns the state reads and mutations that operate on ``WorkspaceState``.
+    Narrow domain methods live here instead of as workspace-first free
+    functions, while low-level atomic file helpers remain module utilities.
+    """
+
+    def __init__(self, workspace: Workspace, runtime_store: RuntimeStore | None = None) -> None:
+        self.workspace = workspace
+        self.runtime_store = runtime_store or RuntimeStore(workspace)
+
+    def load(self, bootstrap: bool = True) -> WorkspaceState:
+        """
+        Return the workspace state for an existing Litehive workspace.
+        """
+        if bootstrap and not _SKIP_BOOTSTRAP_LOAD_STATE.get():
+            self.workspace.require_existing(source="load_state")
+        state = self.runtime_store.load_workspace_state()
+        if state is None:
+            state = WorkspaceState()
+            self.runtime_store.save_workspace_state(state)
+        return state
+
+    def save(self, state: WorkspaceState) -> None:
+        """
+        Persist workspace state under the mutation guard.
+        """
+        with WorkspaceMutationGuard(self.workspace).hold():
+            self.runtime_store.save_workspace_state(state)
+
+    def save_without_runner_guard(
+        self,
+        state: WorkspaceState,
+        audit_entries: list[TaskAuditEntry] | None = None,
+    ) -> None:
+        """
+        Persist workspace state assuming the caller already holds the runner guard.
+        """
+        if audit_entries:
+            self.runtime_store.save_runtime_transaction(
+                workspace_state=state,
+                audit_entries=audit_entries,
+            )
+            return
+        self.runtime_store.save_workspace_state(state)
+
+    def set_pool_stop_reason(self, stop_reason: str | None) -> WorkspaceState:
+        """
+        Set or clear the pool's stop reason.
+
+        Clearing the consecutive-failure stop also resets the counter so
+        operators don't have to chase two fields when resuming the pool; a
+        leftover counter would re-trigger the same stop after one more
+        failure.
+        """
+        with WorkspaceStateLock(self.workspace).hold():
+            state = self.load()
+            if stop_reason is None and state.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
+                state.consecutive_task_failures = 0
+            state.pool_stop_reason = stop_reason
+            self.save_without_runner_guard(state)
+            return state
+
+    def record_task_completion(self, final_stage: PipelineState | None) -> tuple[int, str | None]:
+        """
+        Update the consecutive-failure counter and trigger pool stop at the limit.
+
+        Called by the runner after each task finishes so a streak of failures
+        halts the pool instead of grinding through every task; without this
+        gate a misconfigured environment would burn through the whole queue
+        before an operator noticed.
+        """
+        with WorkspaceStateLock(self.workspace).hold():
+            state = self.load()
+            if final_stage == PipelineState.DONE:
+                state.consecutive_task_failures = 0
+            else:
+                state.consecutive_task_failures = max(0, int(state.consecutive_task_failures)) + 1
+                if state.consecutive_task_failures >= CONSECUTIVE_TASK_FAILURE_LIMIT:
+                    state.pool_stop_reason = CONSECUTIVE_TASK_FAILURE_STOP_REASON
+            self.save_without_runner_guard(state)
+            return state.consecutive_task_failures, state.pool_stop_reason
+
+    def merged_state_for_runner_owned_write(
+        self,
+        state: WorkspaceState,
+        protected_task_ids: list[str] | tuple[str, ...] = (),
+    ) -> WorkspaceState:
+        """
+        Rebase in-memory workspace state onto whatever the persisted state shows.
+
+        Preserves the runner's edits to protected tasks while picking up
+        concurrent CLI changes (queue reorders, future-task additions). The
+        rebase prevents the runner from clobbering operator edits that
+        landed while a task was in flight.
+        """
+        latest_state = self.load()
+        merged_state = state.model_copy(deep=True)
+        merged_state.queue = _merge_queue_preserving_future_changes(
+            desired_queue=state.queue,
+            latest_queue=latest_state.queue,
+            protected_task_ids=protected_task_ids,
+        )
+        merged_state.next_task_number = max(state.next_task_number, latest_state.next_task_number)
+        return merged_state
+
+    def persist_task_and_state(
+        self,
+        task: TaskRecord,
+        state: WorkspaceState,
+        journal_message: str | None = None,
+        protected_task_ids: list[str] | tuple[str, ...] = (),
+        audit_entries: list[TaskAuditEntry] | None = None,
+    ) -> None:
+        """
+        Single-task convenience over ``persist_tasks_and_state``.
+        """
+        if journal_message is not None:
+            journal_messages: dict[str, str] | None = {task.id: journal_message}
+        else:
+            journal_messages = None
+        self.persist_tasks_and_state(
+            tasks=[task],
+            state=state,
+            journal_messages=journal_messages,
+            protected_task_ids=protected_task_ids,
+            audit_entries=audit_entries,
+        )
+
+    def persist_tasks_and_state(
+        self,
+        tasks: list[TaskRecord] | tuple[TaskRecord, ...],
+        state: WorkspaceState,
+        journal_messages: dict[str, str] | None = None,
+        protected_task_ids: list[str] | tuple[str, ...] = (),
+        audit_entries: list[TaskAuditEntry] | None = None,
+    ) -> None:
+        """
+        Atomic write of tasks plus workspace state under the mutation guard.
+        """
+        with WorkspaceMutationGuard(self.workspace).hold():
+            self._persist_tasks_and_state_without_runner_guard(
+                tasks=tasks,
+                state=state,
+                journal_messages=journal_messages,
+                protected_task_ids=protected_task_ids,
+                audit_entries=audit_entries,
+            )
+
+    def persist_tasks_and_state_without_runner_guard(
+        self,
+        tasks: list[TaskRecord] | tuple[TaskRecord, ...],
+        state: WorkspaceState,
+        journal_messages: dict[str, str] | None = None,
+        protected_task_ids: list[str] | tuple[str, ...] = (),
+        audit_entries: list[TaskAuditEntry] | None = None,
+    ) -> None:
+        """
+        Atomic write of tasks plus workspace state assuming the guard is held.
+        """
+        self._persist_tasks_and_state_without_runner_guard(
+            tasks=tasks,
+            state=state,
+            journal_messages=journal_messages,
+            protected_task_ids=protected_task_ids,
+            audit_entries=audit_entries,
+        )
+
+    def persist_task_and_state_without_runner_guard(
+        self,
+        task: TaskRecord,
+        state: WorkspaceState,
+        journal_message: str | None = None,
+        protected_task_ids: list[str] | tuple[str, ...] = (),
+        audit_entries: list[TaskAuditEntry] | None = None,
+    ) -> None:
+        """
+        Single-task variant of ``persist_tasks_and_state_without_runner_guard``.
+        """
+        if journal_message is not None:
+            journal_messages: dict[str, str] | None = {task.id: journal_message}
+        else:
+            journal_messages = None
+        self.persist_tasks_and_state_without_runner_guard(
+            tasks=[task],
+            state=state,
+            journal_messages=journal_messages,
+            protected_task_ids=protected_task_ids,
+            audit_entries=audit_entries,
+        )
+
+    def _persist_tasks_and_state_without_runner_guard(
+        self,
+        tasks: list[TaskRecord] | tuple[TaskRecord, ...],
+        state: WorkspaceState,
+        journal_messages: dict[str, str] | None = None,
+        protected_task_ids: list[str] | tuple[str, ...] = (),
+        audit_entries: list[TaskAuditEntry] | None = None,
+    ) -> None:
+        # inline: state.records top-level-imports state.persist (would cycle).
+        from litehive.state.records import task_state_for_storage, WorkspaceTasks  # noqa: PLC0415
+
+        for task in tasks:
+            task.updated_at = utcnow()
+        merged_state = self.merged_state_for_runner_owned_write(
+            state=state,
+            protected_task_ids=[*protected_task_ids, *[task.id for task in tasks]],
+        )
+        self.runtime_store.save_runtime_transaction(
+            task_intents={task.id: task.to_intent_record() for task in tasks},
+            task_states={task.id: task_state_for_storage(task) for task in tasks},
+            workspace_state=merged_state,
+            task_journal_messages=journal_messages,
+            audit_entries=audit_entries,
+        )
+        WorkspaceTasks(self.workspace).ensure_runtime_ignored()
 
 
 @contextmanager
@@ -37,25 +257,6 @@ def skip_bootstrap_load_state():
         yield
     finally:
         _SKIP_BOOTSTRAP_LOAD_STATE.reset(token)
-
-
-def load_state_for_workspace(workspace: Workspace, bootstrap: bool = True) -> WorkspaceState:
-    """
-    Return the workspace state for an existing Litehive workspace.
-
-    The canonical reader used everywhere the runner, CLI, or dashboards
-    need queue/runner pointers. It validates the workspace boundary
-    before loading so a read path cannot silently create a new project;
-    explicit workspace creation is owned by ``create_workspace``.
-    """
-    if bootstrap and not _SKIP_BOOTSTRAP_LOAD_STATE.get():
-        workspace.require_existing(source="load_state")
-    store = runtime_store_for_workspace(workspace)
-    state = store.load_workspace_state()
-    if state is None:
-        state = WorkspaceState()
-        store.save_workspace_state(state)
-    return state
 
 
 def atomic_write_text(path: Path, content: str) -> None:
@@ -168,83 +369,6 @@ def write_atomic_files_and_then(writes: dict[Path, str], callback) -> None:
         raise
 
 
-def save_state_for_workspace(workspace: Workspace, state: WorkspaceState) -> None:
-    """
-    Persist workspace state under the mutation guard.
-
-    The path used by CLI commands that change queue/pool settings outside
-    an active runner; taking the guard here means a CLI mutation cannot
-    race a runner that's also rewriting workspace state.
-    """
-    with workspace_mutation_guard_for_workspace(workspace):
-        runtime_store_for_workspace(workspace).save_workspace_state(state)
-
-
-def save_state_without_runner_guard_for_workspace(
-    workspace: Workspace,
-    state: WorkspaceState,
-    audit_entries: list[TaskAuditEntry] | None = None,
-) -> None:
-    """
-    Persist workspace state assuming the caller already holds the runner guard.
-
-    Used on the runner's hot path so nested mutations do not re-acquire
-    the same lock and re-trigger guard bookkeeping; the optional audit
-    entries land in the same SQLite transaction so observers see the
-    workspace and the audit advance together.
-    """
-    store = runtime_store_for_workspace(workspace)
-    if audit_entries:
-        store.save_runtime_transaction(
-            workspace_state=state,
-            audit_entries=audit_entries,
-        )
-        return
-    store.save_workspace_state(state)
-
-
-def record_task_completion_for_workspace(
-    workspace: Workspace,
-    final_stage: PipelineState | None,
-) -> tuple[int, str | None]:
-    """
-    Update the consecutive-failure counter and trigger pool stop at the limit.
-
-    Called by the runner after each task finishes so a streak of failures
-    halts the pool instead of grinding through every task; without this
-    gate a misconfigured environment would burn through the whole queue
-    before an operator noticed.
-    """
-    with workspace_lock_for_workspace(workspace):
-        state = load_state_for_workspace(workspace)
-        if final_stage == PipelineState.DONE:
-            state.consecutive_task_failures = 0
-        else:
-            state.consecutive_task_failures = max(0, int(state.consecutive_task_failures)) + 1
-            if state.consecutive_task_failures >= CONSECUTIVE_TASK_FAILURE_LIMIT:
-                state.pool_stop_reason = CONSECUTIVE_TASK_FAILURE_STOP_REASON
-        save_state_without_runner_guard_for_workspace(workspace, state)
-        return state.consecutive_task_failures, state.pool_stop_reason
-
-
-def set_pool_stop_reason_for_workspace(workspace: Workspace, stop_reason: str | None) -> WorkspaceState:
-    """
-    Set or clear the pool's stop reason.
-
-    Clearing the consecutive-failure stop also resets the counter so
-    operators don't have to chase two fields when resuming the pool; a
-    leftover counter would re-trigger the same stop after one more
-    failure.
-    """
-    with workspace_lock_for_workspace(workspace):
-        state = load_state_for_workspace(workspace)
-        if stop_reason is None and state.pool_stop_reason == CONSECUTIVE_TASK_FAILURE_STOP_REASON:
-            state.consecutive_task_failures = 0
-        state.pool_stop_reason = stop_reason
-        save_state_without_runner_guard_for_workspace(workspace, state)
-        return state
-
-
 def _merge_queue_preserving_future_changes(
     desired_queue: list[str],
     latest_queue: list[str],
@@ -293,159 +417,3 @@ def _merge_queue_preserving_future_changes(
         inserted_ids.add(task_id)
         inserted += 1
     return merged
-
-
-def merged_state_for_runner_owned_write_for_workspace(
-    workspace: Workspace,
-    state: WorkspaceState,
-    protected_task_ids: list[str] | tuple[str, ...] = (),
-) -> WorkspaceState:
-    """
-    Rebase in-memory workspace state onto whatever the persisted state shows.
-
-    Preserves the runner's edits to protected tasks while picking up
-    concurrent CLI changes (queue reorders, future-task additions). The
-    rebase prevents the runner from clobbering operator edits that
-    landed while a task was in flight.
-    """
-    latest_state = load_state_for_workspace(workspace)
-    merged_state = state.model_copy(deep=True)
-    merged_state.queue = _merge_queue_preserving_future_changes(
-        desired_queue=state.queue,
-        latest_queue=latest_state.queue,
-        protected_task_ids=protected_task_ids,
-    )
-    merged_state.next_task_number = max(state.next_task_number, latest_state.next_task_number)
-    return merged_state
-
-
-def persist_task_and_state_for_workspace(
-    workspace: Workspace,
-    task: TaskRecord,
-    state: WorkspaceState,
-    journal_message: str | None = None,
-    protected_task_ids: list[str] | tuple[str, ...] = (),
-    audit_entries: list[TaskAuditEntry] | None = None,
-) -> None:
-    """
-    Single-task convenience over ``persist_tasks_and_state``.
-
-    The common case used by stage transitions that mutate exactly one
-    task plus the workspace queue; the multi-task variant is preferred
-    when several tasks change together so they all land in one
-    transaction rather than serialised separate writes.
-    """
-    if journal_message is not None:
-        journal_messages: dict[str, str] | None = {task.id: journal_message}
-    else:
-        journal_messages = None
-    persist_tasks_and_state_for_workspace(
-        workspace,
-        tasks=[task],
-        state=state,
-        journal_messages=journal_messages,
-        protected_task_ids=protected_task_ids,
-        audit_entries=audit_entries,
-    )
-
-
-def persist_tasks_and_state_for_workspace(
-    workspace: Workspace,
-    tasks: list[TaskRecord] | tuple[TaskRecord, ...],
-    state: WorkspaceState,
-    journal_messages: dict[str, str] | None = None,
-    protected_task_ids: list[str] | tuple[str, ...] = (),
-    audit_entries: list[TaskAuditEntry] | None = None,
-) -> None:
-    """
-    Atomic write of tasks plus workspace state under the mutation guard.
-
-    The runner-owned write path: rebases via
-    ``merged_state_for_runner_owned_write_for_workspace`` before persisting so
-    concurrent operator edits land alongside the runner's changes
-    instead of being overwritten by the runner's stale read.
-    """
-    # inline: state.records top-level-imports state.persist (would cycle).
-    from litehive.state.records import ensure_runtime_ignored_for_workspace, task_state_for_storage  # noqa: PLC0415
-
-    for task in tasks:
-        task.updated_at = utcnow()
-    with workspace_mutation_guard_for_workspace(workspace):
-        merged_state = merged_state_for_runner_owned_write_for_workspace(
-            workspace,
-            state=state,
-            protected_task_ids=[*protected_task_ids, *[task.id for task in tasks]],
-        )
-        runtime_store_for_workspace(workspace).save_runtime_transaction(
-            task_intents={task.id: task.to_intent_record() for task in tasks},
-            task_states={task.id: task_state_for_storage(task) for task in tasks},
-            workspace_state=merged_state,
-            task_journal_messages=journal_messages,
-            audit_entries=audit_entries,
-        )
-        ensure_runtime_ignored_for_workspace(workspace)
-
-
-def persist_tasks_and_state_without_runner_guard_for_workspace(
-    workspace: Workspace,
-    tasks: list[TaskRecord] | tuple[TaskRecord, ...],
-    state: WorkspaceState,
-    journal_messages: dict[str, str] | None = None,
-    protected_task_ids: list[str] | tuple[str, ...] = (),
-    audit_entries: list[TaskAuditEntry] | None = None,
-) -> None:
-    """
-    Atomic write of tasks plus workspace state assuming the guard is held.
-
-    Used inside the runner's hot loop where the guard wraps the whole
-    task lifetime; re-entering the guard here would force unnecessary
-    bookkeeping and could deadlock against the same thread that is
-    already inside ``workspace_runner_guard``.
-    """
-    # inline: state.records top-level-imports state.persist (would cycle).
-    from litehive.state.records import ensure_runtime_ignored_for_workspace, task_state_for_storage  # noqa: PLC0415
-
-    for task in tasks:
-        task.updated_at = utcnow()
-    merged_state = merged_state_for_runner_owned_write_for_workspace(
-        workspace,
-        state=state,
-        protected_task_ids=[*protected_task_ids, *[task.id for task in tasks]],
-    )
-    runtime_store_for_workspace(workspace).save_runtime_transaction(
-        task_intents={task.id: task.to_intent_record() for task in tasks},
-        task_states={task.id: task_state_for_storage(task) for task in tasks},
-        workspace_state=merged_state,
-        task_journal_messages=journal_messages,
-        audit_entries=audit_entries,
-    )
-    ensure_runtime_ignored_for_workspace(workspace)
-
-
-def persist_task_and_state_without_runner_guard_for_workspace(
-    workspace: Workspace,
-    task: TaskRecord,
-    state: WorkspaceState,
-    journal_message: str | None = None,
-    protected_task_ids: list[str] | tuple[str, ...] = (),
-    audit_entries: list[TaskAuditEntry] | None = None,
-) -> None:
-    """
-    Single-task variant of ``persist_tasks_and_state_without_runner_guard``.
-
-    The common case on the runner's hot path where one task transitions
-    per write; the multi-task variant is reserved for repair flows that
-    coalesce several tasks into one transaction.
-    """
-    if journal_message is not None:
-        journal_messages: dict[str, str] | None = {task.id: journal_message}
-    else:
-        journal_messages = None
-    persist_tasks_and_state_without_runner_guard_for_workspace(
-        workspace,
-        tasks=[task],
-        state=state,
-        journal_messages=journal_messages,
-        protected_task_ids=protected_task_ids,
-        audit_entries=audit_entries,
-    )

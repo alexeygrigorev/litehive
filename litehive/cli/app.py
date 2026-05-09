@@ -14,8 +14,8 @@ from litehive.cli.task_cli import app as task_app
 from litehive.cli.workspace import register_root_commands as register_workspace_commands, status_command
 from litehive.cli.worktree_cli import app as worktree_app
 from litehive.container import LitehiveContainer, build_container
-from litehive.lifecycle.orchestration import ExecutionResult, run_task_for_workspace
-from litehive.tasks.queue import dequeue_next_task
+from litehive.lifecycle.orchestration import ExecutionResult, TaskOrchestrator
+from litehive.tasks.queue import TaskQueueService
 
 app = make_typer()
 backup_app = make_typer(invoke_without_command=True)
@@ -33,10 +33,10 @@ def _run_next_task(container: LitehiveContainer) -> ExecutionResult | None:
     ``None`` when the queue has nothing to drain so the caller can
     fall through to the status view.
     """
-    task = dequeue_next_task(container.workspace)
+    task = TaskQueueService(container.workspace).dequeue_next()
     if task is None:
         return None
-    return run_task_for_workspace(container.workspace, container.config, task)
+    return TaskOrchestrator(container.workspace, container.config).run(task)
 
 
 @app.callback(invoke_without_command=True)

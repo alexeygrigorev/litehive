@@ -6,13 +6,11 @@ from typer.testing import CliRunner
 from litehive.cli.app import app
 from litehive.config.paths import workspace_path
 from litehive.config.workspace import create_workspace
-from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
 from litehive.state.records import (
-    create_task_for_workspace,
-    require_task_for_workspace,
-    save_task_for_workspace,
-)
-from litehive.tasks.status import requeue_task_for_workspace
+    WorkspaceTasks,
+        )
+from litehive.tasks.status import TaskStatusService
 from litehive.workspace import Workspace
 from litehive.domain.common import PipelineStatus, TaskStatus
 
@@ -20,12 +18,12 @@ from litehive.domain.common import PipelineStatus, TaskStatus
 def test_requeue_writes_durable_audit_row_to_workspace_db(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Retry with audit")
+    task = WorkspaceTasks(workspace).create( title="Retry with audit")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
-    requeue_task_for_workspace(workspace, task.id, front=True, force=True)
+    TaskStatusService(workspace).requeue(task.id, front=True, force=True)
 
     with sqlite3.connect(workspace_path(tmp_path, "data.db")) as connection:
         row = connection.execute(
@@ -52,19 +50,19 @@ def test_requeue_writes_durable_audit_row_to_workspace_db(tmp_path: Path) -> Non
 def test_db_audit_cli_shows_requeue_entry_for_done_task(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Complete after requeue")
+    task = WorkspaceTasks(workspace).create( title="Complete after requeue")
     task.status = TaskStatus.FLAGGED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
-    requeue_task_for_workspace(workspace, task.id, front=True)
-    completed = require_task_for_workspace(workspace, task.id)
+    TaskStatusService(workspace).requeue(task.id, front=True)
+    completed = WorkspaceTasks(workspace).require(task.id)
     completed.status = TaskStatus.DONE
     completed.pipeline_status = PipelineStatus.DONE
-    save_task_for_workspace(workspace, completed)
-    state = load_state_for_workspace(workspace)
+    WorkspaceTasks(workspace).save(completed)
+    state = WorkspaceStateRepository(workspace).load()
     state.queue = [task_id for task_id in state.queue if task_id != completed.id]
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
     result = CliRunner().invoke(
         app,

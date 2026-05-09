@@ -8,8 +8,9 @@ from litehive.agents.session_events import (
 )
 from litehive.config.workspace import create_workspace
 from litehive.domain.common import SubagentStatus
+from litehive.observability.events import append_event
 from litehive.observability.events import read_events
-from litehive.state.records import create_task_for_workspace
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 
@@ -56,10 +57,10 @@ def test_subagent_session_events_serialize_expected_kind_and_data() -> None:
 def test_append_event_persists_typed_event_object(tmp_path: Path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Typed subagent event")
+    task = WorkspaceTasks(workspace).create( title="Typed subagent event")
     event = SubagentPidEvent(subagent_id="SA-0001", role="swe", pid=4242)
 
-    persisted = workspace.append_event(task, event)
+    persisted = append_event(workspace, task, event)
     loaded = read_events(workspace, task)
 
     assert persisted["kind"] == "subagent_pid"

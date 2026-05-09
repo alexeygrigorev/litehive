@@ -9,15 +9,15 @@ from litehive.lifecycle.journal import SqliteJournal
 from litehive.workspace import Workspace
 from litehive.lifecycle.nodes.agent import AgentVerdict
 from litehive.lifecycle.nodes.system import StubCommitNode
-from litehive.lifecycle.orchestration import ExecutionResult, _load_or_initialize, _sync_back, run_task_for_workspace
+from litehive.lifecycle.orchestration import ExecutionResult, _load_or_initialize, _sync_back, TaskOrchestrator
 from litehive.lifecycle.persistence import FailedRunRecord, SqlitePersistence, TaskState
 from litehive.lifecycle.types import PipelineMode
-from litehive.recovery.execution_recovery import recover_stale_runner_state_for_workspace
-from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
-from litehive.state.records import create_task_for_workspace, get_task_record_for_workspace, save_task_for_workspace
-from litehive.state.store import runtime_store_for_workspace
-from litehive.tasks.completed_task_recovery import recover_completed_task_for_workspace
-from litehive.tasks.queue import dequeue_next_task
+from litehive.recovery.execution_recovery import RunnerRecoveryService
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.records import WorkspaceTasks
+from litehive.state.store import RuntimeStore
+from litehive.tasks.status import TaskStatusService
+from litehive.tasks.queue import TaskQueueService
 from litehive.domain.common import PipelineState, PipelineStatus, TaskStatus
 
 
@@ -61,11 +61,14 @@ def _seed_terminal_pipeline_state(
 def _run_recovered_task(
     workspace: Workspace, monkeypatch: pytest.MonkeyPatch, task_id: str
 ) -> tuple[ExecutionResult, list[str], list[str]]:
-    queued = dequeue_next_task(workspace)
+    queued = TaskQueueService(workspace).dequeue_next()
     assert queued is not None and queued.id == task_id
-    monkeypatch.setattr("litehive.lifecycle.orchestration.build_commit_node_for_workspace", lambda workspace: StubCommitNode())
+    monkeypatch.setattr(
+        "litehive.lifecycle.orchestration.PipelineWorktreeSetup.build_commit_node",
+        lambda self: StubCommitNode(),
+    )
     engine = _PassEngine("stub")
-    result = run_task_for_workspace(workspace, workspace.load_config(), queued, engine_factory=lambda _: engine)
+    result = TaskOrchestrator(workspace, workspace.load_config()).run(queued, engine_factory=lambda _: engine)
     routes = [row["to_stage"] for row in SqliteJournal(workspace).load_transitions(task_id)]
     return result, engine.calls, routes
 
@@ -78,7 +81,7 @@ def _assert_runtime_stage_has_no_removed_fields(stage: RuntimeStageState) -> Non
 def test_run_task_restarts_recovered_stale_runner_task_from_ready(tmp_path: Path, monkeypatch) -> None:
     _init_workspace_git_repo(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Recover stale runner task")
+    task = WorkspaceTasks(workspace).create( title="Recover stale runner task")
     task.status = TaskStatus.IN_PROGRESS
     task.pipeline_status = PipelineStatus.IMPLEMENTING
     task.runtime.pipeline.execution_status = "running"
@@ -86,13 +89,13 @@ def test_run_task_restarts_recovered_stale_runner_task_from_ready(tmp_path: Path
     task.runtime.pipeline.current_stage.stage = PipelineState.IMPLEMENTING
     task.runtime.pipeline.current_stage.status = "running"
     task.runtime.pipeline.current_stage.started_at = "2026-04-12T10:00:00Z"
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
     _seed_terminal_pipeline_state(workspace, task.id, entry_stage=PipelineState.IMPLEMENTING)
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     state.active_task_id = task.id
-    save_state_for_workspace(workspace, state)
+    WorkspaceStateRepository(workspace).save(state)
 
-    assert recover_stale_runner_state_for_workspace(workspace) is True
+    assert RunnerRecoveryService(workspace).recover_stale_runner_state() is True
     result, calls, routes = _run_recovered_task(workspace, monkeypatch, task.id)
 
     assert result.final_stage == "done"
@@ -105,13 +108,13 @@ def test_run_task_restarts_recovered_stale_runner_task_from_ready(tmp_path: Path
 def test_run_task_restarts_recovered_completed_task_from_ready(tmp_path: Path, monkeypatch) -> None:
     _init_workspace_git_repo(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Recover completed task")
+    task = WorkspaceTasks(workspace).create( title="Recover completed task")
     task.status = TaskStatus.DONE
     task.pipeline_status = PipelineStatus.DONE
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
     _seed_terminal_pipeline_state(workspace, task.id, entry_stage=PipelineState.IMPLEMENTING, stage=PipelineState.DONE)
 
-    recovered = recover_completed_task_for_workspace(workspace, task.id)
+    recovered = TaskStatusService(workspace).recover_completed(task.id)
     result, calls, routes = _run_recovered_task(workspace, monkeypatch, recovered.id)
 
     assert result.final_stage == "done"
@@ -121,50 +124,49 @@ def test_run_task_restarts_recovered_completed_task_from_ready(tmp_path: Path, m
 
 def test_completed_task_recovery_then_close_reconciles_all_state_layers(tmp_path: Path) -> None:
     """Test that recovery+close operations maintain consistency across all persistence layers."""
-    from litehive.tasks.status import close_task_for_workspace
+    from litehive.tasks.status import TaskStatusService
 
     _init_workspace_git_repo(tmp_path)
     workspace = Workspace.from_path(tmp_path)
 
     # Create a completed task
-    task = create_task_for_workspace(workspace, title="Task for recovery-close test")
+    task = WorkspaceTasks(workspace).create( title="Task for recovery-close test")
     task.status = TaskStatus.DONE
     task.pipeline_status = PipelineStatus.DONE
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
     _seed_terminal_pipeline_state(workspace, task.id, entry_stage=PipelineState.IMPLEMENTING, stage=PipelineState.DONE)
 
     # Remove from queue to simulate completed task state (completed tasks are not queued)
-    state_before_recovery = load_state_for_workspace(workspace)
-    from litehive.tasks.queue import drop_task_from_workspace_state
+    state_before_recovery = WorkspaceStateRepository(workspace).load()
+    from litehive.tasks.queue import TaskQueueService
 
-    drop_task_from_workspace_state(state_before_recovery, task.id)
-    save_state_for_workspace(workspace, state_before_recovery)
+    TaskQueueService.remove_from_state(state_before_recovery, task.id)
+    WorkspaceStateRepository(workspace).save(state_before_recovery)
 
     # Verify initial completed state
-    state_before_recovery = load_state_for_workspace(workspace)
+    state_before_recovery = WorkspaceStateRepository(workspace).load()
     assert task.id not in state_before_recovery.queue
     assert state_before_recovery.active_task_id != task.id
 
     # Recover the completed task
-    recovered_task = recover_completed_task_for_workspace(workspace, task.id)
+    recovered_task = TaskStatusService(workspace).recover_completed(task.id)
 
     # Verify recovery placed task in queue with correct status
-    state_after_recovery = load_state_for_workspace(workspace)
+    state_after_recovery = WorkspaceStateRepository(workspace).load()
     assert recovered_task.status == "queued"
     assert recovered_task.pipeline_status == "implementing"
     assert task.id in state_after_recovery.queue
     assert state_after_recovery.active_task_id is None
 
     # Verify SQLite task_state reflects queued status
-    store = runtime_store_for_workspace(workspace)
+    store = RuntimeStore(workspace)
     task_state_after_recovery = store.load_task_state(task.id)
     assert task_state_after_recovery is not None
     assert task_state_after_recovery.status == "queued"
     assert task_state_after_recovery.pipeline_status == "implementing"
 
     # Close the recovered task as done
-    closed_task = close_task_for_workspace(
-        workspace,
+    closed_task = TaskStatusService(workspace).close(
         task.id,
         outcome="done",
         reason="Task completed successfully",
@@ -176,7 +178,7 @@ def test_completed_task_recovery_then_close_reconciles_all_state_layers(tmp_path
     assert closed_task.close_reason == "done"
 
     # Verify WorkspaceState.queue no longer contains the task
-    state_after_close = load_state_for_workspace(workspace)
+    state_after_close = WorkspaceStateRepository(workspace).load()
     assert task.id not in state_after_close.queue
     assert state_after_close.active_task_id != task.id
 
@@ -187,16 +189,16 @@ def test_completed_task_recovery_then_close_reconciles_all_state_layers(tmp_path
     assert task_state_after_close.pipeline_status == "done"
 
     # Verify task record in storage matches in-memory object
-    stored_task = get_task_record_for_workspace(workspace, task.id)
+    stored_task = WorkspaceTasks(workspace).get_record(task.id)
     assert stored_task is not None
     assert stored_task.status == "done"
     assert stored_task.pipeline_status == "done"
     assert stored_task.close_reason == "done"
 
     # Ensure task is never reported as queued/backlog in any persistence layer
-    final_state = load_state_for_workspace(workspace)
+    final_state = WorkspaceStateRepository(workspace).load()
     final_task_state = store.load_task_state(task.id)
-    final_task_record = get_task_record_for_workspace(workspace, task.id)
+    final_task_record = WorkspaceTasks(workspace).get_record(task.id)
     assert final_task_record is not None
     assert final_task_state is not None
 
@@ -211,14 +213,14 @@ def test_completed_task_recovery_then_close_reconciles_all_state_layers(tmp_path
 def test_runtime_failed_run_projection_does_not_seed_fresh_lifecycle_state(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Ignore stale runtime failed-run projection")
+    task = WorkspaceTasks(workspace).create( title="Ignore stale runtime failed-run projection")
     task.pipeline_status = PipelineStatus.IMPLEMENTING
     task.runtime.pipeline.failed_run_history["implementing:stale"] = RuntimeFailedRunRecord(
         stage=PipelineState.IMPLEMENTING,
         failure_shape="stale",
         count=99,
     )
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
     state = _load_or_initialize(task.id, workspace, SqlitePersistence(workspace))
 
@@ -229,13 +231,13 @@ def test_runtime_failed_run_projection_does_not_seed_fresh_lifecycle_state(tmp_p
 def test_lifecycle_projection_overwrites_stale_runtime_failed_run_state(tmp_path: Path) -> None:
     _init_workspace_git_repo(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Overwrite stale runtime projection")
+    task = WorkspaceTasks(workspace).create( title="Overwrite stale runtime projection")
     task.runtime.pipeline.failed_run_history["implementing:stale"] = RuntimeFailedRunRecord(
         stage=PipelineState.IMPLEMENTING,
         failure_shape="stale",
         count=99,
     )
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
     state = TaskState(task_id=task.id, stage=PipelineState.IMPLEMENTING, pipeline_mode=PipelineMode.FULL)
     state.failed_run_history["implementing:current"] = FailedRunRecord(
         stage=PipelineState.IMPLEMENTING,

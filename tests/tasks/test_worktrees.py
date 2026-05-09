@@ -6,11 +6,11 @@ from unittest.mock import patch
 import pytest
 
 from litehive.config.workspace import create_workspace
-from litehive.state.records import create_task_for_workspace, save_task_for_workspace
+from litehive.state.records import WorkspaceTasks
 from litehive.domain.common import TaskStatus
-from litehive.worktree.cleanup import remove_cleanable_worktrees_for_workspace
-from litehive.worktree.execution_root import resolve_task_execution_root_for_workspace
-from litehive.worktree.paths import ensure_worktree_venv_link_for_workspace, task_worktree_path_for_workspace
+from litehive.worktree.cleanup import WorktreeCleanupService
+from litehive.worktree.execution_root import TaskExecutionRootResolver
+from litehive.worktree.paths import WorktreePaths
 from litehive.workspace import Workspace
 
 
@@ -48,9 +48,9 @@ def test_resolve_task_execution_root_links_worktree_venv_to_workspace_venv(tmp_p
     _git_ok(workspace, "add", "app.txt")
     _git_ok(workspace, "commit", "-m", "initial")
 
-    task = create_task_for_workspace(Workspace.from_path(workspace), title="Resolve execution root")
+    task = WorkspaceTasks(Workspace.from_path(workspace)).create( title="Resolve execution root")
 
-    worktree = resolve_task_execution_root_for_workspace(Workspace.from_path(workspace), task)
+    worktree = TaskExecutionRootResolver(Workspace.from_path(workspace)).resolve(task)
 
     assert worktree.joinpath(".venv").is_symlink()
     assert worktree.joinpath(".venv").resolve() == workspace.joinpath(".venv").resolve()
@@ -67,11 +67,11 @@ def test_resolve_task_execution_root_accepts_injected_workspace(tmp_path: Path) 
     _git_ok(workspace, "add", "app.txt")
     _git_ok(workspace, "commit", "-m", "initial")
 
-    task = create_task_for_workspace(Workspace.from_path(workspace), title="Resolve execution root from workspace")
+    task = WorkspaceTasks(Workspace.from_path(workspace)).create( title="Resolve execution root from workspace")
 
-    worktree = resolve_task_execution_root_for_workspace(Workspace.from_path(workspace), task)
+    worktree = TaskExecutionRootResolver(Workspace.from_path(workspace)).resolve(task)
 
-    assert worktree == task_worktree_path_for_workspace(Workspace.from_path(workspace), task)
+    assert worktree == WorktreePaths(Workspace.from_path(workspace)).task_worktree_path(task)
     assert worktree.exists()
 
 
@@ -88,7 +88,7 @@ def test_ensure_worktree_venv_link_logs_target_and_raises_on_cleanup_failure(
     with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
         with caplog.at_level(logging.INFO, logger="litehive.worktree"):
             with pytest.raises(OSError, match="failed to delete worktree venv directory .*permission denied"):
-                ensure_worktree_venv_link_for_workspace(Workspace.from_path(workspace), worktree)
+                WorktreePaths(Workspace.from_path(workspace)).ensure_venv_link(worktree)
 
     assert f"Deleting worktree venv directory {worktree / '.venv'}" in caplog.text
     assert f"Failed to delete worktree venv directory {worktree / '.venv'}" in caplog.text
@@ -108,14 +108,14 @@ def test_resolve_task_execution_root_logs_target_and_raises_on_worktree_cleanup_
     _git_ok(workspace, "add", "app.txt")
     _git_ok(workspace, "commit", "-m", "initial")
 
-    task = create_task_for_workspace(Workspace.from_path(workspace), title="Cleanup stale worktree")
-    stale_worktree = task_worktree_path_for_workspace(Workspace.from_path(workspace), task)
+    task = WorkspaceTasks(Workspace.from_path(workspace)).create( title="Cleanup stale worktree")
+    stale_worktree = WorktreePaths(Workspace.from_path(workspace)).task_worktree_path(task)
     stale_worktree.mkdir(parents=True)
 
     with patch("litehive.fs_cleanup.shutil.rmtree", side_effect=OSError("permission denied")):
         with caplog.at_level(logging.INFO, logger="litehive.worktree"):
             with pytest.raises(OSError, match="failed to delete task worktree directory .*permission denied"):
-                resolve_task_execution_root_for_workspace(Workspace.from_path(workspace), task)
+                TaskExecutionRootResolver(Workspace.from_path(workspace)).resolve(task)
 
     assert f"Deleting task worktree directory {stale_worktree}" in caplog.text
     assert f"Failed to delete task worktree directory {stale_worktree}" in caplog.text
@@ -128,14 +128,14 @@ def test_remove_cleanable_worktrees_includes_closed_tasks(tmp_path: Path) -> Non
     _configure_repo(workspace)
     create_workspace(workspace)
 
-    task = create_task_for_workspace(Workspace.from_path(workspace), title="Closed worktree cleanup")
-    worktree = task_worktree_path_for_workspace(Workspace.from_path(workspace), task)
+    task = WorkspaceTasks(Workspace.from_path(workspace)).create( title="Closed worktree cleanup")
+    worktree = WorktreePaths(Workspace.from_path(workspace)).task_worktree_path(task)
     worktree.mkdir(parents=True)
     task.status = TaskStatus.CLOSED
     task.close_reason = "deferred"
     task.runtime.pipeline.git.worktree_path = str(worktree)
-    save_task_for_workspace(Workspace.from_path(workspace), task)
+    WorkspaceTasks(Workspace.from_path(workspace)).save(task)
 
-    result = remove_cleanable_worktrees_for_workspace(Workspace.from_path(workspace), dry_run=True)
+    result = WorktreeCleanupService(Workspace.from_path(workspace)).remove_cleanable_worktrees(dry_run=True)
 
     assert [item.task_id for item in result["candidates"]] == [task.id]

@@ -11,10 +11,7 @@ from typing import Any
 
 from litehive.domain.common import utcnow
 from litehive.domain.task import TaskIntentRecord, TaskStateRecord, WorkspaceState
-from litehive.state.rebuild_safety import (
-    assert_database_rebuild_safe_for_workspace,
-    backup_database_before_rebuild_for_workspace,
-)
+from litehive.state.rebuild_safety import DatabaseRebuildSafety
 from litehive.workspace import Workspace
 
 TASK_EVENT_LOG_NAME = "task-events.jsonl"
@@ -63,7 +60,7 @@ class TaskEventLogReplaySummary:
     """
     Summary of a task event log replay into SQLite.
 
-    Returned by ``rebuild_sqlite_from_task_event_log`` so the operator-facing
+    Returned by ``TaskEventLog.rebuild_sqlite`` so the operator-facing
     rebuild CLI can show what was reconstructed (events seen vs replayed,
     tasks rebuilt, audit/activity counts) instead of reporting a bare success.
     """
@@ -118,10 +115,144 @@ class _ReplayState:
         )
 
 
-def task_event_log_path(workspace: Workspace) -> Path:
-    """Return the workspace-level task event log path, outside SQLite."""
-    return workspace.runtime_path(TASK_EVENT_LOG_NAME)
+class TaskEventLog:
+    """
+    Workspace-bound append-only task event log and SQLite replay owner.
+    """
 
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
+
+    def path(self) -> Path:
+        """
+        Return the workspace-level task event log path, outside SQLite.
+        """
+        return self.workspace.runtime_path(TASK_EVENT_LOG_NAME)
+
+    def append(
+        self,
+        event_type: str,
+        task_id: str | None,
+        payload: dict[str, Any] | None = None,
+        timestamp: str | None = None,
+    ) -> dict[str, Any] | None:
+        """
+        Append one immutable task event record to the JSONL log.
+        """
+        if task_event_logging_suppressed():
+            return None
+        event: dict[str, Any] = {
+            "schema_version": TASK_EVENT_LOG_SCHEMA_VERSION,
+            "timestamp": timestamp or utcnow(),
+            "task_id": task_id,
+            "event_type": event_type,
+            "payload": dict(payload or {}),
+        }
+        path = self.path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
+        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+        try:
+            os.write(fd, line.encode("utf-8"))
+            if not os.environ.get("LITEHIVE_SKIP_FSYNC"):
+                os.fsync(fd)
+        finally:
+            os.close(fd)
+        return event
+
+    def read(self) -> tuple[list[dict[str, Any]], int]:
+        """
+        Read complete JSON task events from the workspace event log.
+        """
+        path = self.path()
+        if not path.exists():
+            return [], 0
+        events: list[dict[str, Any]] = []
+        invalid = 0
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                invalid += 1
+                continue
+            if not isinstance(event, dict):
+                invalid += 1
+                continue
+            if not isinstance(event.get("payload"), dict):
+                invalid += 1
+                continue
+            events.append(event)
+        return events, invalid
+
+    def has_events(self) -> bool:
+        """
+        Cheap probe for "should we rebuild SQLite from the log?".
+        """
+        path = self.path()
+        if not path.exists():
+            return False
+        with path.open("r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(event, dict) and isinstance(event.get("payload"), dict):
+                    return True
+        return False
+
+    def rebuild_sqlite(self, clear_existing: bool = True) -> TaskEventLogReplaySummary:
+        """
+        Replay the append-only task event log into the workspace SQLite DB.
+        """
+        events, invalid = self.read()
+        replay_state = _ReplayState.empty()
+        for event in events:
+            _apply_event(replay_state, event)
+        if clear_existing:
+            replay_task_ids = set(replay_state.task_intents) | set(replay_state.task_states)
+            db_path = self.workspace.runtime_path("data.db")
+            rebuild_safety = DatabaseRebuildSafety(self.workspace)
+            rebuild_safety.assert_safe(
+                db_path,
+                replay_task_ids=replay_task_ids,
+                operation="event-log replay",
+            )
+            rebuild_safety.backup_before_rebuild(db_path, label="before-event-log-replay")
+        with suppress_task_event_logging(), self.workspace.connect() as connection:
+            if clear_existing:
+                _clear_replay_tables(connection)
+            _write_replay_state(connection, replay_state)
+            connection.commit()
+        activity_entries = sum(len(entries) for entries in replay_state.task_activity.values())
+        workspace_state = _workspace_state_payload(replay_state)
+        return TaskEventLogReplaySummary(
+            event_log_path=self.path(),
+            events_seen=len(events) + invalid,
+            events_replayed=len(events),
+            invalid_events=invalid,
+            tasks_rebuilt=len(replay_state.task_intents),
+            queue_length=len(workspace_state.get("queue") or []),
+            audit_entries=len(replay_state.task_audit_entries),
+            activity_entries=activity_entries,
+            stage_reports=len(replay_state.stage_reports),
+            recovery_reports=len(replay_state.recovery_reports),
+        )
+
+    def sqlite_task_tables_empty(self) -> bool:
+        """
+        True when both ``task_intent`` and ``task_state`` are empty.
+        """
+        with self.workspace.connect() as connection:
+            task_intent_count = connection.execute("SELECT COUNT(*) FROM task_intent").fetchone()[0]
+            task_state_count = connection.execute("SELECT COUNT(*) FROM task_state").fetchone()[0]
+        return int(task_intent_count) == 0 and int(task_state_count) == 0
 
 def task_event_logging_suppressed() -> bool:
     """
@@ -161,161 +292,6 @@ def task_event_type_for_audit_action(action: str) -> str:
     the event.
     """
     return _ACTION_EVENT_TYPES.get(action, f"task_{action}")
-
-
-def append_task_event(
-    workspace: Workspace,
-    event_type: str,
-    task_id: str | None,
-    payload: dict[str, Any] | None = None,
-    timestamp: str | None = None,
-) -> dict[str, Any] | None:
-    """
-    Append one immutable task event record to the JSONL log.
-
-    Returns the event that was written, or ``None`` while replay is active so
-    the rebuild path does not re-append the events it is currently consuming.
-    The fsync is conditional on ``LITEHIVE_SKIP_FSYNC`` so the test suite can
-    skip the cost without losing crash safety in production.
-    """
-
-    if task_event_logging_suppressed():
-        return None
-    event: dict[str, Any] = {
-        "schema_version": TASK_EVENT_LOG_SCHEMA_VERSION,
-        "timestamp": timestamp or utcnow(),
-        "task_id": task_id,
-        "event_type": event_type,
-        "payload": dict(payload or {}),
-    }
-    path = task_event_log_path(workspace)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    line = json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
-    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
-    try:
-        os.write(fd, line.encode("utf-8"))
-        if not os.environ.get("LITEHIVE_SKIP_FSYNC"):
-            os.fsync(fd)
-    finally:
-        os.close(fd)
-    return event
-
-
-def read_task_events(workspace: Workspace) -> tuple[list[dict[str, Any]], int]:
-    """
-    Read complete JSON task events from the workspace event log.
-
-    Returns ``(events, invalid_count)`` so the replay summary can report how
-    many lines were unparseable. Corrupt or truncated lines are skipped
-    rather than raised because the log is append-only and a partial last
-    line is normal after a crash.
-    """
-    path = task_event_log_path(workspace)
-    if not path.exists():
-        return [], 0
-    events: list[dict[str, Any]] = []
-    invalid = 0
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            invalid += 1
-            continue
-        if not isinstance(event, dict):
-            invalid += 1
-            continue
-        if not isinstance(event.get("payload"), dict):
-            invalid += 1
-            continue
-        events.append(event)
-    return events, invalid
-
-
-def task_event_log_has_events(workspace: Workspace) -> bool:
-    """
-    Cheap probe for "should we rebuild SQLite from the log?".
-
-    The state store uses this on first open to decide whether to replay; the
-    streaming form avoids loading the whole file when the answer is yes after
-    the first valid line, which matters on workspaces with very long logs.
-    """
-    path = task_event_log_path(workspace)
-    if not path.exists():
-        return False
-    with path.open("r", encoding="utf-8") as handle:
-        for raw_line in handle:
-            line = raw_line.strip()
-            if not line:
-                continue
-            try:
-                event = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(event, dict) and isinstance(event.get("payload"), dict):
-                return True
-    return False
-
-
-def rebuild_sqlite_from_task_event_log(workspace: Workspace, clear_existing: bool = True) -> TaskEventLogReplaySummary:
-    """
-    Replay the append-only task event log into the workspace SQLite DB.
-
-    Used both for first-open hydration (when SQLite is empty but the JSONL
-    log has history) and for explicit rebuilds via the operator CLI. Asserts
-    rebuild safety and snapshots the existing DB to ``backups/`` first so a
-    bad replay can be rolled back rather than silently dropping rows.
-    """
-    events, invalid = read_task_events(workspace)
-    replay_state = _ReplayState.empty()
-    for event in events:
-        _apply_event(replay_state, event)
-    if clear_existing:
-        replay_task_ids = set(replay_state.task_intents) | set(replay_state.task_states)
-        db_path = workspace.runtime_path("data.db")
-        assert_database_rebuild_safe_for_workspace(
-            workspace,
-            db_path,
-            replay_task_ids=replay_task_ids,
-            operation="event-log replay",
-        )
-        backup_database_before_rebuild_for_workspace(workspace, db_path, label="before-event-log-replay")
-    with suppress_task_event_logging(), workspace.connect() as connection:
-        if clear_existing:
-            _clear_replay_tables(connection)
-        _write_replay_state(connection, replay_state)
-        connection.commit()
-    activity_entries = sum(len(entries) for entries in replay_state.task_activity.values())
-    workspace_state = _workspace_state_payload(replay_state)
-    return TaskEventLogReplaySummary(
-        event_log_path=task_event_log_path(workspace),
-        events_seen=len(events) + invalid,
-        events_replayed=len(events),
-        invalid_events=invalid,
-        tasks_rebuilt=len(replay_state.task_intents),
-        queue_length=len(workspace_state.get("queue") or []),
-        audit_entries=len(replay_state.task_audit_entries),
-        activity_entries=activity_entries,
-        stage_reports=len(replay_state.stage_reports),
-        recovery_reports=len(replay_state.recovery_reports),
-    )
-
-
-def sqlite_task_tables_empty(workspace: Workspace) -> bool:
-    """
-    True when both ``task_intent`` and ``task_state`` are empty.
-
-    Paired with ``task_event_log_has_events`` by the state store at workspace
-    open: an empty SQLite alongside a non-empty log is the signal that a
-    replay is needed (the DB was wiped or never created), and only that
-    combination triggers the rebuild path.
-    """
-    with workspace.connect() as connection:
-        task_intent_count = connection.execute("SELECT COUNT(*) FROM task_intent").fetchone()[0]
-        task_state_count = connection.execute("SELECT COUNT(*) FROM task_state").fetchone()[0]
-    return int(task_intent_count) == 0 and int(task_state_count) == 0
 
 
 def _apply_event(replay_state: _ReplayState, event: dict[str, Any]) -> None:

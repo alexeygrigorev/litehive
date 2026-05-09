@@ -1,9 +1,8 @@
 """Helpers that snapshot a still-running subagent into an ``interrupted`` record."""
 
-from litehive.agents.execution_trace import load_subagent_execution_trace
+from litehive.agents.execution_trace import execution_trace_renderer
 from litehive.agents.session_store import (
     SubagentArtifactPayload,
-    load_subagent_report,
     subagent_artifacts,
 )
 from litehive.agents.session_continuation import subagent_continuation_state
@@ -71,7 +70,7 @@ def _interrupted_subagent_snippet(
     empty; an empty snippet would render as a missing reason in the
     operator-facing interruption journal.
     """
-    report = load_subagent_report(workspace, task.id, active.id)
+    report = subagent_artifacts(workspace, task.id, active.id).load_report()
     if report:
         summary = str(report.get("summary") or "").strip()
         if summary:
@@ -79,7 +78,7 @@ def _interrupted_subagent_snippet(
     ref = next((candidate for candidate in reversed(task.subagents) if candidate.id == active.id), None)
     if ref is None:
         return active.execution_trace_snippet or "runner interrupted before subagent completion"
-    trace = load_subagent_execution_trace(workspace, task, ref, active=True, runtime_state=active)
+    trace = execution_trace_renderer().load_for_subagent(workspace, task, ref, active=True, runtime_state=active)
     if trace is None:
         snippet = ""
     else:
@@ -128,8 +127,9 @@ def _write_interrupted_subagent_artifacts(
     between memory and disk would mean resume picks the wrong action.
     """
     now = utcnow()
-    existing_session = workspace.load_subagent_session_record(task.id, subagent.id)
-    report_payload = load_subagent_report(workspace, task.id, subagent.id)
+    existing_session = subagent_artifacts(workspace, task.id, subagent.id).load_session_record()
+    artifact_store = subagent_artifacts(workspace, task.id, subagent.id)
+    report_payload = artifact_store.load_report()
     continuation_state = subagent_continuation_state(subagent.continuation)
     created_at = str(existing_session.created_at or subagent.started_at)
     resource_control_value = existing_session.values.get("resource_control")
@@ -160,7 +160,7 @@ def _write_interrupted_subagent_artifacts(
     report_payload["interruption_reason"] = subagent.interruption_reason or None
     report_payload["resume_stage"] = resume_stage
     report_payload["continuation"] = continuation_state.payload()
-    subagent_artifacts(workspace, task.id, subagent.id).save(
+    artifact_store.save(
         session=session_row,
         report=SubagentArtifactPayload(report_payload),
     )

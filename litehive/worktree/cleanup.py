@@ -1,13 +1,11 @@
 """
 Listing and cleanup of Litehive-managed task worktrees.
 
-Three jobs: enumerate live managed worktrees with their dirty count
-(``collect_managed_worktrees_for_workspace``), remove a single terminal
-task's worktree on the lifecycle hand-off
-(``cleanup_terminal_task_worktree_for_workspace``), and bulk-remove every
-cleanable worktree from the operator CLI. Lives as a sibling of
-``litehive.worktree`` so callers that only need cleanup don't have to
-import the full ``WorktreeService`` graph.
+Three jobs: enumerate live managed worktrees with their dirty count,
+remove a single terminal task's worktree on the lifecycle hand-off,
+and bulk-remove every cleanable worktree from the operator CLI. Lives
+as a sibling of ``litehive.worktree`` so callers that only need cleanup
+don't have to import sync or rescue code.
 """
 
 from typing import TypedDict
@@ -17,84 +15,17 @@ from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import WorkspaceConflictError
 from litehive.domain.worktree import ManagedWorktree
 from litehive.git.ops import GitError, delete_branch, remove_worktree, status_porcelain
-from litehive.state.persist import load_state_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
 from litehive.state.records import (
     clear_task_worktree_path,
     get_task_worktree_path,
+    WorkspaceTasks,
 )
 from litehive.worktree.paths import (
-    is_managed_worktree_path_for_workspace,
-    resolve_recorded_worktree_path_for_workspace,
     task_worktree_branch,
+    WorktreePaths,
 )
 from litehive.workspace import Workspace
-
-
-def cleanup_terminal_task_worktree_for_workspace(workspace: Workspace, task: TaskRecord) -> None:
-    """
-    Remove a terminal task's worktree, drop its branch, and clear task metadata.
-
-    The lifecycle orchestrator calls this on terminal transitions
-    (done/closed/cancelled) so finished tasks don't leave abandoned
-    worktrees and branches lying around. The branch deletion is
-    best-effort because git refuses to drop a branch a worktree
-    still holds — we delete the worktree first and then sweep up.
-    """
-    worktree_rel = get_task_worktree_path(task)
-    if not worktree_rel:
-        return
-    worktree_path = resolve_recorded_worktree_path_for_workspace(workspace, worktree_rel)
-    if worktree_path is not None and worktree_path.exists():
-        remove_worktree(workspace.root, worktree_path, force=True)
-    clear_task_worktree_path(task)
-    workspace.save_task(task)
-    branch = task_worktree_branch(task)
-    delete_branch(workspace.root, branch)
-
-
-def collect_managed_worktrees_for_workspace(workspace: Workspace) -> list[ManagedWorktree]:
-    """
-    Enumerate live Litehive-managed task worktrees with their dirty-change count.
-
-    Backs the ``litehive worktree`` listing CLI and any flow that
-    needs to render "what's on disk right now" — including the
-    cleanup decision in ``remove_cleanable_worktrees``. Sorts by
-    task id so two operator invocations produce identical output
-    and tests don't have to depend on filesystem walk order.
-    """
-    state = load_state_for_workspace(workspace)
-    if state.active_task_id:
-        active_task = workspace.get_task(state.active_task_id)
-    else:
-        active_task = None
-    if active_task is not None:
-        active_path = get_task_worktree_path(active_task)
-    else:
-        active_path = None
-
-    worktrees: list[ManagedWorktree] = []
-    for task in workspace.list_tasks(strict=False):
-        worktree_rel = get_task_worktree_path(task)
-        if not is_managed_worktree_path_for_workspace(workspace, worktree_rel):
-            continue
-        worktree_path = resolve_recorded_worktree_path_for_workspace(workspace, worktree_rel)
-        if worktree_path is None or not worktree_path.exists() or worktree_rel is None:
-            continue
-        try:
-            change_count = len(status_porcelain(worktree_path))
-        except GitError:
-            change_count = 0
-        worktrees.append(
-            ManagedWorktree(
-                task_id=task.id,
-                status=task.status,
-                worktree_rel=worktree_rel,
-                worktree_path=worktree_path,
-                change_count=change_count,
-                active=task.id == state.active_task_id or worktree_rel == active_path,
-            )
-        )
-    return sorted(worktrees, key=lambda item: item.task_id)
 
 
 class WorktreeCleanupResult(TypedDict):
@@ -105,58 +36,113 @@ class WorktreeCleanupResult(TypedDict):
     failures: list[tuple[ManagedWorktree, str]]
 
 
-def remove_cleanable_worktrees_for_workspace(workspace: Workspace, dry_run: bool = False) -> WorktreeCleanupResult:
+class WorktreeCleanupService:
     """
-    Remove worktrees for terminal tasks using an injected workspace.
-
-    Backs ``litehive worktree clean``. The result dict separates
-    candidates by what actually happened (removed, deferred because
-    the workspace was locked, failed with a git error, skipped
-    because the task is still active) so the CLI can render an
-    accurate per-row outcome instead of a single boolean. ``dry_run``
-    returns the candidate list without touching disk for the
-    ``--dry-run`` flag.
+    Workspace-bound listing and cleanup of Litehive-managed task worktrees.
     """
-    worktrees = collect_managed_worktrees_for_workspace(workspace)
-    candidates = [item for item in worktrees if item.cleanable]
-    skipped_active = [item for item in worktrees if item.active]
 
-    if dry_run:
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
+        self.paths = WorktreePaths(workspace)
+
+    def cleanup_terminal_task_worktree(self, task: TaskRecord) -> None:
+        """
+        Remove a terminal task's worktree, branch, and recorded metadata.
+        """
+        worktree_rel = get_task_worktree_path(task)
+        if not worktree_rel:
+            return
+        worktree_path = self.paths.resolve_recorded_worktree_path(worktree_rel)
+        if worktree_path is not None and worktree_path.exists():
+            remove_worktree(self.workspace.root, worktree_path, force=True)
+        clear_task_worktree_path(task)
+        WorkspaceTasks(self.workspace).save(task)
+        branch = task_worktree_branch(task)
+        delete_branch(self.workspace.root, branch)
+
+    def collect_managed_worktrees(self) -> list[ManagedWorktree]:
+        """
+        Enumerate live Litehive-managed task worktrees.
+        """
+        state = WorkspaceStateRepository(self.workspace).load()
+        tasks = WorkspaceTasks(self.workspace)
+        if state.active_task_id:
+            active_task = tasks.get(state.active_task_id)
+        else:
+            active_task = None
+        if active_task is not None:
+            active_path = get_task_worktree_path(active_task)
+        else:
+            active_path = None
+
+        worktrees: list[ManagedWorktree] = []
+        for task in tasks.list(strict=False):
+            worktree_rel = get_task_worktree_path(task)
+            if not self.paths.is_managed_worktree_path(worktree_rel):
+                continue
+            worktree_path = self.paths.resolve_recorded_worktree_path(worktree_rel)
+            if worktree_path is None or not worktree_path.exists() or worktree_rel is None:
+                continue
+            try:
+                change_count = len(status_porcelain(worktree_path))
+            except GitError:
+                change_count = 0
+            worktrees.append(
+                ManagedWorktree(
+                    task_id=task.id,
+                    status=task.status,
+                    worktree_rel=worktree_rel,
+                    worktree_path=worktree_path,
+                    change_count=change_count,
+                    active=task.id == state.active_task_id or worktree_rel == active_path,
+                )
+            )
+        return sorted(worktrees, key=lambda item: item.task_id)
+
+    def remove_cleanable_worktrees(self, dry_run: bool = False) -> WorktreeCleanupResult:
+        """
+        Remove or preview worktrees for terminal tasks.
+        """
+        worktrees = self.collect_managed_worktrees()
+        candidates = [item for item in worktrees if item.cleanable]
+        skipped_active = [item for item in worktrees if item.active]
+
+        if dry_run:
+            return {
+                "candidates": candidates,
+                "skipped_active": skipped_active,
+                "removed": [],
+                "deferred": [],
+                "failures": [],
+            }
+
+        failures = []
+        removed = []
+        deferred = []
+        attention_repository = AttentionRepository(self.workspace)
+
+        for item in candidates:
+            try:
+                remove_worktree(self.workspace.root, item.worktree_path, force=True)
+                task = WorkspaceTasks(self.workspace).get(item.task_id)
+                if task is not None:
+                    clear_task_worktree_path(task)
+                    try:
+                        WorkspaceTasks(self.workspace).save(task)
+                    except WorkspaceConflictError:
+                        attention_repository.append(
+                            f"deferred worktree metadata clearing for {item.task_id}: workspace locked by active runner"
+                        )
+                        deferred.append(item)
+                        continue
+                removed.append(item)
+            except GitError as exc:
+                failures.append((item, str(exc)))
+
         return {
             "candidates": candidates,
             "skipped_active": skipped_active,
-            "removed": [],
-            "deferred": [],
-            "failures": [],
+            "removed": removed,
+            "deferred": deferred,
+            "failures": failures,
         }
-
-    failures = []
-    removed = []
-    deferred = []
-    attention_repository = AttentionRepository(workspace)
-
-    for item in candidates:
-        try:
-            remove_worktree(workspace.root, item.worktree_path, force=True)
-            task = workspace.get_task(item.task_id)
-            if task is not None:
-                clear_task_worktree_path(task)
-                try:
-                    workspace.save_task(task)
-                except WorkspaceConflictError:
-                    attention_repository.append(
-                        f"deferred worktree metadata clearing for {item.task_id}: workspace locked by active runner"
-                    )
-                    deferred.append(item)
-                    continue
-            removed.append(item)
-        except GitError as exc:
-            failures.append((item, str(exc)))
-
-    return {
-        "candidates": candidates,
-        "skipped_active": skipped_active,
-        "removed": removed,
-        "deferred": deferred,
-        "failures": failures,
-    }

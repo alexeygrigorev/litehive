@@ -463,6 +463,50 @@ def test_production_constructors_do_not_take_raw_workspace_roots() -> None:
     assert found_cached_workspace_roots == []
 
 
+def test_internal_functions_do_not_add_raw_workspace_root_parameters() -> None:
+    """
+    Keep raw workspace paths from spreading below CLI/process boundaries.
+    """
+    boundary_modules = {
+        "litehive/container.py",
+        "litehive/main.py",
+        "litehive/workspace.py",
+        "litehive/config/paths.py",
+        "litehive/config/workspace.py",
+        "litehive/config/workspace_files.py",
+        "litehive/db/schema.py",
+        "litehive/git/ops.py",
+        "litehive/sandbox/git_wrapper.py",
+    }
+    boundary_prefixes = ("litehive/cli/",)
+    allowed: list[str] = []
+    forbidden_arg_names = {"root", "workspace_root", "main_repo_root", "repo_root"}
+    found: list[str] = []
+    for path in _python_files():
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        if rel in boundary_modules or any(rel.startswith(prefix) for prefix in boundary_prefixes):
+            continue
+        tree = _tree(path)
+        parents = _parent_map(tree)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            if node.name == "__init__":
+                continue
+            owner = _enclosing_definition_name(node, parents)
+            if owner == "<module>":
+                owner = node.name
+            else:
+                owner = f"{owner}.{node.name}"
+            for argument in node.args.args + node.args.kwonlyargs:
+                if argument.arg not in forbidden_arg_names:
+                    continue
+                annotation = _annotation_source(argument.annotation) or "<missing>"
+                found.append(f"{rel}:{owner}:{argument.arg}:{annotation}")
+
+    assert sorted(found) == allowed
+
+
 def test_workspace_from_path_is_only_called_by_container_boundary() -> None:
     """
     Keep raw Path -> Workspace conversion at the DI boundary.

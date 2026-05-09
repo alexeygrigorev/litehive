@@ -9,8 +9,7 @@ formatting logic lives in sibling modules:
 * ``status_health`` — health-mode renderers used by ``litehive workspace health``.
 
 This module owns the pipeline-status orchestration
-(``collect_task_pipeline_status_for_workspace`` /
-``render_task_pipeline_status_lines``) and re-exports the rest so existing
+(``TaskPipelineStatusCollector`` / ``render_task_pipeline_status_lines``) and re-exports the rest so existing
 ``from litehive.observability.status import ...`` imports keep working.
 """
 
@@ -20,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from litehive.attention import waiting_for_you_lines_for_workspace
+from litehive.attention import OperatorAttentionProjector
 from litehive.config.engine_freezes import active_engine_freezes
 from litehive.config.model import LitehiveConfig
 from litehive.domain.engine import WorkspaceEngineMonitoring
@@ -38,8 +37,7 @@ from litehive.observability.status_dashboard import (
 )
 from litehive.observability.status_diagnostics import (
     StatusIssue,
-    collect_operational_status_snapshot_for_workspace,
-    collect_status_snapshot_for_workspace,
+    StatusSnapshotCollector,
 )
 from litehive.observability.status_health import (
     render_health_active_task_lines,
@@ -66,17 +64,15 @@ from litehive.observability.status_summary import (
     estimate_task_execution,  # noqa: F401  (re-export)
     render_task_summary,
 )
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
-
-collect_operational_status_snapshot = collect_operational_status_snapshot_for_workspace
-collect_status_snapshot = collect_status_snapshot_for_workspace
 
 __all__ = [
     "StatusIssue",
     "StatusRenderMode",
+    "TaskPipelineStatusCollector",
     "TaskPipelineStatusData",
     "collect_recent_activity",
-    "collect_task_pipeline_status_for_workspace",
     "estimate_task_execution",
     "find_last_completed_task",
     "render_active_task_detail_lines",
@@ -118,53 +114,62 @@ class TaskPipelineStatusData:
     runner_state_label: str
 
 
-def collect_task_pipeline_status_for_workspace(
-    workspace: Workspace,
-    read_only: bool = False,
-    diagnostics: bool = False,
-) -> TaskPipelineStatusData:
+class TaskPipelineStatusCollector:
     """
-    Bundle the workspace snapshot the CLI status commands need in one read.
+    Workspace-bound collector for the task pipeline status view.
+    """
 
-    Called by the CLI status entry points and by the daemon when
-    emitting periodic health summaries. ``read_only=True`` opens
-    SQLite in URI read-only mode so concurrent runners cannot be
-    blocked by a status read; ``diagnostics=True`` widens the
-    snapshot to include issue collection that the operational
-    fast-path skips, because the issue scan is too expensive for
-    every status print.
-    """
-    if diagnostics:
-        snapshot = collect_status_snapshot_for_workspace(workspace)
-    else:
-        snapshot = collect_operational_status_snapshot_for_workspace(workspace)
-    active_task_id = snapshot.runner.active_task_id or snapshot.state.active_task_id
-    if read_only:
-        if active_task_id:
-            active_task = _load_task_read_only_for_workspace(workspace, active_task_id)
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
+
+    def collect(
+        self,
+        read_only: bool = False,
+        diagnostics: bool = False,
+    ) -> TaskPipelineStatusData:
+        """
+        Bundle the workspace snapshot the CLI status commands need in one read.
+
+        Called by the CLI status entry points and by the daemon when
+        emitting periodic health summaries. ``read_only=True`` opens
+        SQLite in URI read-only mode so concurrent runners cannot be
+        blocked by a status read; ``diagnostics=True`` widens the
+        snapshot to include issue collection that the operational
+        fast-path skips, because the issue scan is too expensive for
+        every status print.
+        """
+        collector = StatusSnapshotCollector(self.workspace)
+        if diagnostics:
+            snapshot = collector.collect()
         else:
-            active_task = None
-        waiting_lines = waiting_for_you_lines_for_workspace(workspace, reconcile=False)
-    else:
-        if active_task_id:
-            active_task = workspace.get_task(active_task_id)
+            snapshot = collector.collect_operational()
+        active_task_id = snapshot.runner.active_task_id or snapshot.state.active_task_id
+        if read_only:
+            if active_task_id:
+                active_task = _load_task_read_only_impl(self.workspace, active_task_id)
+            else:
+                active_task = None
+            waiting_lines = OperatorAttentionProjector(self.workspace).waiting_lines(reconcile=False)
         else:
-            active_task = None
-        waiting_lines = waiting_for_you_lines_for_workspace(workspace)
-    if not diagnostics:
-        waiting_lines = _operational_attention_lines(waiting_lines)
-    return TaskPipelineStatusData(
-        config=snapshot.config,
-        state=snapshot.state,
-        runner=snapshot.runner,
-        monitoring=snapshot.monitoring,
-        issues=snapshot.issues,
-        active_task_id=active_task_id,
-        active_task=active_task,
-        queue_head=_first_or_none(snapshot.state.queue),
-        waiting_lines=waiting_lines,
-        runner_state_label=_runner_state_label_for_workspace(workspace, snapshot.runner),
-    )
+            if active_task_id:
+                active_task = WorkspaceTasks(self.workspace).get(active_task_id)
+            else:
+                active_task = None
+            waiting_lines = OperatorAttentionProjector(self.workspace).waiting_lines()
+        if not diagnostics:
+            waiting_lines = _operational_attention_lines(waiting_lines)
+        return TaskPipelineStatusData(
+            config=snapshot.config,
+            state=snapshot.state,
+            runner=snapshot.runner,
+            monitoring=snapshot.monitoring,
+            issues=snapshot.issues,
+            active_task_id=active_task_id,
+            active_task=active_task,
+            queue_head=_first_or_none(snapshot.state.queue),
+            waiting_lines=waiting_lines,
+            runner_state_label=_runner_state_label_impl(self.workspace, snapshot.runner),
+        )
 
 
 def render_task_pipeline_status_lines(
@@ -243,7 +248,7 @@ def _first_or_none(items):
     return None
 
 
-def _runner_state_label_for_workspace(workspace: Workspace, runner: RunnerStatusState) -> str:
+def _runner_state_label_impl(workspace: Workspace, runner: RunnerStatusState) -> str:
     """
     Distinguish never-started workspaces from stopped or dead runners.
 
@@ -263,7 +268,7 @@ def _runner_state_label_for_workspace(workspace: Workspace, runner: RunnerStatus
     return "dead"
 
 
-def _load_task_read_only_for_workspace(workspace: Workspace, task_id: str) -> TaskRecord | None:
+def _load_task_read_only_impl(workspace: Workspace, task_id: str) -> TaskRecord | None:
     """
     Load a task without taking a writer lock.
 

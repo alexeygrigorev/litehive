@@ -15,10 +15,9 @@ from litehive.domain.reports import StageReport, TaskActivityEntry
 from litehive.lifecycle.persistence import SqlitePersistence
 from litehive.lifecycle.types import FailedReason, PipelineMode
 from litehive.workspace import Workspace
-from litehive.state.records import create_task_for_workspace, save_task_for_workspace
+from litehive.state.records import WorkspaceTasks
 from litehive.tasks.activity_rendering import append_activity_entry
-from litehive.tasks.paths import task_dir
-from litehive.tasks.report_storage import record_stage_report
+from litehive.tasks.report_storage import TaskReportStore
 
 from tests.support.helpers import _cmd_debug, _cmd_evidence, _run, _task_worktree_path
 
@@ -35,12 +34,12 @@ def _ns(workspace, task_id, all_flag=False, worktree_flag=False):
 def _make_task_with_subagent(tmp_path, *, engine="codex", role="swe", sa_id="SA-implementing"):
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Debug test task", auto_commit=False)
+    task = WorkspaceTasks(workspace).create( title="Debug test task", auto_commit=False)
     sa_path = f"subagents/{sa_id}"
     task.subagents = [SubagentRef(id=sa_id, role=role, engine=engine, status="completed", path=sa_path)]
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
-    sa_dir = task_dir(tmp_path, task) / sa_path
+    sa_dir = workspace.task_dir(task) / sa_path
     sa_dir.mkdir(parents=True, exist_ok=True)
     return task, sa_dir
 
@@ -75,7 +74,7 @@ def _create_task_worktree(root: Path, task) -> Path:
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
     _run(["git", "worktree", "add", "--detach", str(worktree_path), "HEAD"], root)
     task.git.worktree_path = str(worktree_path)
-    save_task_for_workspace(Workspace.from_path(root), task)
+    WorkspaceTasks(Workspace.from_path(root)).save(task)
     return worktree_path
 
 
@@ -91,7 +90,7 @@ def test_task_evidence_renders_minimal_recovery_routing_state(
         task,
         TaskActivityEntry(role="swe", stage="implementing", verdict="reject", message="agent report failed"),
     )
-    record_stage_report(Workspace.from_path(tmp_path),
+    TaskReportStore(Workspace.from_path(tmp_path)).record_stage_report(
         task,
         StageReport(
             task_id=task.id,
@@ -158,14 +157,14 @@ def test_debug_task_not_found(tmp_path: Path, capsys: pytest.CaptureFixture[str]
 def test_debug_all_subagents_remains_compact(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Multi SA task", auto_commit=False)
+    task = WorkspaceTasks(workspace).create( title="Multi SA task", auto_commit=False)
     task.subagents = [
         SubagentRef(
             id="SA-grooming", role="planner", engine="gemini", status="completed", path="subagents/SA-grooming"
         ),
         SubagentRef(id="SA-testing", role="qa", engine="claude", status="failed", path="subagents/SA-testing"),
     ]
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
     _write_session_record(tmp_path, task.id, sa_id="SA-grooming", role="planner", engine="gemini", exit_code=0)
     _write_session_record(tmp_path, task.id, sa_id="SA-testing", role="qa", engine="claude", exit_code=1)
 
@@ -182,7 +181,7 @@ def test_debug_all_subagents_remains_compact(tmp_path: Path, capsys: pytest.Capt
 def test_debug_worktree_shows_minimal_change_summary(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     create_workspace(tmp_path)
     _init_git_repo(tmp_path)
-    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Worktree debug task", auto_commit=False)
+    task = WorkspaceTasks(Workspace.from_path(tmp_path)).create( title="Worktree debug task", auto_commit=False)
     worktree_path = _create_task_worktree(tmp_path, task)
     (worktree_path / "dirty.py").write_text("print('dirty')\n", encoding="utf-8")
 

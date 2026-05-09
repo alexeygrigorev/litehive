@@ -26,10 +26,7 @@ from typing import TypeAlias
 
 from litehive.config.paths import workspace_path
 from litehive.db.migration_hooks import run_post_migration_hook
-from litehive.state.rebuild_safety import (
-    assert_database_rebuild_safe_for_workspace,
-    backup_database_before_rebuild_for_workspace,
-)
+from litehive.state.rebuild_safety import DatabaseRebuildSafety
 
 MIGRATIONS_PACKAGE = "litehive.db.migrations"
 _BASELINE_REQUIRED_TABLES = {
@@ -357,12 +354,12 @@ def apply_pending_migrations(root: Path, dry_run: bool = False) -> MigrationPlan
         from litehive.workspace import Workspace  # noqa: PLC0415
 
         workspace = Workspace(root)
-        assert_database_rebuild_safe_for_workspace(
-            workspace,
+        rebuild_safety = DatabaseRebuildSafety(workspace)
+        rebuild_safety.assert_safe(
             db_path,
             operation="migration-triggered database rebuild",
         )
-        backup_database_before_rebuild_for_workspace(workspace, db_path, label="before-migration-rebuild")
+        rebuild_safety.backup_before_rebuild(db_path, label="before-migration-rebuild")
         db_path.unlink(missing_ok=True)
         MIGRATED_DB_PATHS.pop(key, None)
         REBUILT_DB_PATHS.add(key)

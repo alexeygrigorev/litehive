@@ -7,20 +7,19 @@ import pytest
 from heru.base import CLIExecutionResult
 from heru.types import SubagentRef
 
-from litehive.container import build_subagent_manager_for_workspace
-from litehive.agents.session_store import load_subagent_report, load_subagent_event_stream
+from litehive.container import build_subagent_manager
+from litehive.agents.session_store import subagent_artifacts
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import create_workspace
 from litehive.db.schema import connect_workspace_db
 from litehive.recovery.execution_recovery import mark_interrupted_subagent
-from litehive.state.records import create_task_for_workspace, get_task_for_workspace, save_task_for_workspace
-from litehive.tasks.paths import task_dir
-from litehive.tasks.runtime import mark_subagent_started_for_workspace
+from litehive.state.records import WorkspaceTasks
+from litehive.tasks.runtime import TaskRuntimeTransitions
 from litehive.workspace import Workspace
 
 
 def _build_manager(workspace: Workspace, *, execution_root: Path) -> Any:
-    return build_subagent_manager_for_workspace(
+    return build_subagent_manager(
         workspace,
         workspace.load_config(),
         execution_root=execution_root,
@@ -32,7 +31,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
 ) -> None:
     create_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Claude live restart summary", auto_commit=False)
+    task = WorkspaceTasks(workspace).create( title="Claude live restart summary", auto_commit=False)
     manager = _build_manager(workspace, execution_root=tmp_path)
 
     ref = SubagentRef(
@@ -43,10 +42,10 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
         path="subagents/SA-0001-swe",
     )
     task.subagents.append(ref)
-    mark_subagent_started_for_workspace(workspace, task, ref)
-    save_task_for_workspace(workspace, task)
+    TaskRuntimeTransitions(workspace, WorkspaceTasks(workspace)).mark_subagent_started(task, ref)
+    WorkspaceTasks(workspace).save(task)
 
-    base = task_dir(tmp_path, task) / "subagents" / "SA-0001-swe"
+    base = workspace.task_dir(task) / "subagents" / "SA-0001-swe"
     base.mkdir(parents=True, exist_ok=False)
     manager.sessions.write_session_start(task, base, ref, "stream partial Claude output")
 
@@ -67,12 +66,12 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
 
     manager.write_session_progress(task, base, ref, "stream partial Claude output", execution)
 
-    report = load_subagent_report(workspace, task.id, "SA-0001")
+    report = subagent_artifacts(workspace, task.id, "SA-0001").load_report()
     assert report["status"] == "running"
     assert "did not submit verdict" in report["summary"]
     assert report["files_changed"] == []
 
-    refreshed = get_task_for_workspace(workspace, task.id)
+    refreshed = WorkspaceTasks(workspace).get(task.id)
     assert refreshed is not None
     interrupted = mark_interrupted_subagent(
         workspace,
@@ -84,7 +83,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
     assert interrupted is not None
     assert "did not submit verdict" in interrupted.execution_trace_snippet
 
-    resumed_report = load_subagent_report(workspace, task.id, "SA-0001")
+    resumed_report = subagent_artifacts(workspace, task.id, "SA-0001").load_report()
     assert resumed_report["status"] == "interrupted"
     assert resumed_report["resume_stage"] == "implementing"
 
@@ -92,7 +91,7 @@ def test_claude_live_progress_report_uses_unified_execution_trace_for_restart_sn
 def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Event stream live progress test")
+    task = WorkspaceTasks(workspace).create( title="Event stream live progress test")
     manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     partial_stdout = (
@@ -132,7 +131,7 @@ def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monke
             if on_update is not None:
                 on_update(first)
 
-            event_stream_data = load_subagent_event_stream(Workspace.from_path(tmp_path), task.id, "SA-0001")
+            event_stream_data = subagent_artifacts(Workspace.from_path(tmp_path), task.id, "SA-0001").load_event_stream()
             assert event_stream_data["engine"] == "opencode"
             assert event_stream_data["task_id"] == task.id
             assert len(event_stream_data["events"]) == 1
@@ -159,7 +158,7 @@ def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monke
     result = manager.run(task, role="swe", engine_name="opencode", prompt="stream it")
     assert result.ref.status == "completed"
 
-    event_stream_data = load_subagent_event_stream(Workspace.from_path(tmp_path), task.id, "SA-0001")
+    event_stream_data = subagent_artifacts(Workspace.from_path(tmp_path), task.id, "SA-0001").load_event_stream()
     assert len(event_stream_data["events"]) == 2
     assert event_stream_data["event_counts"] == {"message": 1, "usage": 1}
 
@@ -167,7 +166,7 @@ def test_subagent_writes_event_stream_during_live_progress(tmp_path: Path, monke
 def test_subagent_skips_event_stream_when_no_events(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="No event stream test")
+    task = WorkspaceTasks(workspace).create( title="No event stream test")
     manager = _build_manager(Workspace.from_path(tmp_path), execution_root=tmp_path)
 
     class FakeEngine:
@@ -196,12 +195,12 @@ def test_subagent_skips_event_stream_when_no_events(tmp_path: Path, monkeypatch:
     result = manager.run(task, role="swe", engine_name="codex", prompt="no events")
     assert result.ref.status == "completed"
 
-    assert load_subagent_event_stream(Workspace.from_path(tmp_path), task.id, "SA-0001") == {}
+    assert subagent_artifacts(Workspace.from_path(tmp_path), task.id, "SA-0001").load_event_stream() == {}
 
 
 def test_subagent_event_stream_ignores_removed_timeline_payload_key(tmp_path: Path) -> None:
     create_workspace(tmp_path)
-    task = create_task_for_workspace(Workspace.from_path(tmp_path), title="Current event stream key")
+    task = WorkspaceTasks(Workspace.from_path(tmp_path)).create( title="Current event stream key")
     with connect_workspace_db(tmp_path) as connection:
         connection.execute(
             """
@@ -222,4 +221,4 @@ def test_subagent_event_stream_ignores_removed_timeline_payload_key(tmp_path: Pa
             ),
         )
 
-    assert load_subagent_event_stream(Workspace.from_path(tmp_path), task.id, "SA-0001") == {}
+    assert subagent_artifacts(Workspace.from_path(tmp_path), task.id, "SA-0001").load_event_stream() == {}

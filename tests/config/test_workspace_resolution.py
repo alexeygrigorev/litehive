@@ -4,7 +4,7 @@ import pytest
 
 from litehive.config.workspace_files import workspace_dir
 from litehive.config.workspace import create_workspace, normalize_workspace_root, resolve_workspace
-from litehive.state.records import create_task_for_workspace
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 
@@ -60,7 +60,7 @@ def test_resolve_workspace_rejects_env_workspace_when_it_does_not_own_task(
 ) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Env task mismatch probe")
+    task = WorkspaceTasks(workspace).create( title="Env task mismatch probe")
     legacy = tmp_path / ".litehive" / "worktrees" / f"{task.id}-bad" / "repo"
     (legacy / ".litehive" / "tasks").mkdir(parents=True)
 

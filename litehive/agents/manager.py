@@ -17,18 +17,14 @@ from heru.base import CLIExecutionResult, ExternalCLIAdapter
 from heru.types import RuntimeEngineContinuation
 from litehive.agents.callbacks import CallbackWarnings, SubagentRunCallbacks
 from litehive.agents.engine_callables import resolve_cli_execution_callable
-from litehive.agents.execution_trace import render_execution_trace
 from litehive.sandbox.adapter import SandboxedAdapter
 from litehive.sandbox.launcher import SandboxError, SandboxLauncher, SandboxPolicySummary
 from litehive.config.model import LitehiveConfig
 from litehive.agents.engine_manager import EngineManager
 from litehive.domain.reports import REPORT_VERDICT_KINDS, ReportPipelineState, StageReport
 from litehive.domain.task import TaskRecord
+from litehive.observability.events import append_event
 from litehive.observability.engine_monitoring import record_engine_execution, record_engine_observation
-from litehive.agents.artifacts import (
-    write_stream_artifact,
-    write_text_if_changed,
-)
 from heru.engine_detection import (
     filter_supported_kwargs,
     supports_live_execution,
@@ -38,7 +34,7 @@ from heru.engine_detection import (
 from litehive.domain.agent import EngineFailure, ExecutionTrace, SubagentId, SubagentInactivityTimeout, SubagentResult
 from litehive.domain.common import SubagentStatus
 from litehive.domain.runtime import Subagent
-from litehive.agents.report_extraction import MissingVerdictError, stage_report_from_subagent
+from litehive.agents.report_extraction import AgentReportService, MissingVerdictError
 from litehive.agents.session import SubagentSessionManager
 from litehive.agents.session_events import SubagentFinishedEvent, SubagentProgressEvent
 from litehive.agents.session_continuation import subagent_continuation_state
@@ -50,14 +46,11 @@ from litehive.agents.session_snapshots import (
 )
 from litehive.agents.subagent_ids import SubagentIdRepository
 from litehive.domain.roles import agent_stage_for_task
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.tasks.activity_rendering import normalized_files_changed
-from litehive.tasks.paths import task_dir
-from litehive.tasks.report_storage import record_stage_report
-from litehive.tasks.runtime import (
-    mark_subagent_finished_for_workspace,
-    mark_subagent_progress_for_workspace,
-    mark_subagent_started_for_workspace,
-)
+from litehive.tasks.report_storage import TaskReportStore
+from litehive.tasks.runtime import TaskRuntimeTransitions
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 logger = logging.getLogger(__name__)
@@ -118,7 +111,7 @@ def _latest_report_files_changed(
     same task, and an unfiltered lookup would attribute its files to
     the wrong session.
     """
-    latest = workspace.task_activity(task).latest_entry(
+    latest = task_activity_store_for_task(workspace, task).latest_entry(
         stage=pipeline_state,
         source_subagent_id=source_subagent_id,
         verdicts=REPORT_VERDICT_KINDS,
@@ -281,7 +274,7 @@ class SubagentManager:
         """
         subagent_id = self.subagent_ids.reserve_next_id(task)
         folder_name = f"{subagent_id}-{role}"
-        base = task_dir(self.workspace.root.resolve(), task) / "subagents" / folder_name
+        base = self.workspace.task_dir(task) / "subagents" / folder_name
         base.mkdir(parents=True, exist_ok=False)
 
         engine_adapter = self.engines.engine_for(engine_name)
@@ -297,8 +290,8 @@ class SubagentManager:
             sandbox_summary=sandbox_summary.summary,
         )
         task.subagents.append(ref)
-        self.workspace.save_task(task)
-        mark_subagent_started_for_workspace(self.workspace, task, ref)
+        WorkspaceTasks(self.workspace).save(task)
+        TaskRuntimeTransitions(self.workspace, WorkspaceTasks(self.workspace)).mark_subagent_started(task, ref)
         self.sessions.write_session_start(task, base, ref, prompt)
         callbacks = SubagentRunCallbacks(
             task=task,
@@ -350,7 +343,7 @@ class SubagentManager:
             completed_timeout = self.sessions.completed_inactivity_timeout(proc)
             if completed_timeout is not None:
                 raise completed_timeout
-            transcript = render_execution_trace(proc)
+            transcript = self.sessions.render_execution_trace(proc)
             continuation = self.sessions.extract_execution_continuation(ref.engine, proc)
             failure = self._classify_completed_execution(ref, proc, transcript)
         except SubagentInactivityTimeout as exc:
@@ -359,7 +352,7 @@ class SubagentManager:
             if timeout_note not in stderr:
                 stderr = f"{stderr.rstrip()}\n{timeout_note}".strip()
             proc = replace(exc.execution, exit_code=124, stderr=stderr)
-            transcript = render_execution_trace(proc)
+            transcript = self.sessions.render_execution_trace(proc)
             continuation = self.sessions.extract_execution_continuation(ref.engine, proc)
             ref.status = SubagentStatus.FAILED.value
             failure = EngineFailure(
@@ -574,7 +567,7 @@ class SubagentManager:
         continuation = outcome.continuation
         failure = outcome.failure
 
-        self.workspace.save_task(task)
+        WorkspaceTasks(self.workspace).save(task)
         proc_exit_code = proc.exit_code
         proc_pid = proc.pid
         if failure is None or failure.kind != "execution_interrupted":
@@ -587,8 +580,7 @@ class SubagentManager:
         else:
             failure_kind = failure.kind
             failure_reason = failure.reason
-        mark_subagent_finished_for_workspace(
-            self.workspace,
+        TaskRuntimeTransitions(self.workspace, WorkspaceTasks(self.workspace)).mark_subagent_finished(
             task,
             ref,
             transcript,
@@ -692,7 +684,7 @@ class SubagentManager:
                 report.pipeline_state,
                 source_subagent_id=SubagentId(ref.id),
             )
-            record_stage_report(self.workspace, task, report)
+            TaskReportStore(self.workspace).record_stage_report(task, report)
             report_payload = SubagentReportPayload(
                 status=SubagentStatus(ref.status),
                 summary=report.summary,
@@ -721,11 +713,11 @@ class SubagentManager:
                 ),
             ),
         )
-        write_stream_artifact(base, "stdout", execution_stdout, compress=True)
-        write_stream_artifact(base, "stderr", execution_stderr, compress=True)
+        self.sessions.write_terminal_stream_artifacts(base, execution_stdout, execution_stderr)
         self.sessions.append_stream_delta(base, ref, "stdout", execution.stdout)
         self.sessions.append_stream_delta(base, ref, "stderr", execution.stderr)
-        self.workspace.append_event(
+        append_event(
+            self.workspace,
             task,
             SubagentFinishedEvent(
                 subagent_id=ref.id,
@@ -755,7 +747,7 @@ class SubagentManager:
         output after the engine finishes.
         """
         engine = self.engines.engine_for(ref.engine)
-        transcript = render_execution_trace(execution)
+        transcript = self.sessions.render_execution_trace(execution)
         continuation = self.sessions.extract_execution_continuation(ref.engine, execution)
         continuation_state = subagent_continuation_state(continuation)
         if isinstance(engine, ExternalCLIAdapter):
@@ -767,8 +759,7 @@ class SubagentManager:
                 execution=execution,
             )
         self.sessions.record_subagent_pid(task, ref, execution.pid)
-        mark_subagent_progress_for_workspace(
-            self.workspace,
+        TaskRuntimeTransitions(self.workspace, WorkspaceTasks(self.workspace)).mark_subagent_progress(
             task,
             pid=execution.pid,
             transcript=transcript,
@@ -782,12 +773,11 @@ class SubagentManager:
                 continuation=continuation_state,
             ),
         )
-        write_text_if_changed(base / "prompt.txt", prompt)
-        write_text_if_changed(base / "stdout.txt", execution.stdout)
-        write_text_if_changed(base / "stderr.txt", execution.stderr)
+        self.sessions.write_live_progress_artifacts(base, prompt, execution.stdout, execution.stderr)
         self.sessions.append_stream_delta(base, ref, "stdout", execution.stdout)
         self.sessions.append_stream_delta(base, ref, "stderr", execution.stderr)
-        self.workspace.append_event(
+        append_event(
+            self.workspace,
             task,
             SubagentProgressEvent(subagent_id=ref.id, role=ref.role, pid=execution.pid),
         )
@@ -877,7 +867,9 @@ class SubagentManager:
         apart on field naming.
         """
         try:
-            return stage_report_from_subagent(
+            return AgentReportService(
+                self.workspace,
+            ).stage_report_from_subagent(
                 task,
                 stage,
                 SubagentResult(
@@ -886,7 +878,6 @@ class SubagentManager:
                     execution_trace=ExecutionTrace.from_text(transcript),
                     exit_code=execution.exit_code,
                 ),
-                workspace=self.workspace,
             )
         except MissingVerdictError:
             # Agent finished without calling `litehive agent report`. The

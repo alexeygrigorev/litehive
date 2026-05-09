@@ -5,6 +5,7 @@ from typing import Iterable
 from litehive.domain.common import TaskStage, Verdict
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.workspace import Workspace
 
 RETRACTED_FILESYSTEM_MARKER = "[retracted - filesystem check shows no changes landed]"
@@ -20,7 +21,7 @@ def append_activity_entry(workspace: Workspace, task: TaskRecord, entry: TaskAct
     while avoiding hidden root-to-workspace conversion inside the task
     layer.
     """
-    workspace.task_activity(task).append(entry)
+    task_activity_store_for_task(workspace, task).append(entry)
 
 
 def normalized_files_changed(paths: Iterable[str]) -> list[str]:
@@ -96,7 +97,7 @@ def render_task_activity(workspace: Workspace, task: TaskRecord, for_prompt: boo
     operator-facing renders show the full text so a human can audit what was
     retracted and why.
     """
-    activity_entries = workspace.task_activity(task).load()
+    activity_entries = task_activity_store_for_task(workspace, task).load()
     if not activity_entries:
         return ""
     lines = ["Task activity:"]

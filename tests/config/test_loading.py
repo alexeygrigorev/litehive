@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from litehive.config.loading import load_config_for_workspace
+from litehive.config.loading import WorkspaceConfigLoader
 from litehive.config.model import (
     DaemonConfig,
     DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS,
@@ -18,7 +18,7 @@ from litehive.workspace import Workspace
 
 
 def _load_config(root: Path) -> LitehiveConfig:
-    return load_config_for_workspace(Workspace.from_path(root))
+    return WorkspaceConfigLoader(Workspace.from_path(root)).load()
 
 
 def test_configure_persists_gemini_model(tmp_path: Path) -> None:

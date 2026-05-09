@@ -309,6 +309,14 @@ RuntimeStore, HeruEngineAdapter, etc.). When you touch one of
 those classes for any other reason, take the opportunity to
 hoist the wiring out of `__init__` into the container.
 
+Service extraction follows the same small-slice rule as other
+structural refactors. Move behavior behind a focused service in
+tested refactor slices: characterize the old function first,
+introduce the constructor-injected service, route a small caller
+set, and keep the old function only as a temporary wrapper while
+callers migrate. Delete that wrapper once `rg` confirms no
+production callers remain.
+
 ## Package `__init__.py`
 
 - `__init__.py` files hold no behavior — no typer apps, no CLI

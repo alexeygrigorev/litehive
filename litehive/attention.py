@@ -21,7 +21,8 @@ import sqlite3
 
 from litehive.domain.common import TaskStatus, utcnow
 from litehive.domain.task import TaskRecord
-from litehive.state.persist import load_state_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 OPERATOR_NEEDED_POOL_STOP_REASONS = {
@@ -106,6 +107,70 @@ class AttentionRepository:
             connection.commit()
 
 
+class OperatorAttentionProjector:
+    """
+    Workspace-bound projection for operator-needed status.
+
+    Reads authoritative task and pool state, then renders the
+    compact status block consumed by CLI/status surfaces. Binding
+    the workspace once keeps attention policy in this object instead
+    of threading workspace through free helpers.
+    """
+
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
+
+    def collect_state(self) -> OperatorNeededState:
+        """
+        Project the current attention requirement from authoritative SQLite state.
+
+        Reads flagged tasks and the pool stop reason and filters the
+        latter to the operator-needed allow list, so transient stop
+        reasons like ``queue_exhausted`` don't show up as attention
+        items.
+        """
+        state = WorkspaceStateRepository(self.workspace).load(bootstrap=False)
+        flagged_tasks = tuple(
+            sorted(
+                (
+                    task
+                    for task in WorkspaceTasks(self.workspace).list(strict=False)
+                    if task.status == TaskStatus.FLAGGED
+                ),
+                key=lambda task: task.id,
+            )
+        )
+        pool_stop_reason = state.pool_stop_reason
+        if pool_stop_reason not in OPERATOR_NEEDED_POOL_STOP_REASONS:
+            pool_stop_reason = None
+        return OperatorNeededState(flagged_tasks=flagged_tasks, pool_stop_reason=pool_stop_reason)
+
+    def waiting_lines(self, limit: int = 5, reconcile: bool = True) -> list[str]:
+        """
+        Render the "waiting on you" status block.
+
+        Consumed by ``litehive status`` and the operator dashboard.
+        Degrades to a single error line on database failure rather
+        than crashing, because status is the operator's first stop
+        when something is wrong.
+        """
+        del reconcile
+        try:
+            state = self.collect_state()
+        except (OSError, sqlite3.DatabaseError, ValueError) as exc:
+            return [f"operator_needed: unavailable ({type(exc).__name__}: {exc})"]
+
+        lines = [f"operator_needed: {str(state.needed).lower()}"]
+        if state.pool_stop_reason is not None:
+            lines.append(f"operator_needed_pool_stop_reason: {state.pool_stop_reason}")
+        lines.append(f"operator_needed_tasks: {len(state.flagged_tasks)}")
+        for task in state.flagged_tasks[:limit]:
+            reason = task.flag_reason or "unknown"
+            stage = task.pipeline_status or "-"
+            lines.append(f"operator_needed_task: {task.id} stage={stage} reason={reason}")
+        return lines
+
+
 def read_attention_log(workspace: Workspace, limit: int | None = None) -> list[AttentionLogEntry]:
     """
     Return attention-log entries newest-first, optionally limited.
@@ -125,54 +190,3 @@ def read_attention_log(workspace: Workspace, limit: int | None = None) -> list[A
         except sqlite3.OperationalError:
             return []
     return [AttentionLogEntry(created_at=row[0], message=row[1]) for row in rows]
-
-
-def collect_operator_needed_state_for_workspace(workspace: Workspace) -> OperatorNeededState:
-    """
-    Project the current attention requirement from authoritative SQLite state.
-
-    Reads flagged tasks and the pool stop reason and filters the
-    latter to the operator-needed allow list, so transient stop
-    reasons like ``queue_exhausted`` don't show up as attention
-    items. Called by :func:`waiting_for_you_lines` for status
-    rendering and by the daemon's pool gate before deciding
-    whether to iterate.
-    """
-    state = load_state_for_workspace(workspace, bootstrap=False)
-    flagged_tasks = tuple(
-        sorted(
-            (task for task in workspace.list_tasks(strict=False) if task.status == TaskStatus.FLAGGED),
-            key=lambda task: task.id,
-        )
-    )
-    pool_stop_reason = state.pool_stop_reason
-    if pool_stop_reason not in OPERATOR_NEEDED_POOL_STOP_REASONS:
-        pool_stop_reason = None
-    return OperatorNeededState(flagged_tasks=flagged_tasks, pool_stop_reason=pool_stop_reason)
-
-
-def waiting_for_you_lines_for_workspace(workspace: Workspace, limit: int = 5, reconcile: bool = True) -> list[str]:
-    """
-    Render the "waiting on you" status block.
-
-    Consumed by ``litehive status`` and the operator dashboard.
-    Degrades to a single error line on database failure rather
-    than crashing — status is the operator's first stop when
-    something is wrong, and crashing here would obscure whatever
-    they were trying to diagnose.
-    """
-    del reconcile
-    try:
-        state = collect_operator_needed_state_for_workspace(workspace)
-    except (OSError, sqlite3.DatabaseError, ValueError) as exc:
-        return [f"operator_needed: unavailable ({type(exc).__name__}: {exc})"]
-
-    lines = [f"operator_needed: {str(state.needed).lower()}"]
-    if state.pool_stop_reason is not None:
-        lines.append(f"operator_needed_pool_stop_reason: {state.pool_stop_reason}")
-    lines.append(f"operator_needed_tasks: {len(state.flagged_tasks)}")
-    for task in state.flagged_tasks[:limit]:
-        reason = task.flag_reason or "unknown"
-        stage = task.pipeline_status or "-"
-        lines.append(f"operator_needed_task: {task.id} stage={stage} reason={reason}")
-    return lines

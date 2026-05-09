@@ -17,8 +17,8 @@ from typing import Any
 import pytest
 
 from litehive.lifecycle.nodes.agent import AgentVerdict, EngineBlockedError
-from litehive.lifecycle.orchestration import run_task_for_workspace
-from litehive.state.records import create_task_for_workspace, save_task_for_workspace
+from litehive.lifecycle.orchestration import TaskOrchestrator
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 from litehive.config.workspace import create_workspace
@@ -86,8 +86,7 @@ def _stub_factory(behavior):
 
 def test_run_task_happy_path_against_real_workspace(live_workspace: Path) -> None:
     workspace = Workspace.from_path(live_workspace)
-    task = create_task_for_workspace(
-        workspace,
+    task = WorkspaceTasks(workspace).create(
         title="v2 bootstrap smoke",
         goal="make sure v2 end-to-end actually works on a real workspace",
         pipeline_mode="single",
@@ -95,13 +94,10 @@ def test_run_task_happy_path_against_real_workspace(live_workspace: Path) -> Non
     # Seed a non-empty last_report expectation by setting plan so
     # single-mode routes through commit (not the zero-change shortcut).
     task.plan = ["step 1"]
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
     calls: list = []
-    result = run_task_for_workspace(
-        workspace,
-        workspace.load_config(),
-        task,
+    result = TaskOrchestrator(workspace, workspace.load_config()).run(task,
         engine_factory=_stub_factory(_auto_pass_behavior(calls)),
     )
 
@@ -117,18 +113,14 @@ def test_run_task_happy_path_against_real_workspace(live_workspace: Path) -> Non
 def test_run_task_full_mode_walks_every_stage(live_workspace: Path) -> None:
     """Full-mode task: grooming → implementing → testing → accepting → done."""
     workspace = Workspace.from_path(live_workspace)
-    task = create_task_for_workspace(
-        workspace,
+    task = WorkspaceTasks(workspace).create(
         title="full-mode smoke",
         goal="walk every agent stage",
         pipeline_mode="full",
     )
 
     calls: list = []
-    result = run_task_for_workspace(
-        workspace,
-        workspace.load_config(),
-        task,
+    result = TaskOrchestrator(workspace, workspace.load_config()).run(task,
         engine_factory=_stub_factory(_auto_pass_behavior(calls)),
     )
 
@@ -142,17 +134,13 @@ def test_run_task_full_mode_walks_every_stage(live_workspace: Path) -> None:
 
 def test_run_task_all_engines_blocked_lands_in_failed(live_workspace: Path) -> None:
     workspace = Workspace.from_path(live_workspace)
-    task = create_task_for_workspace(
-        workspace,
+    task = WorkspaceTasks(workspace).create(
         title="v2 bootstrap failure",
         goal="make sure a blocked engine cascades to failed",
         pipeline_mode="single",
     )
 
-    result = run_task_for_workspace(
-        workspace,
-        workspace.load_config(),
-        task,
+    result = TaskOrchestrator(workspace, workspace.load_config()).run(task,
         engine_factory=_stub_factory(_always_block_behavior),
     )
 

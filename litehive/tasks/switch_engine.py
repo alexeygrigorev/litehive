@@ -17,16 +17,18 @@ from litehive.domain.common import PipelineStatus, TaskStatus, Verdict
 from litehive.domain.reports import TaskActivityEntry
 from litehive.domain.task import TaskRecord
 from litehive.domain.task_ops import SwitchTaskSummary
-from litehive.state.persist import load_state_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.records import WorkspaceTasks
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.tasks.audit import (
     append_task_audit_entries,
     build_task_audit_entry,
     snapshot_task_audit_state,
 )
 from litehive.tasks.constants import CLOSED_TASK_STATUSES, VALID_TASK_ENGINES
-from litehive.tasks.paths import latest_subagent_base_for_workspace
-from litehive.tasks.queue import move_queued_task_for_workspace
-from litehive.tasks.runtime import mark_engine_switch_for_workspace
+from litehive.tasks.paths import TaskArtifactLocator
+from litehive.tasks.queue import TaskQueueService
+from litehive.tasks.runtime import TaskRuntimeTransitions
 from litehive.workspace import Workspace
 
 
@@ -61,7 +63,7 @@ def _switch_prior_work_paths(workspace: Workspace, task: TaskRecord) -> list[str
     for candidate in (ref.path for ref in reversed(task.subagents)):
         if candidate and candidate not in paths:
             paths.append(candidate)
-    base = latest_subagent_base_for_workspace(workspace, task)
+    base = TaskArtifactLocator(workspace).latest_subagent_base(task)
     if base is not None:
         rel_path = str(base.relative_to(workspace.task_dir(task)))
         if rel_path not in paths:
@@ -97,7 +99,7 @@ def _switch_activity_entry_message(
     return "\n".join(lines)
 
 
-def switch_task_engine_for_workspace(
+def _switch_task_engine_impl(
     workspace: Workspace,
     task_id: str,
     engine: str,
@@ -114,61 +116,57 @@ def switch_task_engine_for_workspace(
     subagent artifacts the new engine should consult. Called by
     ``litehive queue switch``.
     """
-    # inline: tasks.status imports tasks.switch_engine indirectly via
-    # the queue CLI re-export; keeping these imports inside the
-    # function avoids the partial-init cycle that would otherwise
-    # appear when tasks.status is imported during ``litehive
-    # queue switch`` startup.
-    from litehive.tasks.status import resume_task_for_workspace, stop_current_task  # noqa: PLC0415
+    from litehive.tasks.status_resume import _resume_task_transition
+    from litehive.tasks.stop import _stop_current_task
 
     if engine not in VALID_TASK_ENGINES:
         raise ValueError(f"Unsupported engine '{engine}'")
     if not reason.strip():
         raise ValueError("Switch reason must not be empty")
 
-    task = workspace.require_task(task_id)
+    tasks = WorkspaceTasks(workspace)
+    task = tasks.require(task_id)
     before_task = snapshot_task_audit_state(task)
     if task.pipeline_status == PipelineStatus.DONE:
         raise ValueError(f"Task {task.id} is already done")
     if task.pipeline_status == PipelineStatus.BACKLOG:
         raise ValueError(f"Task {task.id} is still in backlog and has no runnable stage to resume")
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     was_active = state.active_task_id == task_id
     runner_pid: int | None = None
     signal_sent = False
     if was_active:
-        stop_summary = stop_current_task(workspace)
+        stop_summary = _stop_current_task(workspace)
         task = stop_summary.task
         runner_pid = stop_summary.runner_pid
         signal_sent = stop_summary.signal_sent
     else:
-        task = workspace.get_task_record(task_id)
+        task = tasks.get_record(task_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
 
     previous_engine = _effective_task_engine(workspace.load_config().default_engine, task)
-    mark_engine_switch_for_workspace(
-        workspace,
+    TaskRuntimeTransitions(workspace, WorkspaceTasks(workspace)).switch_engine(
         task,
         stage=task.pipeline_status,
         from_engine=previous_engine,
         to_engine=engine,
         reason=reason.strip(),
     )
-    task = workspace.require_task(task.id)
+    task = tasks.require(task.id)
 
     if task.status == TaskStatus.QUEUED:
-        move_queued_task_for_workspace(workspace, task.id, 1)
-        task = workspace.require_task(task.id)
+        TaskQueueService(workspace).move(task.id, 1)
+        task = tasks.require(task.id)
     elif task.status in {TaskStatus.INTERRUPTED, TaskStatus.PARKED, TaskStatus.FLAGGED, *CLOSED_TASK_STATUSES}:
-        task = resume_task_for_workspace(workspace, task.id, front=True)
+        task = _resume_task_transition(workspace, task.id, front=True)
     else:
         raise ValueError(f"Task {task.id} is {task.status} and cannot be switched into a queued runnable state")
 
     prior_work_paths = _switch_prior_work_paths(workspace, task)
 
-    workspace.task_activity(task).append(
+    task_activity_store_for_task(workspace, task).append(
         TaskActivityEntry(
             source="operator",
             role="operator",

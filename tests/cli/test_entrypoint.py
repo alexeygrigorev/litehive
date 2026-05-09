@@ -5,8 +5,8 @@ import pytest
 from typer.testing import CliRunner
 
 from litehive.config.workspace import create_workspace
-from litehive.state.persist import load_state_for_workspace
-from litehive.state.records import create_task_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 modern_cli = importlib.import_module("litehive.cli.app")
@@ -166,7 +166,7 @@ def test_run_drain_runs_until_queue_is_empty(tmp_path, monkeypatch) -> None:
     queue = [Task("T-1", "one"), Task("T-2", "two")]
     calls: list[tuple[str, object]] = []
 
-    def fake_dequeue_next_task(workspace):  # type: ignore[no-untyped-def]
+    def fake_pick_next_task(workspace):  # type: ignore[no-untyped-def]
         calls.append(("dequeue", len(queue)))
         return queue.pop(0) if queue else None
 
@@ -174,7 +174,7 @@ def test_run_drain_runs_until_queue_is_empty(tmp_path, monkeypatch) -> None:
         calls.append(("run_task", task.id))
         return Result(task)
 
-    monkeypatch.setattr("litehive.cli.runner.dequeue_next_task", fake_dequeue_next_task)
+    monkeypatch.setattr("litehive.cli.runner.pick_next_task", fake_pick_next_task)
     monkeypatch.setattr("litehive.cli.runner.run_task", fake_run_task)
 
     result = CliRunner().invoke(
@@ -225,7 +225,7 @@ def test_run_drain_stops_after_three_consecutive_task_failures(tmp_path, monkeyp
     }
     calls: list[str] = []
 
-    def fake_dequeue_next_task(workspace):  # type: ignore[no-untyped-def]
+    def fake_pick_next_task(workspace):  # type: ignore[no-untyped-def]
         del workspace
         return queue.pop(0) if queue else None
 
@@ -239,7 +239,7 @@ def test_run_drain_stops_after_three_consecutive_task_failures(tmp_path, monkeyp
             failed_message=None,
         )
 
-    monkeypatch.setattr("litehive.cli.runner.dequeue_next_task", fake_dequeue_next_task)
+    monkeypatch.setattr("litehive.cli.runner.pick_next_task", fake_pick_next_task)
     monkeypatch.setattr("litehive.cli.runner.run_task", fake_run_task)
 
     result = CliRunner().invoke(
@@ -248,7 +248,7 @@ def test_run_drain_stops_after_three_consecutive_task_failures(tmp_path, monkeyp
         catch_exceptions=False,
     )
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     assert result.exit_code == 0, result.output
     assert calls == ["T-1", "T-2", "T-3", "T-4", "T-5", "T-6"]
     assert "critical_status: stopped after 3 consecutive task failures" in result.output
@@ -260,7 +260,7 @@ def test_run_drain_stops_after_three_consecutive_task_failures(tmp_path, monkeyp
 def test_run_dry_run_previews_next_task_without_mutating_queue(tmp_path) -> None:
     create_workspace(tmp_path)
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Preview task")
+    task = WorkspaceTasks(workspace).create( title="Preview task")
 
     result = CliRunner().invoke(
         modern_cli.app,
@@ -268,7 +268,7 @@ def test_run_dry_run_previews_next_task_without_mutating_queue(tmp_path) -> None
         catch_exceptions=False,
     )
 
-    state = load_state_for_workspace(workspace)
+    state = WorkspaceStateRepository(workspace).load()
     assert result.exit_code == 0, result.output
     assert f"task: {task.id} Preview task" in result.output
     assert "engine: codex" in result.output

@@ -3,15 +3,15 @@ from pathlib import Path
 import yaml
 
 from litehive.config.engine_models import resolve_engine_name
-from litehive.config.loading import load_config_for_workspace
+from litehive.config.loading import WorkspaceConfigLoader
 from litehive.config.model import LitehiveConfig
 from litehive.config.workspace import create_workspace
-from litehive.state.records import create_task_for_workspace
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 
 def _load_config(root: Path) -> LitehiveConfig:
-    return load_config_for_workspace(Workspace.from_path(root))
+    return WorkspaceConfigLoader(Workspace.from_path(root)).load()
 
 
 def test_resolve_engine_name_allows_claude_task_when_workspace_defaults_to_claude(
@@ -19,7 +19,7 @@ def test_resolve_engine_name_allows_claude_task_when_workspace_defaults_to_claud
 ) -> None:
     create_workspace(tmp_path, LitehiveConfig(default_engine="claude"))
     workspace = Workspace.from_path(tmp_path)
-    task = create_task_for_workspace(workspace, title="Claude task")
+    task = WorkspaceTasks(workspace).create( title="Claude task")
     config = _load_config(tmp_path)
 
     assert resolve_engine_name(task, config) == "claude"
@@ -30,7 +30,7 @@ def test_resolve_engine_name_allows_workspace_default_claude(tmp_path: Path) -> 
     workspace = Workspace.from_path(tmp_path)
     config = _load_config(tmp_path)
 
-    task = create_task_for_workspace(workspace, title="Claude default task")
+    task = WorkspaceTasks(workspace).create( title="Claude default task")
     assert config.default_engine == "claude"
     assert resolve_engine_name(task, config) == "claude"
 

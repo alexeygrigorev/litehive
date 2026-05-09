@@ -15,12 +15,13 @@ from datetime import datetime, timezone
 from heru import get_engine
 from litehive.config.engine_freezes import (
     active_engine_freezes,
-    clear_persisted_engine_freeze_for_workspace,
     is_engine_frozen,
-    persist_engine_freeze_iso_for_workspace,
 )
-from litehive.config.engine_quota import engine_quota_block
+from litehive.config.engine_quota import EngineQuotaBlock, engine_quota_block
 from litehive.config.model import LitehiveConfig
+from litehive.config.runtime_settings import RuntimeSettingContext, clear_engine_freeze, set_engine_freeze
+from litehive.config.runtime_settings import set_default_engine as set_default_engine_setting
+from litehive.config.runtime_settings import set_engine_preference as set_engine_preference_setting
 from litehive.config.time_parsing import parse_engine_freeze_until as parse_engine_freeze_until
 from litehive.config.time_parsing import parse_utc_datetime
 from litehive.domain.task import TaskRecord
@@ -90,6 +91,185 @@ class EngineSelectionRequest:
     check_quota: bool = True
 
 
+class EngineRoutingPolicy:
+    """
+    Workspace-bound engine routing and engine-control policy.
+    """
+
+    def __init__(self, workspace: Workspace, config: LitehiveConfig) -> None:
+        self.workspace = workspace
+        self.config = config
+
+    def select(self, task: TaskRecord, request: EngineSelectionRequest | None = None) -> EngineSelection:
+        if request is None:
+            selection_request = EngineSelectionRequest()
+        else:
+            selection_request = request
+        order = _candidate_engine_order(task, self.config, selection_request)
+        frozen_engines = active_engine_freezes(self.config)
+        attempts = [engine_name for engine_name in order if engine_name not in frozen_engines]
+        skipped: list[EngineSkip] = []
+        if not attempts and order and all(engine_name in frozen_engines for engine_name in order):
+            return EngineSelection(
+                engine_name=None,
+                model_name=None,
+                engine_attempts=[],
+                skipped=[],
+                blocked_reason="all candidate engines are frozen",
+            )
+        for engine_name in attempts:
+            if selection_request.require_available:
+                try:
+                    if not get_engine(engine_name).is_available():
+                        skipped.append(EngineSkip(engine_name=engine_name, reason=f"{engine_name} unavailable"))
+                        continue
+                except (OSError, RuntimeError, ValueError) as exc:
+                    skipped.append(
+                        EngineSkip(
+                            engine_name=engine_name,
+                            reason=f"{engine_name} availability check failed ({type(exc).__name__}: {exc})",
+                        )
+                    )
+                    continue
+            expired_freeze = (
+                engine_name not in frozen_engines
+                and parse_utc_datetime(self.config.engine_freeze.get(engine_name)) is not None
+            )
+            if selection_request.check_quota:
+                quota_block = self.quota_status(engine_name)
+            else:
+                quota_block = None
+            if quota_block is not None:
+                if quota_block.freeze_until is not None:
+                    _persist_engine_freeze(
+                        self.workspace,
+                        self.config,
+                        engine_name=engine_name,
+                        freeze_until=quota_block.freeze_until,
+                    )
+                elif expired_freeze:
+                    _clear_engine_freeze(self.workspace, self.config, engine_name)
+                skipped.append(EngineSkip(engine_name=engine_name, reason=quota_block.reason))
+                continue
+            if expired_freeze:
+                _clear_engine_freeze(self.workspace, self.config, engine_name)
+            return EngineSelection(
+                engine_name=engine_name,
+                model_name=self.resolve_model_override(
+                    task,
+                    engine_name,
+                    requested_model_name=selection_request.requested_model_name,
+                ),
+                engine_attempts=attempts,
+                skipped=skipped,
+            )
+        if skipped:
+            blocked_reason = skipped[-1].reason
+        else:
+            blocked_reason = "no eligible engine available"
+        return EngineSelection(
+            engine_name=None,
+            model_name=None,
+            engine_attempts=attempts,
+            skipped=skipped,
+            blocked_reason=blocked_reason,
+        )
+
+    def resolve_engine_name(self, task: TaskRecord, engine_override: str | None = None) -> str:
+        initial_engine_names = resolve_engine_plan(task, self.config, engine_override=engine_override)
+        attempt_order = _unfrozen_engine_attempt_order(self.config.engine_attempt_order(initial_engine_names), self.config)
+        if attempt_order:
+            return attempt_order[0]
+        return initial_engine_names[0]
+
+    def resolve_model_override(
+        self,
+        task: TaskRecord,
+        engine_name: str,
+        requested_model_name: str | None = None,
+    ) -> str | None:
+        if not get_engine(engine_name).capabilities.supports_model_override:
+            return None
+        if requested_model_name is not None:
+            return requested_model_name
+        if task.model is not None:
+            return task.model
+        return self.config.model_for_engine(engine_name)
+
+    def resolve_recovery_engine(self, task: TaskRecord) -> tuple[str, str | None]:
+        engine_override = None
+        if self.config.recovery_engine and self.config.recovery_engine != "auto":
+            engine_override = self.config.recovery_engine
+        selection = self.select(
+            task,
+            EngineSelectionRequest(engine_override=engine_override, require_available=True),
+        )
+        if selection.engine_name is None:
+            raise RuntimeError(selection.blocked_reason)
+        return selection.engine_name, selection.model_name
+
+    def freeze(self, engine: str, until: str, reason: str | None = None) -> None:
+        set_engine_freeze(
+            self.workspace,
+            engine_name=engine,
+            freeze_iso=until,
+            actor="operator",
+            source="cli",
+            context=_reason_context(reason),
+        )
+        self.config.engine_freeze[engine] = until
+
+    def unfreeze(self, engine: str, reason: str | None = None) -> bool:
+        changed = clear_engine_freeze(
+            self.workspace,
+            engine_name=engine,
+            actor="operator",
+            source="cli",
+            context=_reason_context(reason),
+        ).changed
+        if changed:
+            self.config.engine_freeze.pop(engine, None)
+        return changed
+
+    def set_default(self, engine: str, reason: str | None = None) -> None:
+        context = _reason_context(reason)
+        set_default_engine_setting(
+            self.workspace,
+            engine_name=engine,
+            actor="operator",
+            source="cli",
+            context=context,
+        )
+        self.config.default_engine = engine
+
+    def set_preference(self, order: list[str], reason: str | None = None) -> None:
+        context = _reason_context(reason)
+        set_engine_preference_setting(
+            self.workspace,
+            engines=order,
+            actor="operator",
+            source="cli",
+            context=context,
+        )
+        self.config.engine_preference = list(order)
+
+    def quota_status(self, engine: str) -> EngineQuotaBlock | None:
+        return engine_quota_block(engine)
+
+    def clear_expired_freezes(self) -> None:
+        for engine_name, freeze_until in list(self.config.engine_freeze.items()):
+            if parse_utc_datetime(freeze_until) is None:
+                continue
+            if is_engine_frozen(self.config, engine_name):
+                continue
+            _clear_engine_freeze(self.workspace, self.config, engine_name)
+
+def _reason_context(reason: str | None) -> RuntimeSettingContext | None:
+    if reason is None:
+        return None
+    return {"reason": reason}
+
+
 def _candidate_engine_order(
     task: TaskRecord,
     config: LitehiveConfig,
@@ -120,7 +300,7 @@ def _persist_engine_freeze(
 
     Skips the write when the new ISO value matches the existing
     one so we don't spam the audit log with no-op rows on every
-    selection pass. Called by :func:`select_engine_for_workspace` when an
+    selection pass. Called by :meth:`EngineRoutingPolicy.select` when an
     engine returns ``limit_reached`` with a reset time; mirroring
     on ``LitehiveConfig`` keeps subsequent selection within the
     same call seeing the freeze without re-reading the database.
@@ -128,12 +308,13 @@ def _persist_engine_freeze(
     freeze_iso = freeze_until.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     if config.engine_freeze.get(engine_name) == freeze_iso:
         return
-    persist_engine_freeze_iso_for_workspace(
+    set_engine_freeze(
         workspace,
         engine_name=engine_name,
         freeze_iso=freeze_iso,
         actor="system",
         source="quota",
+        context=None,
     )
     config.engine_freeze[engine_name] = freeze_iso
 
@@ -142,107 +323,15 @@ def _clear_engine_freeze(workspace: Workspace, config: LitehiveConfig, engine_na
     """
     Drop a freeze entry from both the audited store and the live config.
 
-    Called by :func:`select_engine_for_workspace` when a previously-frozen
+    Called by :meth:`EngineRoutingPolicy.select` when a previously-frozen
     engine's window has lapsed and the quota check now passes;
     the freeze map self-cleans during normal selection so we
     avoid maintaining a separate freeze sweeper. The audited
     delete keeps the operator able to reconstruct freeze
     history.
     """
-    clear_persisted_engine_freeze_for_workspace(workspace, engine_name=engine_name, actor="system", source="quota")
+    clear_engine_freeze(workspace, engine_name=engine_name, actor="system", source="quota", context=None)
     config.engine_freeze.pop(engine_name, None)
-
-
-def select_engine_for_workspace(
-    workspace: Workspace,
-    task: TaskRecord,
-    config: LitehiveConfig,
-    request: EngineSelectionRequest | None = None,
-) -> EngineSelection:
-    """
-    Pick the engine and model the next stage will use from an injected workspace.
-
-    Walks the task's engine plan plus the workspace preference
-    list, skipping frozen, unavailable, and quota-exhausted
-    engines, and returns the first usable ``(engine, model)``
-    along with attempt/skip diagnostics so the operator can see
-    *why* an engine was bypassed. Called by the runtime when a
-    task transitions into an agent-driven stage and by the
-    recovery agent when picking a fallback engine.
-    """
-    if request is None:
-        selection_request = EngineSelectionRequest()
-    else:
-        selection_request = request
-    order = _candidate_engine_order(task, config, selection_request)
-    frozen_engines = active_engine_freezes(config)
-    attempts = [engine_name for engine_name in order if engine_name not in frozen_engines]
-    skipped: list[EngineSkip] = []
-    if not attempts and order and all(engine_name in frozen_engines for engine_name in order):
-        return EngineSelection(
-            engine_name=None,
-            model_name=None,
-            engine_attempts=[],
-            skipped=[],
-            blocked_reason="all candidate engines are frozen",
-        )
-    for engine_name in attempts:
-        if selection_request.require_available:
-            try:
-                if not get_engine(engine_name).is_available():
-                    skipped.append(EngineSkip(engine_name=engine_name, reason=f"{engine_name} unavailable"))
-                    continue
-            except (OSError, RuntimeError, ValueError) as exc:
-                skipped.append(
-                    EngineSkip(
-                        engine_name=engine_name,
-                        reason=f"{engine_name} availability check failed ({type(exc).__name__}: {exc})",
-                    )
-                )
-                continue
-        expired_freeze = (
-            engine_name not in frozen_engines and parse_utc_datetime(config.engine_freeze.get(engine_name)) is not None
-        )
-        if selection_request.check_quota:
-            quota_block = engine_quota_block(engine_name)
-        else:
-            quota_block = None
-        if quota_block is not None:
-            if quota_block.freeze_until is not None:
-                _persist_engine_freeze(
-                    workspace,
-                    config,
-                    engine_name=engine_name,
-                    freeze_until=quota_block.freeze_until,
-                )
-            elif expired_freeze:
-                _clear_engine_freeze(workspace, config, engine_name=engine_name)
-            skipped.append(EngineSkip(engine_name=engine_name, reason=quota_block.reason))
-            continue
-        if expired_freeze:
-            _clear_engine_freeze(workspace, config, engine_name=engine_name)
-        return EngineSelection(
-            engine_name=engine_name,
-            model_name=resolve_model(
-                task,
-                config,
-                engine_name=engine_name,
-                requested_model_name=selection_request.requested_model_name,
-            ),
-            engine_attempts=attempts,
-            skipped=skipped,
-        )
-    if skipped:
-        blocked_reason = skipped[-1].reason
-    else:
-        blocked_reason = "no eligible engine available"
-    return EngineSelection(
-        engine_name=None,
-        model_name=None,
-        engine_attempts=attempts,
-        skipped=skipped,
-        blocked_reason=blocked_reason,
-    )
 
 
 def resolve_model(

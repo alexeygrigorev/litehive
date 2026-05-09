@@ -140,9 +140,9 @@ class StageReport(BaseModel):
     Distinct from ``TaskActivityEntry``: activity is the append-only
     human history, while ``StageReport`` is the routing input
     ``PipelineRunner`` reads to decide pass/reject/blocked. Built by
-    ``stage_report_from_subagent`` from ``litehive agent report`` CLI
-    submissions; the legacy ``STAGE_RESULT: <yaml>`` parsing path is
-    gone.
+    ``AgentReportService.stage_report_from_subagent`` from
+    ``litehive agent report`` CLI submissions; the legacy
+    ``STAGE_RESULT: <yaml>`` parsing path is gone.
 
     ``failure_diagnostics`` is report-local evidence and may seed a
     later ``FailureFingerprint`` — but the report does not own

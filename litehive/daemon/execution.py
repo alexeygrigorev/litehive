@@ -12,7 +12,7 @@ itself (``run_daemon_loop``), the detach-and-register flow
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import logging
 import os
@@ -35,28 +35,21 @@ from litehive.domain.task import WorkspaceState
 from litehive.db.schema import apply_pending_migrations
 from litehive.git.ops import check_origin_divergence
 from litehive.observability.status import (
-    collect_task_pipeline_status_for_workspace,
     render_runner_status_line,
     render_task_pipeline_status_lines,
+    TaskPipelineStatusCollector,
 )
-from litehive.observability.venv_health import (
-    daemon_broken_venv_message,
-    probe_broken_venv_executables_for_workspace,
-)
-from litehive.state.backup import create_scheduled_workspace_backup_for_workspace
-from litehive.state.persist import load_state_for_workspace, set_pool_stop_reason_for_workspace
-from litehive.state.locking import runner_status_for_workspace
+from litehive.observability.venv_health import WorkspaceVenvHealth
+from litehive.state.backup import WorkspaceBackupService
+from litehive.state.persist import WorkspaceStateRepository
+from litehive.state.locking import WorkspaceRunnerLock
 from litehive.workspace import Workspace
 
-from .logs import DaemonLogs, latest_matching, latest_run_all_log_dir_for_workspace
+from .logs import DaemonLogs, latest_matching
 
 from .registry import (
     DaemonRegistryEntry,
-    daemon_metadata_for_workspace,
-    get_workspace_daemon_for_workspace,
-    register_daemon_for_workspace,
-    touch_daemon_for_workspace,
-    unregister_daemon_for_workspace,
+    DaemonRegistry,
 )
 from .termination import force_kill_recorded_daemon, terminate_child_process, terminate_recorded_daemon
 
@@ -75,16 +68,16 @@ def register_daemon(workspace: Workspace, pid: int, log_dir: Path) -> None:
     Execution-module seam for daemon registration.
 
     Tests patch this name directly; production delegates to the
-    workspace-native registry helper.
+    workspace-native registry.
     """
-    register_daemon_for_workspace(workspace, pid=pid, log_dir=log_dir)
+    DaemonRegistry(workspace).register(pid=pid, log_dir=log_dir)
 
 
 def unregister_daemon(workspace: Workspace, pid: int | None = None) -> None:
     """
     Execution-module seam for daemon unregistration.
     """
-    unregister_daemon_for_workspace(workspace, pid=pid)
+    DaemonRegistry(workspace).unregister(pid=pid)
 _LIVE_RUNNER_STATUSES = frozenset({RunnerExecutionStatus.RUNNING, RunnerExecutionStatus.LATE})
 
 
@@ -93,8 +86,8 @@ class DaemonStatusSnapshot:
     """
     Status state plus rendered daemon-loop text for one observation.
 
-    Built by ``_daemon_status_snapshot_for_workspace`` before and
-    after each child ``litehive run`` invocation. Keeping the
+    Built by ``DaemonStatusSnapshotCollector`` before and after each
+    child ``litehive run`` invocation. Keeping the
     `WorkspaceState` object intact avoids converting domain state into
     a loose dictionary just so the daemon can inspect queue and stop
     fields.
@@ -171,7 +164,7 @@ def _halt_for_origin_divergence(
     divergence_reason = check_origin_divergence(workspace.root)
     if divergence_reason is None:
         return None
-    set_pool_stop_reason_for_workspace(workspace, "diverged_from_origin")
+    WorkspaceStateRepository(workspace).set_pool_stop_reason("diverged_from_origin")
     attention_repository.append(divergence_reason)
     return divergence_reason
 
@@ -194,7 +187,8 @@ def sleep_with_stop(seconds: float, stop_requested_fn: Callable[[], bool]) -> No
         time.sleep(min(remaining, 1.0))
 
 
-def _daemon_status_snapshot_for_workspace(workspace: Workspace) -> DaemonStatusSnapshot:
+@dataclass(frozen=True, slots=True)
+class DaemonStatusSnapshotCollector:
     """
     Capture pool state plus a renderable status block in one read-only pass.
 
@@ -204,9 +198,12 @@ def _daemon_status_snapshot_for_workspace(workspace: Workspace) -> DaemonStatusS
     keeps the snapshot from racing the runner's own writes — the
     daemon must not mutate state here, only observe it.
     """
-    status = collect_task_pipeline_status_for_workspace(workspace, read_only=True)
-    lines = render_task_pipeline_status_lines(status, workspace=workspace.root, mode="summary")
-    return DaemonStatusSnapshot(state=status.state, text="\n".join(lines) + "\n")
+    workspace: Workspace
+
+    def snapshot(self) -> DaemonStatusSnapshot:
+        status = TaskPipelineStatusCollector(self.workspace).collect(read_only=True)
+        lines = render_task_pipeline_status_lines(status, workspace=self.workspace.root, mode="summary")
+        return DaemonStatusSnapshot(state=status.state, text="\n".join(lines) + "\n")
 
 
 def _heartbeat_age_seconds(heartbeat_at: object) -> float | None:
@@ -310,24 +307,6 @@ def _snapshot_exit_code(snapshot: DaemonStatusSnapshot, output: DaemonOutput) ->
     return None
 
 
-def create_workspace_venvs_ready_for_workspace(
-    workspace: Workspace,
-) -> None:
-    """
-    Refuse to start the daemon when the workspace has a broken Python venv.
-
-    Called by `start_background_daemon` before forking the worker.
-    A broken venv would surface inside subagents as cryptic
-    ``ModuleNotFoundError``s on every task, with the operator chasing
-    a different agent each time. Failing here produces exactly one
-    clear error per broken workspace and stops a wave of confusing
-    task failures from hitting the queue.
-    """
-    findings = probe_broken_venv_executables_for_workspace(workspace)
-    if findings:
-        raise RuntimeError(daemon_broken_venv_message(findings))
-
-
 def maybe_run_workspace_backup(
     workspace: Workspace,
     *,
@@ -345,7 +324,7 @@ def maybe_run_workspace_backup(
     mutation. Returns the created backup timestamp so the loop can
     decide whether and where to render it.
     """
-    backup = create_scheduled_workspace_backup_for_workspace(workspace, now=now)
+    backup = WorkspaceBackupService(workspace).create_scheduled(now=now)
     if backup is None:
         return None
     return backup.timestamp
@@ -390,14 +369,14 @@ def run_logged_subprocess(
         return return_code
 
 
-@dataclass(frozen=True, slots=True)
-class DaemonExecutor:
+@dataclass(slots=True)
+class WorkspaceDaemon:
     """
     Executes one daemon loop from injected workspace dependencies.
 
     The dataclass constructor stores collaborators only. Runtime state
     such as signal handlers, heartbeat events, and the current child
-    process is created inside ``run`` for a single invocation.
+    process is reset inside ``run`` for a single invocation.
     """
 
     workspace: Workspace
@@ -407,14 +386,125 @@ class DaemonExecutor:
     command_prefix: tuple[str, ...]
     logs: DaemonLogs
     session_dir: Path | None
+    status_snapshot_collector: DaemonStatusSnapshotCollector | None = None
+    _stop_requested: bool = field(default=False, init=False)
+    _current_child: dict[str, subprocess.Popen[str] | None] = field(
+        default_factory=lambda: {"process": None},
+        init=False,
+    )
+
+    def should_continue(self, stop_reason: PoolStopReason | None) -> bool:
+        """
+        Return whether the daemon should keep looping for a pool stop reason.
+        """
+        return _daemon_should_continue_for_stop_reason(stop_reason)
+
+    def sleep_with_stop(self, seconds: float) -> None:
+        """
+        Sleep while still honoring a pending daemon stop request.
+        """
+        sleep_with_stop(seconds, stop_requested_fn=lambda: self._stop_requested)
+
+    def maybe_backup(self) -> str | None:
+        """
+        Trigger a scheduled workspace backup when the configured cadence is due.
+        """
+        return maybe_run_workspace_backup(self.workspace)
+
+    def stop(self) -> None:
+        """
+        Request daemon shutdown and terminate any live child runner.
+        """
+        self._stop_requested = True
+        child = self._current_child["process"]
+        if child is not None:
+            terminate_child_process(child)
+
+    def run_cycle(self, iteration: int, log_root: Path) -> int | None:
+        """
+        Execute one daemon iteration.
+
+        Returns an exit code when the daemon should stop, or ``None``
+        when the outer loop should continue.
+        """
+        workspace_root = self.workspace.root
+        prefix = f"{iteration:04d}"
+        run_file = log_root / f"{prefix}-run.log"
+
+        self.output.line()
+        self.output.line(f"== iteration {iteration} ==")
+
+        live_runner = WorkspaceRunnerLock(self.workspace).status()
+        if _runner_is_live(live_runner):
+            self.output.runner_wait(live_runner)
+            self.sleep_with_stop(1.0)
+            return None
+
+        divergence_reason = _halt_for_origin_divergence(self.workspace, self.attention_repository)
+        if divergence_reason is not None:
+            self.output.line(
+                "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. "
+                "Halting pool: diverged_from_origin"
+            )
+            self.output.line(divergence_reason)
+            return 0
+
+        try:
+            backup_timestamp = self.maybe_backup()
+        except (OSError, RuntimeError) as exc:
+            logger.exception("scheduled workspace backup failed")
+            self.attention_repository.append(f"scheduled backup failed: {exc}")
+            self.output.line(f"backup_failed: {exc}")
+        else:
+            if backup_timestamp is not None:
+                self.output.line(f"backup_created: {backup_timestamp}")
+
+        try:
+            pre_snapshot = self._status_snapshot_collector().snapshot()
+        except (OSError, RuntimeError, ValueError) as exc:
+            logger.exception("status snapshot raised")
+            self.output.line(f"status raised: {exc}")
+            return 1
+        snapshot_exit_code = _snapshot_exit_code(pre_snapshot, self.output)
+        if snapshot_exit_code is not None:
+            return snapshot_exit_code
+
+        try:
+            run_rc = run_logged_subprocess(
+                [*self.command_prefix, "run", "--workspace", str(workspace_root)],
+                cwd=workspace_root,
+                log_path=run_file,
+                output=self.output,
+                current_child=self._current_child,
+            )
+        except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
+            logger.exception("run subprocess raised")
+            self.output.line(f"run raised: {exc}")
+            return 1
+        if run_rc != 0:
+            self.output.line(f"litehive run failed (rc={run_rc}); see {run_file}")
+            return run_rc
+
+        try:
+            post_snapshot = self._status_snapshot_collector().snapshot()
+        except (OSError, RuntimeError, ValueError) as exc:
+            logger.exception("post-status snapshot raised")
+            self.output.line(f"post-status raised: {exc}")
+            return 1
+        return _snapshot_exit_code(post_snapshot, self.output)
+
+    def _status_snapshot_collector(self) -> DaemonStatusSnapshotCollector:
+        if self.status_snapshot_collector is not None:
+            return self.status_snapshot_collector
+        return DaemonStatusSnapshotCollector(self.workspace)
 
     def run(self) -> int:
         workspace_root = self.workspace.root
         apply_pending_migrations(workspace_root)
         log_root = self.logs.prepare_session(self.session_dir)
         register_daemon(self.workspace, pid=os.getpid(), log_dir=log_root)
-        stop_requested = False
-        current_child: dict[str, subprocess.Popen[str] | None] = {"process": None}
+        self._stop_requested = False
+        self._current_child = {"process": None}
         heartbeat_stop = threading.Event()
         heartbeat_thread = threading.Thread(
             target=_daemon_heartbeat_loop,
@@ -433,19 +523,12 @@ class DaemonExecutor:
             """
             SIGTERM/SIGINT handler for the daemon loop.
 
-            Flips the local ``stop_requested`` flag so the loop exits
-            after the current iteration, and forwards the signal to the
-            live ``litehive run`` child via ``terminate_child_process``
-            so a Ctrl-C from the operator reaches the whole subtree
-            instead of leaving a zombie subagent attached to a dead
-            daemon.
+            Requests shutdown and forwards the signal to the live
+            ``litehive run`` child via ``terminate_child_process`` so
+            a Ctrl-C from the operator reaches the whole subtree.
             """
-            nonlocal stop_requested
             del signum
-            stop_requested = True
-            child = current_child["process"]
-            if child is not None:
-                terminate_child_process(child)
+            self.stop()
 
         previous_term = signal.signal(signal.SIGTERM, _handle_signal)
         previous_int = signal.signal(signal.SIGINT, _handle_signal)
@@ -454,84 +537,20 @@ class DaemonExecutor:
             self.output.line(f"logs: {log_root}")
             iteration = 0
             while True:
-                if stop_requested:
+                if self._stop_requested:
                     self.output.line("Runner stop requested. Stopping.")
                     return 0
 
                 iteration += 1
-                prefix = f"{iteration:04d}"
-                run_file = log_root / f"{prefix}-run.log"
-
-                self.output.line()
-                self.output.line(f"== iteration {iteration} ==")
-
-                live_runner = runner_status_for_workspace(self.workspace)
-                if _runner_is_live(live_runner):
-                    self.output.runner_wait(live_runner)
-                    sleep_with_stop(1.0, stop_requested_fn=lambda: stop_requested)
-                    continue
-
-                divergence_reason = _halt_for_origin_divergence(self.workspace, self.attention_repository)
-                if divergence_reason is not None:
-                    self.output.line(
-                        "!!! ATTENTION REQUIRED !!! Local main has diverged from origin/main. "
-                        "Halting pool: diverged_from_origin"
-                    )
-                    self.output.line(divergence_reason)
-                    return 0
-
-                try:
-                    backup_timestamp = maybe_run_workspace_backup(self.workspace)
-                except (OSError, RuntimeError) as exc:
-                    logger.exception("scheduled workspace backup failed")
-                    self.attention_repository.append(f"scheduled backup failed: {exc}")
-                    self.output.line(f"backup_failed: {exc}")
-                else:
-                    if backup_timestamp is not None:
-                        self.output.line(f"backup_created: {backup_timestamp}")
-
-                try:
-                    pre_snapshot = _daemon_status_snapshot_for_workspace(self.workspace)
-                except (OSError, RuntimeError, ValueError) as exc:
-                    logger.exception("status snapshot raised")
-                    self.output.line(f"status raised: {exc}")
-                    return 1
-                snapshot_exit_code = _snapshot_exit_code(pre_snapshot, self.output)
-                if snapshot_exit_code is not None:
-                    return snapshot_exit_code
-
-                try:
-                    run_rc = run_logged_subprocess(
-                        [*self.command_prefix, "run", "--workspace", str(workspace_root)],
-                        cwd=workspace_root,
-                        log_path=run_file,
-                        output=self.output,
-                        current_child=current_child,
-                    )
-                except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
-                    logger.exception("run subprocess raised")
-                    self.output.line(f"run raised: {exc}")
-                    return 1
-                if run_rc != 0:
-                    self.output.line(f"litehive run failed (rc={run_rc}); see {run_file}")
-                    return run_rc
-
-                try:
-                    post_snapshot = _daemon_status_snapshot_for_workspace(self.workspace)
-                except (OSError, RuntimeError, ValueError) as exc:
-                    logger.exception("post-status snapshot raised")
-                    self.output.line(f"post-status raised: {exc}")
-                    return 1
-                snapshot_exit_code = _snapshot_exit_code(post_snapshot, self.output)
-                if snapshot_exit_code is not None:
-                    return snapshot_exit_code
+                cycle_exit_code = self.run_cycle(iteration, log_root)
+                if cycle_exit_code is not None:
+                    return cycle_exit_code
         finally:
             signal.signal(signal.SIGTERM, previous_term)
             signal.signal(signal.SIGINT, previous_int)
             heartbeat_stop.set()
             heartbeat_thread.join(timeout=max(self.daemon_config.heartbeat_interval_seconds, 0.1) * 2)
             unregister_daemon(self.workspace, pid=os.getpid())
-
 
 def run_daemon_loop(
     workspace: Path,
@@ -552,7 +571,7 @@ def run_daemon_loop(
     workspace = workspace.resolve()
     create_workspace(workspace)
     daemon_container = build_daemon_container(workspace)
-    executor = DaemonExecutor(
+    executor = WorkspaceDaemon(
         workspace=daemon_container.workspace,
         daemon_config=daemon_container.config.daemon,
         attention_repository=daemon_container.attention_repository,
@@ -581,7 +600,7 @@ def _daemon_heartbeat_loop(
     shutdown.
     """
     while not stop_event.wait(interval_seconds):
-        touch_daemon_for_workspace(workspace, pid=pid)
+        DaemonRegistry(workspace).touch(pid=pid)
 
 
 def start_background_daemon(workspace: Path) -> int:
@@ -599,15 +618,16 @@ def start_background_daemon(workspace: Path) -> int:
     workspace = workspace.resolve()
     workspace_obj = build_workspace(workspace)
     daemon_config = workspace_obj.load_config().daemon
-    existing = daemon_metadata_for_workspace(workspace_obj)
+    daemon_registry = DaemonRegistry(workspace_obj)
+    existing = daemon_registry.metadata()
     if existing is not None and existing.status == "running":
         if existing.pid is not None and _daemon_healthcheck_failed(existing, daemon_config):
             force_kill_recorded_daemon(workspace_obj, pid=existing.pid, config=daemon_config)
         else:
             raise RuntimeError(f"daemon already running for {workspace}: pid={existing.pid}")
     if existing is not None and existing.status == "stale":
-        unregister_daemon_for_workspace(workspace_obj)
-    create_workspace_venvs_ready_for_workspace(workspace_obj)
+        daemon_registry.unregister()
+    WorkspaceVenvHealth(workspace_obj).ensure_ready()
     project_root = Path(__file__).resolve().parents[2]
     child_env = os.environ.copy()
     for key in ("LITEHIVE_AGENT_ROLE", "LITEHIVE_STAGE", "LITEHIVE_TASK_ID"):
@@ -634,7 +654,7 @@ def start_background_daemon(workspace: Path) -> int:
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise RuntimeError("daemon failed to start")
-        entry = get_workspace_daemon_for_workspace(workspace_obj)
+        entry = daemon_registry.live_entry()
         if entry is not None and entry.pid == process.pid:
             return process.pid
         time.sleep(daemon_config.startup_poll_interval_seconds)
@@ -655,14 +675,15 @@ def stop_workspace_daemon(workspace: Path) -> DaemonRegistryEntry | None:
     workspace = workspace.resolve()
     workspace_obj = build_workspace(workspace)
     daemon_config = workspace_obj.load_config().daemon
-    entry = daemon_metadata_for_workspace(workspace_obj)
+    daemon_registry = DaemonRegistry(workspace_obj)
+    entry = daemon_registry.metadata()
     if entry is None:
         return None
     if entry.status != "running":
-        unregister_daemon_for_workspace(workspace_obj)
+        daemon_registry.unregister()
         return None
     if entry.pid is None:
-        unregister_daemon_for_workspace(workspace_obj)
+        daemon_registry.unregister()
         return None
     terminate_recorded_daemon(workspace_obj, pid=entry.pid, config=daemon_config)
     return entry
@@ -673,13 +694,14 @@ def daemon_status_lines(workspace: Path) -> list[str]:
     Render daemon status lines from a root path.
 
     The CLI status command still passes a path at this boundary; this
-    wrapper builds the `Workspace` once and delegates to
-    `daemon_status_lines_for_workspace`.
+    wrapper builds the `Workspace` once and delegates to the workspace-bound
+    presenter.
     """
-    return daemon_status_lines_for_workspace(build_workspace(workspace))
+    return DaemonStatusPresenter(build_workspace(workspace)).status_lines()
 
 
-def daemon_status_lines_for_workspace(workspace: Workspace) -> list[str]:
+@dataclass(frozen=True, slots=True)
+class DaemonStatusPresenter:
     """
     Render the daemon-side block of ``litehive status`` / ``litehive daemon status``.
 
@@ -689,28 +711,31 @@ def daemon_status_lines_for_workspace(workspace: Workspace) -> list[str]:
     the workspace tree. Failing to surface the latest log dir here
     is the difference between "I can debug" and "I have to grep".
     """
-    entry = daemon_metadata_for_workspace(workspace)
-    lines = [f"workspace: {workspace.root}"]
-    if entry is None or entry.status != "running":
-        lines.append("daemon_status: stopped")
-    else:
-        lines.append("daemon_status: running")
-        lines.append(f"pid: {entry.pid}")
-        lines.append(f"started_at: {entry.started_at}")
-        lines.append(f"log_dir: {entry.log_dir}")
-    runner = runner_status_for_workspace(workspace)
-    state = load_state_for_workspace(workspace)
-    lines.append(render_runner_status_line(runner, state))
-    latest_dir = latest_run_all_log_dir_for_workspace(workspace)
-    if latest_dir is not None:
-        latest_dir_label = latest_dir
-    else:
-        latest_dir_label = "-"
-    lines.append(f"latest_run_all_dir: {latest_dir_label}")
-    latest_run = latest_matching(latest_dir, "*-run.log")
-    if latest_run is not None:
-        latest_run_label = latest_run
-    else:
-        latest_run_label = "-"
-    lines.append(f"latest_run_log: {latest_run_label}")
-    return lines
+    workspace: Workspace
+
+    def status_lines(self) -> list[str]:
+        entry = DaemonRegistry(self.workspace).metadata()
+        lines = [f"workspace: {self.workspace.root}"]
+        if entry is None or entry.status != "running":
+            lines.append("daemon_status: stopped")
+        else:
+            lines.append("daemon_status: running")
+            lines.append(f"pid: {entry.pid}")
+            lines.append(f"started_at: {entry.started_at}")
+            lines.append(f"log_dir: {entry.log_dir}")
+        runner = WorkspaceRunnerLock(self.workspace).status()
+        state = WorkspaceStateRepository(self.workspace).load()
+        lines.append(render_runner_status_line(runner, state))
+        latest_dir = DaemonLogs(self.workspace).latest_run_all_dir()
+        if latest_dir is not None:
+            latest_dir_label = latest_dir
+        else:
+            latest_dir_label = "-"
+        lines.append(f"latest_run_all_dir: {latest_dir_label}")
+        latest_run = latest_matching(latest_dir, "*-run.log")
+        if latest_run is not None:
+            latest_run_label = latest_run
+        else:
+            latest_run_label = "-"
+        lines.append(f"latest_run_log: {latest_run_label}")
+        return lines

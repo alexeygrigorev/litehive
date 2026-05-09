@@ -7,18 +7,22 @@ from this module. It also covers the post-run cleanup paths
 SHA reconciliation).
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 from litehive.domain.common import PipelineState, TaskExecutionStatus, TaskStatus
 from litehive.domain.task import TaskRecord
 from litehive.git.ops import current_head
-from litehive.state.persist import load_state_for_workspace, save_state_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
 from litehive.state.records import (
+    clear_task_worktree_path,
     get_task_worktree_path,
     set_task_commit_sha,
+    WorkspaceTasks,
 )
-from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace
-from litehive.worktree.service import WorktreeService
+from litehive.worktree.cleanup import WorktreeCleanupService
+from litehive.worktree.inspection import WorktreeInspector
+from litehive.worktree.paths import WorktreePaths
 from litehive.workspace import Workspace
 
 from .nodes.system import CommitNode, GitCommitNode, GitWorktreeSyncNode
@@ -26,160 +30,175 @@ from .persistence import SqlitePersistence, TaskNotFound, TaskState
 from .runtime_sync import _MANUAL_REVIEW_FLAG_REASONS
 
 
-def _resolve_worktree_for_workspace(workspace: Workspace, state: TaskState) -> Path:
-    """Look up the task worktree path for a task, falling back to the workspace root when no worktree was recorded."""
-    _, worktree_path = _task_recorded_worktree_for_workspace(workspace, state.task_id)
-    return worktree_path or workspace.root
-
-
-def _resolve_hook_execution_root_for_workspace(workspace: Workspace, state: TaskState) -> Path:
+class PipelineWorktreeSetup:
     """
-    Pick the cwd for runner hooks based on stage.
+    Workspace-bound owner for lifecycle worktree dependency setup.
 
-    Pre-commit hooks run in the task worktree so they see the agent's
-    edits; the ``after_commit`` hook runs on main because by that
-    point the changes have already landed there and we want to verify
-    the integrated state.
+    The runner needs the same task/worktree lookup rules for hooks, commit,
+    worktree sync, recovery probes, crash cleanup, and terminal reconciliation.
+    Binding the workspace once keeps those rules in one object instead of
+    scattering small workspace-first helpers through orchestration.
     """
-    if state.stage == PipelineState.AFTER_COMMIT:
-        return workspace.root
-    return _resolve_worktree_for_workspace(workspace, state)
 
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
+        self.tasks = WorkspaceTasks(workspace)
+        self.paths = WorktreePaths(workspace)
 
-def _task_recorded_worktree_for_workspace(workspace: Workspace, task_id: str) -> tuple[TaskRecord | None, Path | None]:
-    """
-    Look up the task and its on-disk worktree path together.
+    def resolve_worktree(self, state: TaskState) -> Path:
+        """Look up the task worktree path for a task, falling back to the workspace root when no worktree was recorded."""
+        _, worktree_path = self.task_recorded_worktree(state.task_id)
+        return worktree_path or self.workspace.root
 
-    Commit and sync nodes need both the TaskRecord (for commit message
-    rendering) and the worktree path (for the actual git work);
-    returning them in one call means a single db hit per resolution
-    instead of two.
-    """
-    task = workspace.get_task(task_id)
-    if task is None:
-        return None, None
-    recorded = get_task_worktree_path(task)
-    if not recorded:
-        return task, None
-    return task, resolve_recorded_worktree_path_for_workspace(workspace, recorded)
+    def resolve_hook_execution_root(self, state: TaskState) -> Path:
+        """
+        Pick the cwd for runner hooks based on stage.
 
+        Pre-commit hooks run in the task worktree so they see the agent's
+        edits; the ``after_commit`` hook runs on main because by that point the
+        changes have already landed there and we want to verify the integrated
+        state.
+        """
+        if state.stage == PipelineState.AFTER_COMMIT:
+            return self.workspace.root
+        return self.resolve_worktree(state)
 
-def build_commit_node_for_workspace(workspace: Workspace) -> CommitNode:
-    """Return the production ``GitCommitNode`` bound to an injected workspace."""
-    return GitCommitNode(
-        workspace,
-        worktree_resolver=lambda state: _resolve_worktree_for_workspace(workspace, state),
-        task_resolver=lambda state: _task_recorded_worktree_for_workspace(workspace, state.task_id)[0],
-    )
+    def task_recorded_worktree(self, task_id: str) -> tuple[TaskRecord | None, Path | None]:
+        """
+        Look up the task and its on-disk worktree path together.
 
+        Commit and sync nodes need both the TaskRecord (for commit message
+        rendering) and the worktree path (for the actual git work); returning
+        them in one call means a single db hit per resolution instead of two.
+        """
+        task = self.tasks.get(task_id)
+        if task is None:
+            return None, None
+        recorded = get_task_worktree_path(task)
+        if not recorded:
+            return task, None
+        return task, self.paths.resolve_recorded_worktree_path(recorded)
 
-def _build_worktree_sync_node(workspace: Workspace) -> GitWorktreeSyncNode:
-    """Return the production ``GitWorktreeSyncNode`` bound to this workspace; mirrors ``build_commit_node`` for the worktree-sync stage."""
-    return GitWorktreeSyncNode(
-        workspace=workspace,
-        worktree_resolver=lambda state: _resolve_worktree_for_workspace(workspace, state),
-    )
+    def build_commit_node(self) -> CommitNode:
+        """Return the production ``GitCommitNode`` bound to this workspace."""
+        return GitCommitNode(
+            self.workspace,
+            worktree_resolver=self.resolve_worktree,
+            task_resolver=lambda state: self.task_recorded_worktree(state.task_id)[0],
+        )
 
+    def build_worktree_sync_node(self) -> GitWorktreeSyncNode:
+        """Return the production ``GitWorktreeSyncNode`` bound to this workspace."""
+        return GitWorktreeSyncNode(
+            workspace=self.workspace,
+            worktree_resolver=self.resolve_worktree,
+        )
 
-def _worktree_missing_probe(workspace: Workspace):
-    """
-    Build the worktree-existence probe for ``ReadyNode``.
+    def worktree_missing_probe(self) -> Callable[[TaskState], bool]:
+        """
+        Build the worktree-existence probe for ``ReadyNode``.
 
-    Returns a closure that asks ``WorktreeService`` whether the task
-    has a recorded worktree that is no longer on disk; the runner
-    uses it to decide "should this task re-run worktree setup before
-    launch?" without every call site reaching into the service
-    directly.
-    """
-    service = WorktreeService(workspace)
+        Returns a closure that asks ``WorktreeInspector`` whether the task has
+        a recorded worktree that is no longer on disk; the runner uses it to
+        decide whether worktree setup should run again before launch.
+        """
+        inspector = WorktreeInspector(self.workspace)
 
-    def _probe(state) -> bool:
-        return service.task_has_missing_recorded_worktree(state.task_id)
+        def _probe(state: TaskState) -> bool:
+            task = self.tasks.get(state.task_id)
+            if task is None:
+                return False
+            inspection = inspector.inspect_task_worktree(task)
+            return inspection.worktree_rel is not None and not inspection.exists
 
-    return _probe
+        return _probe
 
+    def worktree_metadata_repair(self) -> Callable[[TaskState], None]:
+        """
+        Build the stale-worktree-metadata repair for ``PreExecRecoveryNode``.
 
-def _worktree_metadata_repair(workspace: Workspace):
-    """
-    Build the stale-worktree-metadata repair for ``PreExecRecoveryNode``.
+        Twin of ``worktree_missing_probe``: when the probe says a recorded
+        worktree is gone, the machine calls this to wipe the stale path on the
+        task record so the next launch creates a fresh worktree.
+        """
+        inspector = WorktreeInspector(self.workspace)
 
-    Twin of ``_worktree_missing_probe``: when the probe says a
-    recorded worktree is gone, the machine calls this to wipe the
-    stale path on the task record so the next launch creates a fresh
-    worktree instead of failing the existence check.
-    """
-    service = WorktreeService(workspace)
+        def _repair(state: TaskState) -> None:
+            task = self.tasks.get(state.task_id)
+            if task is None:
+                return
+            inspection = inspector.inspect_task_worktree(task)
+            if inspection.worktree_rel is None or inspection.exists:
+                return
+            clear_task_worktree_path(task)
+            self.tasks.save(task)
 
-    def _repair(state) -> None:
-        service.clear_missing_recorded_worktree(state.task_id)
+        return _repair
 
-    return _repair
+    def mark_task_interrupted_on_crash(self, task: TaskRecord) -> None:
+        """
+        Best-effort cleanup when ``run_task`` raises an unexpected exception.
 
-
-def _mark_task_interrupted_on_crash(workspace: Workspace, task: TaskRecord) -> None:
-    """Best-effort cleanup when run_task raises an unexpected exception.
-
-    Clears active_task_id and marks the task as interrupted so the next
-    runner start can resume it instead of finding stale "running" state.
-    """
-    try:
-        state = load_state_for_workspace(workspace)
-        if state.active_task_id == task.id:
-            state.active_task_id = None
-            if task.id not in state.queue:
-                state.queue.insert(0, task.id)
-            save_state_for_workspace(workspace, state)
-        fresh = workspace.get_task(task.id)
-        if fresh is not None and fresh.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING:
-            fresh.runtime.pipeline.execution_status = TaskExecutionStatus.INTERRUPTED
-            fresh.status = TaskStatus.QUEUED
-            workspace.save_task(fresh)
-    except Exception:
-        pass  # best-effort — don't mask the original crash
-
-
-def _cleanup_terminal_worktree(workspace: Workspace, task: TaskRecord | None) -> None:
-    """Tear down a finished task's worktree, but preserve worktrees for tasks flagged for manual review so an operator can inspect them."""
-    if task is None:
-        return
-    fresh = workspace.get_task(task.id)
-    if fresh is not None:
-        task = fresh
-    if task.status == TaskStatus.FLAGGED and task.flag_reason in _MANUAL_REVIEW_FLAG_REASONS:
-        return
-    WorktreeService(workspace).cleanup_terminal_task_worktree(task)
-
-
-def reconcile_terminal_commit_sha_for_workspace(
-    workspace: Workspace,
-    task: TaskRecord | None,
-    final_state: TaskState,
-    persistence: SqlitePersistence,
-) -> TaskRecord | None:
-    """Backfill the integration commit SHA on a DONE task when the runner path didn't already record one.
-
-    Falls back to reloading the commit_result from sqlite, then to ``git
-    rev-parse HEAD``, so terminal status views never display a DONE task with
-    an empty commit_sha.
-    """
-    if task is None or final_state.stage != PipelineState.DONE:
-        return task
-    if task.git.commit_sha and task.runtime.pipeline.git.commit_sha:
-        return task
-
-    commit_result = final_state.commit_result
-    if commit_result is None:
+        Clears active_task_id and marks the task as interrupted so the next
+        runner start can resume it instead of finding stale "running" state.
+        """
         try:
-            commit_result = persistence.load(final_state.task_id).commit_result
-        except TaskNotFound:
-            commit_result = None
-    if commit_result is None:
-        return task
+            state = WorkspaceStateRepository(self.workspace).load()
+            if state.active_task_id == task.id:
+                state.active_task_id = None
+                if task.id not in state.queue:
+                    state.queue.insert(0, task.id)
+                WorkspaceStateRepository(self.workspace).save(state)
+            fresh = self.tasks.get(task.id)
+            if fresh is not None and fresh.runtime.pipeline.execution_status == TaskExecutionStatus.RUNNING:
+                fresh.runtime.pipeline.execution_status = TaskExecutionStatus.INTERRUPTED
+                fresh.status = TaskStatus.QUEUED
+                self.tasks.save(fresh)
+        except Exception:
+            pass  # best-effort; do not mask the original crash
 
-    head_sha = commit_result.head_sha or current_head(workspace.root)
-    if not head_sha:
-        return task
+    def cleanup_terminal_worktree(self, task: TaskRecord | None) -> None:
+        """Tear down a finished task's worktree, preserving manual-review worktrees for inspection."""
+        if task is None:
+            return
+        fresh = self.tasks.get(task.id)
+        if fresh is not None:
+            task = fresh
+        if task.status == TaskStatus.FLAGGED and task.flag_reason in _MANUAL_REVIEW_FLAG_REASONS:
+            return
+        WorktreeCleanupService(self.workspace).cleanup_terminal_task_worktree(task)
 
-    set_task_commit_sha(task, head_sha)
-    workspace.save_task(task)
-    return task
+    def reconcile_terminal_commit_sha(
+        self,
+        task: TaskRecord | None,
+        final_state: TaskState,
+        persistence: SqlitePersistence,
+    ) -> TaskRecord | None:
+        """
+        Backfill the integration commit SHA on a DONE task when the runner path did not record one.
+
+        Falls back to reloading the commit_result from sqlite, then to ``git
+        rev-parse HEAD``, so terminal status views never display a DONE task
+        with an empty commit_sha.
+        """
+        if task is None or final_state.stage != PipelineState.DONE:
+            return task
+        if task.git.commit_sha and task.runtime.pipeline.git.commit_sha:
+            return task
+
+        commit_result = final_state.commit_result
+        if commit_result is None:
+            try:
+                commit_result = persistence.load(final_state.task_id).commit_result
+            except TaskNotFound:
+                commit_result = None
+        if commit_result is None:
+            return task
+
+        head_sha = commit_result.head_sha or current_head(self.workspace.root)
+        if not head_sha:
+            return task
+
+        set_task_commit_sha(task, head_sha)
+        self.tasks.save(task)
+        return task

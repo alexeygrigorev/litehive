@@ -17,6 +17,7 @@ from litehive.domain.outcomes import TaskOutcomeKind
 from litehive.domain.task import TaskRecord, WorkspaceState
 from litehive.tasks.failed_runs import has_blocking_failed_run_history
 from litehive.tasks.normalization import implementation_entry_stage
+from litehive.state.records import WorkspaceTasks
 from litehive.workspace import Workspace
 
 _TERMINAL_EXECUTION_STATUSES = {
@@ -292,27 +293,37 @@ def _task_blockers(task: TaskRecord, tasks_by_id: dict[str, TaskRecord]) -> list
     return blockers
 
 
-def validate_task_dependencies_for_workspace(workspace: Workspace, task_id: str, depends_on: list[str]) -> None:
+class TaskDependencyValidator:
     """
-    Reject a self-referential, missing, or cyclic ``depends_on`` list.
+    Workspace-bound validator for task dependency edges.
 
-    Called when persisting a new task and when ``litehive update`` rewrites
-    a task's dependency list; refusing the mutation here keeps the queue
-    selector's blocked-task graph from ever observing a cycle and looping
-    forever during selection.
+    Refuses self-referential, missing, or cyclic ``depends_on`` lists before
+    they reach persistence, so queue selection never has to defend against
+    corrupt dependency graphs.
     """
-    tasks_by_id = {task.id: task for task in workspace.list_tasks(strict=False)}
-    seen: set[str] = set()
-    for dependency_id in depends_on:
-        if dependency_id in seen:
-            continue
-        seen.add(dependency_id)
-        if dependency_id == task_id:
-            raise ValueError(f"Task {task_id} cannot depend on itself")
-        if dependency_id not in tasks_by_id:
-            raise ValueError(f"Task {dependency_id} not found")
-        if _dependency_reaches_task(task_id, dependency_id, tasks_by_id):
-            raise ValueError(f"Task {task_id} dependency cycle detected via {dependency_id}")
+
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
+
+    def validate(self, task_id: str, depends_on: list[str]) -> None:
+        """
+        Reject invalid dependencies for ``task_id``.
+
+        Called when persisting a new task and when ``litehive update``
+        rewrites a task's dependency list.
+        """
+        tasks_by_id = {task.id: task for task in WorkspaceTasks(self.workspace).list(strict=False)}
+        seen: set[str] = set()
+        for dependency_id in depends_on:
+            if dependency_id in seen:
+                continue
+            seen.add(dependency_id)
+            if dependency_id == task_id:
+                raise ValueError(f"Task {task_id} cannot depend on itself")
+            if dependency_id not in tasks_by_id:
+                raise ValueError(f"Task {dependency_id} not found")
+            if _dependency_reaches_task(task_id, dependency_id, tasks_by_id):
+                raise ValueError(f"Task {task_id} dependency cycle detected via {dependency_id}")
 
 
 def _dependency_reaches_task(task_id: str, dependency_id: str, tasks_by_id: dict[str, TaskRecord]) -> bool:

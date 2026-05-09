@@ -256,10 +256,10 @@ class GitWorktreeSyncNode(WorktreeSyncNode):
         and ``False`` when the worktree was already current.
         """
         from litehive.domain.worktree import WorktreeMergeConflict  # noqa: PLC0415
-        from litehive.worktree.service import WorktreeService  # noqa: PLC0415
+        from litehive.worktree.sync import WorktreeSyncService  # noqa: PLC0415
 
         try:
-            result = WorktreeService(self.workspace).sync_task_worktree(
+            result = WorktreeSyncService(self.workspace).sync_task_worktree(
                 state.task_id,
                 entry_stage=state.entry_stage,
                 worktree_resolver=self.worktree_resolver,
@@ -432,18 +432,6 @@ def _is_main_checkout_cleanup_excluded(relpath: str) -> bool:
     return relpath.startswith(".litehive/") and relpath.count("/") == 1 and relpath.endswith(".db")
 
 
-def _is_ignored_even_if_tracked(repo_root: Path, relpath: str) -> bool:
-    """Return whether Git ignore rules exclude ``relpath`` in ``repo_root``.
-
-    ``git add --all -- <path>`` still errors on tracked paths that now match an
-    ignore rule (for example old task report artifacts under
-    ``.litehive/tasks/*/reports``). ``git check-ignore --no-index`` asks Git to
-    evaluate ignore rules for the path regardless of index state so the main
-    cleanup commit can skip those runtime artifacts safely.
-    """
-    return check_ignore(repo_root, relpath)
-
-
 def _status_entry_needs_git_add(code: str) -> bool:
     """Return whether a porcelain status entry still needs `git add`.
 
@@ -462,26 +450,6 @@ def _status_entry_needs_git_add(code: str) -> bool:
     else:
         worktree_state = " "
     return worktree_state != " " or index_state in {"?", "U"}
-
-
-def _is_untracked_embedded_git_repo(repo_root: Path, code: str, relpath: str) -> bool:
-    """Return True when an untracked path is itself a nested git checkout.
-
-    Agents and verification commands sometimes create disposable repos inside a
-    task worktree (for example a literal ``$workspace/`` scratch directory).
-    ``git add -- <dir>`` treats that as an embedded repository; if the nested
-    repo has no commit yet, Git aborts with "does not have a commit checked
-    out". Those scratch repos must stay local to the task worktree and should
-    never block the commit stage.
-    """
-
-    if code != "??":
-        return False
-    candidate = repo_root / relpath
-    if not candidate.is_dir():
-        return False
-    git_marker = candidate / ".git"
-    return git_marker.is_dir() or git_marker.is_file()
 
 
 class GitCommitNode(CommitNode):
@@ -624,7 +592,7 @@ class GitCommitNode(CommitNode):
         """
         if worktree == self.workspace.root:
             return
-        entries = self.git_status_entries(worktree)
+        entries = self.worktree_git_status_entries(worktree)
         if not entries:
             return
         committable = [
@@ -632,7 +600,7 @@ class GitCommitNode(CommitNode):
             for code, path in entries
             if not _is_runner_owned_metadata(path, state.task_id)
             and not _is_main_checkout_cleanup_excluded(path)
-            and not _is_untracked_embedded_git_repo(worktree, code, path)
+            and not self._is_untracked_embedded_git_repo(worktree, code, path)
         ]
         if not committable:
             # Only runner-owned metadata is dirty — nothing to checkpoint.
@@ -655,18 +623,18 @@ class GitCommitNode(CommitNode):
         crossed the ignore line); cleaning them up in a follow-up
         commit prevents the next task from seeing a dirty main.
         """
-        entries = self.git_status_entries(self.workspace.root)
+        entries = self.main_checkout_git_status_entries()
         committable = [
             (code, path)
             for code, path in entries
             if code != "!!"
             and not _is_main_checkout_cleanup_excluded(path)
-            and not _is_ignored_even_if_tracked(self.workspace.root, path)
+            and not self._is_ignored_even_if_tracked(path)
         ]
         if not committable:
             return None
         needs_add = [path for code, path in committable if _status_entry_needs_git_add(code)]
-        needs_add = self._filter_stageable_paths(self.workspace.root, needs_add)
+        needs_add = self._filter_stageable_paths(needs_add)
 
         if needs_add:
             add_paths(self.workspace.root, needs_add, all_flag=True)
@@ -692,11 +660,17 @@ class GitCommitNode(CommitNode):
                 return generated_completion_commit_message(task, detail=detail)
         return f"litehive {state.task_id}: {detail}"
 
-    def git_status_entries(self, repo_root: Path) -> list[tuple[str, str]]:
-        """Return ``(porcelain_code, path)`` tuples for the auto-commit helpers — public seam the commit-stage tests monkey-patch to fake a dirty checkout."""
-        return self._git_status_entries_with_options(repo_root)
+    def main_checkout_git_status_entries(self, include_ignored: bool = False) -> list[tuple[str, str]]:
+        """Return ``(porcelain_code, path)`` tuples for the main checkout."""
+        lines = status_porcelain_with_options(self.workspace.root, include_ignored=include_ignored)
+        return self._parse_git_status_lines(lines)
 
-    def _filter_stageable_paths(self, repo_root: Path, paths: list[str]) -> list[str]:
+    def worktree_git_status_entries(self, worktree: Path, include_ignored: bool = False) -> list[tuple[str, str]]:
+        """Return ``(porcelain_code, path)`` tuples for a task worktree checkout."""
+        lines = status_porcelain_with_options(worktree, include_ignored=include_ignored)
+        return self._parse_git_status_lines(lines)
+
+    def _filter_stageable_paths(self, paths: list[str]) -> list[str]:
         """
         Drop stale pathspecs so one vanished path cannot abort the
         whole ``git add``.
@@ -709,19 +683,46 @@ class GitCommitNode(CommitNode):
         """
         filtered: list[str] = []
         for relpath in paths:
-            candidate = repo_root / relpath
+            candidate = self.workspace.root / relpath
             if candidate.exists() or candidate.is_symlink():
                 filtered.append(relpath)
                 continue
-            if is_path_tracked(repo_root, relpath):
+            if is_path_tracked(self.workspace.root, relpath):
                 filtered.append(relpath)
         return filtered
 
-    def _git_status_entries_with_options(
-        self,
-        repo_root: Path,
-        include_ignored: bool = False,
-    ) -> list[tuple[str, str]]:
+    def _is_ignored_even_if_tracked(self, relpath: str) -> bool:
+        """
+        Return whether Git ignore rules exclude ``relpath`` in the main checkout.
+
+        ``git add --all -- <path>`` still errors on tracked paths that
+        now match an ignore rule, for example old task report artifacts
+        under ``.litehive/tasks/*/reports``. ``git check-ignore
+        --no-index`` asks Git to evaluate ignore rules for the path
+        regardless of index state so the main cleanup commit can skip
+        those runtime artifacts safely.
+        """
+        return check_ignore(self.workspace.root, relpath)
+
+    def _is_untracked_embedded_git_repo(self, worktree: Path, code: str, relpath: str) -> bool:
+        """Return True when an untracked worktree path is itself a nested git checkout.
+
+        Agents and verification commands sometimes create disposable repos
+        inside a task worktree, for example a literal ``$workspace/`` scratch
+        directory. ``git add -- <dir>`` treats that as an embedded repository;
+        if the nested repo has no commit yet, Git aborts with "does not have a
+        commit checked out". Those scratch repos must stay local to the task
+        worktree and should never block the commit stage.
+        """
+        if code != "??":
+            return False
+        candidate = worktree / relpath
+        if not candidate.is_dir():
+            return False
+        git_marker = candidate / ".git"
+        return git_marker.is_dir() or git_marker.is_file()
+
+    def _parse_git_status_lines(self, lines: list[str]) -> list[tuple[str, str]]:
         """
         Parse ``git status --porcelain`` lines for the auto-commit
         helpers.
@@ -731,7 +732,7 @@ class GitCommitNode(CommitNode):
         ``git add`` is invalid and would error out otherwise.
         """
         entries: list[tuple[str, str]] = []
-        for line in status_porcelain_with_options(repo_root, include_ignored=include_ignored):
+        for line in lines:
             # Porcelain format: "XY path" for most changes; "R  old -> new" for
             # renames, "C  old -> new" for copies. Extract the new path for
             # rename/copy entries — `git add -- "old -> new"` is not valid.
@@ -752,7 +753,7 @@ class GitCommitNode(CommitNode):
         snapshot the post-merge main checkout would lose its local
         artifacts every cycle.
         """
-        entries = self._git_status_entries_with_options(worktree, include_ignored=True)
+        entries = self.worktree_git_status_entries(worktree, include_ignored=True)
         return [path for code, path in entries if code == "!!" or _is_main_checkout_cleanup_excluded(path)]
 
     def _restore_local_only_paths(self, worktree: Path, relpaths: list[str]) -> None:

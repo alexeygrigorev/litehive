@@ -11,22 +11,15 @@ from litehive.cli.app import app
 from litehive.config.workspace import create_workspace
 from heru.types import SubagentRef
 from litehive.state.records import (
-    create_task_for_workspace,
-    require_task_for_workspace,
-    save_task_for_workspace,
-)
+    WorkspaceTasks,
+        )
 from litehive.tasks.journal import render_task_journal
 from litehive.workspace import Workspace
-from litehive.tasks.paths import runner_lock_path
-from litehive.state.persist import load_state_for_workspace
+from litehive.state.persist import WorkspaceStateRepository
 from litehive.domain.common import PipelineStatus, TaskStatus
-from litehive.tasks.queue import set_active_task
-from litehive.state.locking import runner_lock_is_held_for_workspace
-from litehive.tasks.runtime import (
-    mark_subagent_pid_for_workspace,
-    mark_subagent_started_for_workspace,
-    mark_task_run_started_for_workspace,
-)
+from litehive.tasks.queue import TaskQueueService
+from litehive.state.locking import WorkspaceRunnerLock
+from litehive.tasks.runtime import TaskRuntimeTransitions
 
 
 def _wait_for_process_exit(proc: subprocess.Popen[bytes], *, timeout_seconds: float) -> int | None:
@@ -44,13 +37,12 @@ def test_cmd_close_task_stops_active_runner_and_closes_task(tmp_path: Path, caps
     workspace = Workspace.from_path(tmp_path)
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.setattr("litehive.cli.agent_cli.block_if_agent", lambda: None)
-    task = create_task_for_workspace(workspace, title="Kill bad run")
-    mark_task_run_started_for_workspace(workspace, task)
-    set_active_task(workspace, task.id)
+    task = WorkspaceTasks(workspace).create( title="Kill bad run")
+    TaskRuntimeTransitions(workspace, WorkspaceTasks(workspace)).start_run(task)
+    TaskQueueService(workspace).mark_active(task.id)
 
-    task = require_task_for_workspace(workspace, task.id)
-    mark_subagent_started_for_workspace(
-        workspace,
+    task = WorkspaceTasks(workspace).require(task.id)
+    TaskRuntimeTransitions(workspace, WorkspaceTasks(workspace)).mark_subagent_started(
         task,
         SubagentRef(
             id="SA-0001",
@@ -68,7 +60,7 @@ import threading
 import time
 from pathlib import Path
 
-from litehive.state.locking import runner_heartbeat_for_workspace, workspace_runner_guard
+from litehive.state.locking import WorkspaceRunnerLock
 from litehive.workspace import Workspace
 
 root = Path(sys.argv[1])
@@ -81,8 +73,8 @@ def _handle_signal(signum, frame):
     stop.set()
 
 signal.signal(signal.SIGINT, _handle_signal)
-with workspace_runner_guard(workspace):
-    with runner_heartbeat_for_workspace(workspace, active_task_id=task_id, interval_seconds=0.05):
+with WorkspaceRunnerLock(workspace).guard():
+    with WorkspaceRunnerLock(workspace).heartbeat(active_task_id=task_id, interval_seconds=0.05):
         ready.write_text("ready\\n", encoding="utf-8")
         while not stop.wait(0.05):
             pass
@@ -102,7 +94,7 @@ with workspace_runner_guard(workspace):
     try:
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
-            if ready_file.exists() and runner_lock_is_held_for_workspace(workspace):
+            if ready_file.exists() and WorkspaceRunnerLock(workspace).is_held():
                 break
             time.sleep(0.05)
         else:
@@ -129,14 +121,14 @@ with workspace_runner_guard(workspace):
         assert "status: closed" in out
         assert "close_reason: wont_do" in out
 
-        assert not runner_lock_is_held_for_workspace(workspace)
-        lock_text = runner_lock_path(tmp_path).read_text(encoding="utf-8")
+        assert not WorkspaceRunnerLock(workspace).is_held()
+        lock_text = workspace.runtime_path("runtime", ".runner.lock").read_text(encoding="utf-8")
         assert lock_text == ""
         returncode = _wait_for_process_exit(proc, timeout_seconds=15.0)
         if returncode is not None:
             assert returncode in {0, -signal.SIGINT}
 
-        refreshed = require_task_for_workspace(workspace, task.id)
+        refreshed = WorkspaceTasks(workspace).require(task.id)
         assert refreshed.status == "closed"
         assert refreshed.close_reason == "wont_do"
         assert refreshed.runtime.pipeline.execution_status == "cancelled"
@@ -145,7 +137,7 @@ with workspace_runner_guard(workspace):
         assert refreshed.runtime.pipeline.last_outcome.kind == "closed"
         assert refreshed.runtime.pipeline.last_outcome.reason == "bad direction"
 
-        state = load_state_for_workspace(workspace)
+        state = WorkspaceStateRepository(workspace).load()
         assert state.active_task_id is None
         assert task.id not in state.queue
 
@@ -162,10 +154,10 @@ def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch
     workspace = Workspace.from_path(tmp_path)
     monkeypatch.delenv("LITEHIVE_AGENT_ROLE", raising=False)
     monkeypatch.setattr("litehive.cli.agent_cli.block_if_agent", lambda: None)
-    task = create_task_for_workspace(workspace, title="Kill live subagent")
+    task = WorkspaceTasks(workspace).create( title="Kill live subagent")
     task.status = TaskStatus.QUEUED
     task.pipeline_status = PipelineStatus.IMPLEMENTING
-    save_task_for_workspace(workspace, task)
+    WorkspaceTasks(workspace).save(task)
 
     sleeper = subprocess.Popen(
         [
@@ -181,9 +173,8 @@ def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch
     )
 
     try:
-        task = require_task_for_workspace(workspace, task.id)
-        mark_subagent_started_for_workspace(
-            workspace,
+        task = WorkspaceTasks(workspace).require(task.id)
+        TaskRuntimeTransitions(workspace, WorkspaceTasks(workspace)).mark_subagent_started(
             task,
             SubagentRef(
                 id="SA-0001",
@@ -193,12 +184,12 @@ def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch
                 path="subagents/SA-0001-swe",
             ),
         )
-        task = require_task_for_workspace(workspace, task.id)
+        task = WorkspaceTasks(workspace).require(task.id)
         task.runtime.pipeline.execution_status = "running"
-        save_task_for_workspace(workspace, task)
-        task = require_task_for_workspace(workspace, task.id)
-        mark_subagent_pid_for_workspace(workspace, task, sleeper.pid)
-        set_active_task(workspace, task.id)
+        WorkspaceTasks(workspace).save(task)
+        task = WorkspaceTasks(workspace).require(task.id)
+        TaskRuntimeTransitions(workspace, WorkspaceTasks(workspace)).mark_subagent_pid(task, sleeper.pid)
+        TaskQueueService(workspace).mark_active(task.id)
 
         result = CliRunner().invoke(
             app,
@@ -220,7 +211,7 @@ def test_cmd_close_task_terminates_live_subagent_pid(tmp_path: Path, monkeypatch
         sleeper.wait(timeout=5)
         assert sleeper.returncode in {0, -signal.SIGTERM, -signal.SIGKILL}
 
-        refreshed = require_task_for_workspace(workspace, task.id)
+        refreshed = WorkspaceTasks(workspace).require(task.id)
         assert refreshed.status == "closed"
         assert refreshed.close_reason == "duplicate"
         assert refreshed.runtime.pipeline.execution_status == "cancelled"

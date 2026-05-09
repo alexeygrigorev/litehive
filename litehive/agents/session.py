@@ -8,8 +8,7 @@ from heru import extract_engine_continuation
 from heru.base import CLIExecutionResult
 from heru.types import LiveTimeline, RuntimeEngineContinuation
 from litehive.agents.execution_trace import (
-    parse_unified_events,
-    recovered_timeline_from_events,
+    execution_trace_renderer,
 )
 from litehive.agents.artifacts import ArtifactService
 from litehive.agents.session_store import (
@@ -32,7 +31,9 @@ from litehive.domain.agent import SubagentInactivityTimeout
 from litehive.domain.common import SubagentStatus, utcnow
 from litehive.domain.runtime import Subagent
 from litehive.domain.task import TaskRecord
-from litehive.tasks.runtime import mark_subagent_pid_for_workspace
+from litehive.observability.events import append_event
+from litehive.state.records import WorkspaceTasks
+from litehive.tasks.runtime import TaskRuntimeTransitions
 
 if TYPE_CHECKING:
     from litehive.sandbox.launcher import SandboxLauncher
@@ -88,6 +89,13 @@ class SubagentSessionManager:
         return extract_engine_continuation(engine_name, execution)
 
     @staticmethod
+    def render_execution_trace(execution: CLIExecutionResult) -> str:
+        """
+        Render a CLI execution result into the transcript text persisted on task runtime.
+        """
+        return execution_trace_renderer().render(execution)
+
+    @staticmethod
     def extract_execution_event_stream(
         engine_name: str,
         stdout: str,
@@ -95,8 +103,9 @@ class SubagentSessionManager:
         subagent_id: str | None = None,
     ) -> LiveTimeline | None:
         """Parse stdout into the live event timeline persisted as the subagent's ``event_stream`` artifact, so the status UI can replay tool calls without re-parsing raw stdout each time."""
-        return recovered_timeline_from_events(
-            parse_unified_events(stdout),
+        renderer = execution_trace_renderer()
+        return renderer.recovered_timeline_from_events(
+            renderer.parse_unified_events(stdout),
             engine_name=engine_name,
             task_id=task_id,
             subagent_id=subagent_id,
@@ -128,7 +137,8 @@ class SubagentSessionManager:
         even if the launch crashes before any output arrives.
         """
         self.stream_log.ensure(base)
-        self.workspace.append_event(
+        append_event(
+            self.workspace,
             task,
             SubagentStartedEvent(
                 subagent_id=ref.id,
@@ -171,7 +181,7 @@ class SubagentSessionManager:
         codes and interruption reasons are terminal state and are
         written through full session snapshots.
         """
-        created_at = self.workspace.load_subagent_session_created_at(task.id, ref.id) or utcnow()
+        created_at = subagent_artifacts(self.workspace, task.id, ref.id).load_session_record().created_at or utcnow()
         session_row = RunningSubagentSessionRow(
             fields=self.session_storage_fields(ref, created_at, utcnow()),
             pid=metadata.pid,
@@ -193,13 +203,14 @@ class SubagentSessionManager:
         """
         if pid is None:
             return
-        mark_subagent_pid_for_workspace(self.workspace, task, pid)
+        TaskRuntimeTransitions(self.workspace, WorkspaceTasks(self.workspace)).mark_subagent_pid(task, pid)
         self.write_running_session_metadata(
             task,
             ref,
             metadata=RunningSubagentSessionMetadata(pid=pid),
         )
-        self.workspace.append_event(
+        append_event(
+            self.workspace,
             task,
             SubagentPidEvent(subagent_id=ref.id, role=ref.role, pid=pid),
         )
@@ -295,7 +306,7 @@ class SubagentSessionManager:
         debugging — sees a consistent set of artifacts instead of
         catching the snapshot mid-update.
         """
-        created_at = self.workspace.load_subagent_session_created_at(task.id, ref.id) or utcnow()
+        created_at = subagent_artifacts(self.workspace, task.id, ref.id).load_session_record().created_at or utcnow()
         session_row = self.session_row_for_snapshot(ref, snapshot, created_at)
         subagent_artifacts(self.workspace, task.id, ref.id).save(
             session=session_row,
@@ -316,6 +327,25 @@ class SubagentSessionManager:
             artifacts.write_text("execution_trace", ".md", snapshot.transcript, compress=True)
         artifacts.write_stream("stdout", snapshot.stdout, compress=False)
         artifacts.write_stream("stderr", snapshot.stderr, compress=False)
+
+    @staticmethod
+    def write_terminal_stream_artifacts(base: Path, stdout: str, stderr: str) -> None:
+        """
+        Persist compressed terminal stdout/stderr evidence.
+        """
+        artifacts = ArtifactService(base)
+        artifacts.write_stream("stdout", stdout, compress=True)
+        artifacts.write_stream("stderr", stderr, compress=True)
+
+    @staticmethod
+    def write_live_progress_artifacts(base: Path, prompt: str, stdout: str, stderr: str) -> None:
+        """
+        Persist prompt and live stdout/stderr evidence during progress callbacks.
+        """
+        artifacts = ArtifactService(base)
+        artifacts.write_text("prompt", ".txt", prompt, compress=False)
+        artifacts.write_stream("stdout", stdout, compress=False)
+        artifacts.write_stream("stderr", stderr, compress=False)
 
     def session_row_for_snapshot(
         self,

@@ -34,7 +34,7 @@ from typing import Any
 
 from heru.adapters import CodexCLIAdapter
 from litehive.agents.manager import SubagentManager, SubagentStartupError
-from litehive.container import build_subagent_manager_for_workspace
+from litehive.container import build_subagent_manager
 from litehive.config.model import LitehiveConfig
 from litehive.domain.agent import EngineFailure, SubagentId
 from litehive.domain.common import PipelineState, SubagentStatus, TaskStage, Verdict
@@ -46,11 +46,12 @@ from litehive.git.ops import GitError, is_git_repo, status_porcelain
 from litehive.roles.base import PromptContext
 from litehive.roles.recovery import RecoveryAgent
 from litehive.workspace import Workspace
-from litehive.state.records import get_task_worktree_path
+from litehive.state.records import get_task_worktree_path, WorkspaceTasks
+from litehive.tasks.activity import task_activity_store_for_task
 from litehive.tasks.journal import append_journal
 from litehive.tasks.activity_rendering import normalized_files_changed
-from litehive.tasks.report_storage import rewrite_latest_stage_report
-from litehive.worktree.paths import resolve_recorded_worktree_path_for_workspace
+from litehive.tasks.report_storage import TaskReportStore
+from litehive.worktree.paths import WorktreePaths
 
 from .events import Crash
 from .nodes.agent import (
@@ -144,10 +145,7 @@ def _execution_checkout_path(workspace: Workspace, task) -> Path:
     the per-task worktree if one was recorded, otherwise the workspace root.
     Falls back to the workspace so engines never see a missing cwd."""
     return (
-        resolve_recorded_worktree_path_for_workspace(
-            workspace,
-            get_task_worktree_path(task),
-        )
+        WorktreePaths(workspace).resolve_recorded_worktree_path(get_task_worktree_path(task))
         or workspace.root
     )
 
@@ -236,7 +234,7 @@ def _rewrite_hallucinated_implementing_pass(
         f"claimed_files_changed: {claimed}"
     )
 
-    activity_log = workspace.task_activity(task)
+    activity_log = task_activity_store_for_task(workspace, task)
     activity_entries = activity_log.load()
     for entry in reversed(activity_entries):
         if entry.created_at != latest.created_at:
@@ -269,7 +267,7 @@ def _rewrite_hallucinated_implementing_pass(
             "claimed_files_changed": claimed_files,
         },
     )
-    report_path = rewrite_latest_stage_report(workspace, task, report)
+    report_path = TaskReportStore(workspace).rewrite_latest_stage_report(task, report)
     append_journal(
         workspace,
         task,
@@ -347,10 +345,10 @@ def latest_verdict_after(
     previous or parallel session for the same stage. Returns ``None``
     when nothing newer landed — caller raises ``NudgeRequired``.
     """
-    task = workspace.get_task(task_id)
+    task = WorkspaceTasks(workspace).get(task_id)
     if task is None:
         return None
-    latest = workspace.task_activity(task).latest_entry(
+    latest = task_activity_store_for_task(workspace, task).latest_entry(
         stage=stage,
         source_subagent_id=source_subagent_id,
         verdicts=_allowed_verdicts_for_stage(stage),
@@ -448,7 +446,7 @@ class HeruEngineAdapter:
                 f"HeruEngineAdapter expects an AgentPrompt from RoleAgent.build_prompt, got {type(prompt).__name__}"
             )
 
-        task = self.workspace.get_task(state.task_id)
+        task = WorkspaceTasks(self.workspace).get(state.task_id)
         if task is None:
             raise UnrecoverableError(f"task {state.task_id} not found in workspace")
 
@@ -461,7 +459,7 @@ class HeruEngineAdapter:
 
         before_turn = datetime.now(UTC)
         try:
-            manager = build_subagent_manager_for_workspace(
+            manager = build_subagent_manager(
                 self.workspace,
                 config,
                 execution_root=execution_root,
@@ -626,7 +624,7 @@ class HeruEngineAdapter:
         recovery_execution_root = _agent_execution_root(self.workspace, task, role="recovery", config=self.config)
         after_ts = datetime.min.replace(tzinfo=UTC)
         if state.stage == PipelineState.RECOVERING:
-            previous_recovery = self.workspace.task_activity(task).latest_entry(
+            previous_recovery = task_activity_store_for_task(self.workspace, task).latest_entry(
                 stage=PipelineState.RECOVERING,
                 verdicts=_allowed_verdicts_for_stage(PipelineState.RECOVERING),
             )

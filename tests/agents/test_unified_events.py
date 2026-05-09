@@ -9,11 +9,11 @@ from heru import (
 )
 from heru.base import CLIExecutionResult
 
-from litehive.agents.execution_trace import ParsedUnifiedEvents, parse_unified_events
+from litehive.agents.execution_trace import ParsedUnifiedEvents, execution_trace_renderer
 
 
 def test_parse_unified_events_returns_named_event_collection() -> None:
-    parsed = parse_unified_events('{"kind":"message","engine":"codex","content":"step"}')
+    parsed = execution_trace_renderer().parse_unified_events('{"kind":"message","engine":"codex","content":"step"}')
 
     assert isinstance(parsed, ParsedUnifiedEvents)
     assert len(parsed.events) == 1
