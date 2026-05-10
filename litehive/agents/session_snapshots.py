@@ -18,9 +18,16 @@ class SubagentSessionMetadata:
     """
 
     exit_code: int | None
+    """Process exit code; None while the subagent is still running."""
+
     pid: int | None
+    """OS process id, or None if not yet reported."""
+
     interruption_reason: str | None = None
+    """Reason the process was interrupted, if applicable."""
+
     continuation: SubagentContinuationState = field(default_factory=NoSubagentContinuation)
+    """Engine continuation state for multi-turn resume."""
 
     def continuation_payload(self) -> dict[str, object] | None:
         """
@@ -38,11 +45,14 @@ class RunningSubagentSessionMetadata:
     engine progress callbacks can arrive before a pid is available, so
     the pid mirrors the nullable runtime row. It deliberately has no
     exit code or interruption reason because those belong to terminal
-    snapshots, not running-session metadata.
+    snapshots,     not running-session metadata.
     """
 
     pid: int | None
+    """OS process id, or None if not yet reported by the adapter."""
+
     continuation: SubagentContinuationState = field(default_factory=NoSubagentContinuation)
+    """Engine continuation state for multi-turn resume."""
 
     def continuation_payload(self) -> dict[str, object] | None:
         """
@@ -58,14 +68,31 @@ class SubagentSessionStorageFields:
     """
 
     id: str
+    """Canonical subagent identifier, e.g. SA-0001."""
+
     role: str
+    """Agent role assigned to this subagent."""
+
     engine: str
+    """Name of the engine adapter used to run the subagent."""
+
     status: SubagentStatus
+    """Current lifecycle status of the subagent."""
+
     sandboxed: bool
+    """Whether the subagent runs under a sandbox policy."""
+
     sandbox: str
+    """Human-readable sandbox policy summary string."""
+
     created_at: str
+    """ISO timestamp when the session was first created."""
+
     updated_at: str
+    """ISO timestamp of the most recent session update."""
+
     resource_control: SandboxPolicySummary
+    """Structured sandbox/resource policy attached to this session."""
 
     def as_dict(self) -> dict[str, object]:
         """
@@ -95,8 +122,13 @@ class RunningSubagentSessionRow:
     """
 
     fields: SubagentSessionStorageFields
+    """Common session fields shared by all row types."""
+
     pid: int | None
+    """OS process id, or None if not yet reported."""
+
     continuation: SubagentContinuationState = field(default_factory=NoSubagentContinuation)
+    """Engine continuation state for multi-turn resume."""
 
     def as_dict(self) -> dict[str, object]:
         """
@@ -121,10 +153,19 @@ class TerminalSubagentSessionRow:
     """
 
     fields: SubagentSessionStorageFields
+    """Common session fields shared by all row types."""
+
     exit_code: int
+    """Final process exit code."""
+
     pid: int | None
+    """OS process id, or None if not captured."""
+
     interruption_reason: str | None = None
+    """Reason the process was interrupted, if applicable."""
+
     continuation: SubagentContinuationState = field(default_factory=NoSubagentContinuation)
+    """Engine continuation state for multi-turn resume."""
 
     def as_dict(self) -> dict[str, object]:
         """
@@ -152,11 +193,22 @@ class InterruptedSubagentSessionRow:
     """
 
     fields: SubagentSessionStorageFields
+    """Common session fields shared by all row types."""
+
     pid: int | None
+    """OS process id, or None if not captured."""
+
     interruption_reason: str
+    """Reason the process was paused or interrupted."""
+
     resume_stage: str
+    """Pipeline stage the subagent should resume from."""
+
     exit_code: int | None = None
+    """Process exit code if available at interruption time."""
+
     continuation: SubagentContinuationState = field(default_factory=NoSubagentContinuation)
+    """Engine continuation state for multi-turn resume."""
 
     def as_dict(self) -> dict[str, object]:
         """
@@ -182,8 +234,19 @@ class SubagentSessionSnapshot:
     """
 
     prompt: str
+    """Original prompt sent to the engine for this subagent."""
+
     transcript: str
+    """Rendered execution trace text."""
+
     stdout: str
+    """Raw engine stdout captured during the run."""
+
     stderr: str
+    """Raw engine stderr captured during the run."""
+
     report: SubagentReportPayload
+    """Structured report payload derived from the engine output."""
+
     metadata: SubagentSessionMetadata
+    """Terminal or in-progress metadata for the session row."""

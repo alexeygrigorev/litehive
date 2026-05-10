@@ -42,6 +42,13 @@ class WorkspaceStateStore:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Pin the store to a workspace.
+
+        Every read/write opens a connection through the workspace so the
+        store does not hold a persistent handle; constructed by
+        ``RuntimeStore`` rather than called directly by most consumers.
+        """
         self.workspace = workspace
 
     def load_workspace_state(self) -> WorkspaceState | None:
@@ -160,6 +167,16 @@ class WorkspaceStateStore:
         state_row: sqlite3.Row | None,
         queue_row: sqlite3.Row | None,
     ) -> WorkspaceState | None:
+        """
+        Merge the separate pool and queue rows back into one object.
+
+        ``load_workspace_state`` splits the workspace into ``pool_state``
+        and ``queue`` tables so hot queue edits avoid rewriting the larger
+        pool blob; this is the inverse that reassembles the two halves
+        into a single ``WorkspaceState`` for callers.  Returns ``None``
+        when either row is missing (i.e. the workspace was never
+        bootstrapped).
+        """
         if state_row is None or queue_row is None:
             return None
         payload = json.loads(state_row["payload"])
@@ -173,6 +190,12 @@ class TaskStateStore:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Pin the store to a workspace for task state persistence.
+
+        Each call opens a short-lived SQLite connection so the store
+        never blocks other writers between operations.
+        """
         self.workspace = workspace
 
     def load_task_state(self, task_id: str) -> TaskStateRecord | None:
@@ -262,6 +285,13 @@ class TaskIntentStore:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Pin the store to a workspace for task intent persistence.
+
+        Task intents are the immutable definition half (goal, plan,
+        criteria) set at creation time; the mutable runtime half lives
+        in ``TaskStateStore``.
+        """
         self.workspace = workspace
 
     def load_task_intent(self, task_id: str) -> TaskIntentRecord | None:
@@ -378,6 +408,13 @@ class ProcessStateStore:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Pin the store to a workspace for process registry persistence.
+
+        Each long-lived runner or daemon writes a row on start and
+        clears it on shutdown; liveness probes read the row to decide
+        whether the owner is still alive.
+        """
         self.workspace = workspace
 
     def save_process_state(
@@ -962,6 +999,7 @@ class RuntimeStore:
                 continue
             highest = max(highest, int(match.group(1)))
         return highest
+
 
 def _load_task_state_for_intent_columns(
     connection: sqlite3.Connection,

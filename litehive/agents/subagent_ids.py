@@ -44,6 +44,9 @@ class SubagentCounterStore:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Store the workspace database handle used for id allocations.
+        """
         self.workspace = workspace
 
     def reserve_next_number(self, task: TaskRecord) -> int:

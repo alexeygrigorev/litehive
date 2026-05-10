@@ -432,7 +432,10 @@ class UnmergedWorktree(BaseModel):
     """
 
     task_id: str
+    """Task that owned this worktree."""
+
     worktree_path: str
+    """Filesystem path to the worktree directory."""
 
 
 class WorkspaceState(BaseModel):
@@ -448,8 +451,19 @@ class WorkspaceState(BaseModel):
     """
 
     active_task_id: str | None = None
+    """Task id currently being executed by the runner, or ``None`` if idle."""
+
     queue: list[str] = Field(default_factory=list)
+    """Ordered list of task ids waiting to be picked up by the pool."""
+
     pool_stop_reason: str | None = None
+    """Machine-readable ``PoolStopReason`` value from the last pool run."""
+
     consecutive_task_failures: int = 0
+    """Number of tasks that failed in a row; drives the "halt on three consecutive" gate."""
+
     next_task_number: int = 0
+    """Monotonic counter used to generate unique task slugs (``T001``, ``T002``, …)."""
+
     unmerged_worktrees: list[UnmergedWorktree] = Field(default_factory=list)
+    """Worktrees whose branches were never merged back into main."""

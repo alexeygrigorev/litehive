@@ -66,19 +66,38 @@ class TaskEventLogReplaySummary:
     """
 
     event_log_path: Path
+    """Filesystem path of the JSONL log that was replayed."""
     events_seen: int
+    """Total lines examined, including invalid ones."""
     events_replayed: int
+    """Number of events successfully folded into the replay state."""
     invalid_events: int
+    """Lines that failed JSON parsing or schema validation."""
     tasks_rebuilt: int
+    """Distinct task ids that received at least one intent or state event."""
     queue_length: int
+    """Number of tasks in the rebuilt workspace queue."""
     audit_entries: int
+    """Audit-log rows reconstructed from the event stream."""
     activity_entries: int
+    """Activity-log rows reconstructed across all tasks."""
     stage_reports: int
+    """Stage-report rows reconstructed from the event stream."""
     recovery_reports: int
+    """Recovery-report rows reconstructed from the event stream."""
 
 
 @dataclass(slots=True)
 class _ReplayState:
+    """
+    Mutable accumulator that folds JSONL events into per-table collections.
+
+    The replay loop creates one instance, walks every event, and mutates the
+    dicts and lists in place so the final flush step sees the complete
+    snapshot.  Keeping the accumulator pure-in-memory means a crash during
+    replay never writes partial rows to SQLite.
+    """
+
     task_intents: dict[str, dict[str, Any]]
     task_states: dict[str, dict[str, Any]]
     task_journal: dict[str, list[dict[str, Any]]]
@@ -121,6 +140,12 @@ class TaskEventLog:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the event log to a workspace's JSONL file.
+
+        The log file lives at ``workspace.runtime_path("task-events.jsonl")``
+        and is created on first append.
+        """
         self.workspace = workspace
 
     def path(self) -> Path:
@@ -253,6 +278,7 @@ class TaskEventLog:
             task_intent_count = connection.execute("SELECT COUNT(*) FROM task_intent").fetchone()[0]
             task_state_count = connection.execute("SELECT COUNT(*) FROM task_state").fetchone()[0]
         return int(task_intent_count) == 0 and int(task_state_count) == 0
+
 
 def task_event_logging_suppressed() -> bool:
     """
@@ -862,9 +888,7 @@ def _optional_int(value: object) -> int | None:
     if value is None:
         return None
     if not isinstance(value, (int, str, bytes, float)):
-        raise TypeError(
-            f"_optional_int expected int|str|bytes|float|None, got {type(value).__name__}"
-        )
+        raise TypeError(f"_optional_int expected int|str|bytes|float|None, got {type(value).__name__}")
     return int(value)
 
 

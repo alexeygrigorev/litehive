@@ -34,10 +34,20 @@ class LoadedSubagentSession:
     """
 
     values: dict[str, Any]
+    """Raw session slice dictionary from the persisted payload."""
+
     created_at: str | None
+    """Normalized creation timestamp preserved across upserts."""
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any], persisted_created_at: str | None) -> "LoadedSubagentSession":
+        """
+        Construct a session view from a raw payload and its stored created_at.
+
+        The payload's inner ``session`` slice supplies the field values.
+        When the session slice carries its own ``created_at`` it takes
+        precedence over the row-level timestamp.
+        """
         value = payload.get(SubagentArtifactSlice.SESSION.value)
         if isinstance(value, dict):
             values = value
@@ -51,10 +61,12 @@ class LoadedSubagentSession:
         return cls(values=values, created_at=created_at)
 
     def __bool__(self) -> bool:
+        """Return True when the session slice contains data."""
         return bool(self.values)
 
     @property
     def subagent_id(self) -> SubagentId | None:
+        """Subagent id from the session slice, or None if absent."""
         value = self._non_empty_string("id")
         if value is None:
             return None
@@ -62,20 +74,29 @@ class LoadedSubagentSession:
 
     @property
     def role(self) -> str | None:
+        """Agent role from the session slice, or None if absent."""
         return self._non_empty_string("role")
 
     @property
     def updated_at(self) -> str | None:
+        """Last-updated timestamp from the session slice, or None."""
         return self._non_empty_string("updated_at")
 
     @property
     def exit_code(self) -> int | None:
+        """Process exit code from the session slice, or None if not set."""
         value = self.values.get("exit_code")
         if isinstance(value, int):
             return value
         return None
 
     def _non_empty_string(self, key: str) -> str | None:
+        """
+        Extract a non-blank string value from the session dictionary.
+
+        Returns None when the key is missing, the value is not a string,
+        or the value is whitespace-only.
+        """
         value = self.values.get(key)
         if not isinstance(value, str):
             return None
@@ -112,6 +133,7 @@ class SubagentArtifactPayload:
     values: Mapping[str, Any]
 
     def as_dict(self) -> dict[str, object]:
+        """Return a mutable copy of the wrapped payload."""
         return dict(self.values)
 
 
@@ -124,6 +146,7 @@ class SubagentEventStreamPayload:
     values: Mapping[str, Any]
 
     def as_dict(self) -> dict[str, Any]:
+        """Return a mutable copy of the wrapped event-stream payload."""
         return dict(self.values)
 
 
@@ -142,20 +165,30 @@ class SubagentArtifactStore:
     subagent_id: str
 
     def load_all(self) -> dict[str, Any]:
+        """Return the full persisted payload for this subagent."""
         payload, _ = _load_subagent_payload(self.workspace, self.task_id, self.subagent_id)
         return payload
 
     def load_session_record(self) -> LoadedSubagentSession:
+        """
+        Load and return a typed session view for this subagent.
+
+        The returned object exposes typed accessors for subagent_id, role,
+        updated_at, and exit_code.
+        """
         payload, created_at = _load_subagent_payload(self.workspace, self.task_id, self.subagent_id)
         return LoadedSubagentSession.from_payload(payload, created_at)
 
     def load_session(self) -> dict[str, Any]:
+        """Return the raw session slice dictionary."""
         return self.load_session_record().values
 
     def load_report(self) -> dict[str, Any]:
+        """Return the report slice from the persisted payload."""
         return self._load_slice(SubagentArtifactSlice.REPORT)
 
     def load_event_stream(self) -> dict[str, Any]:
+        """Return the event-stream slice from the persisted payload."""
         return self._load_slice(SubagentArtifactSlice.EVENT_STREAM)
 
     def save(
@@ -204,6 +237,12 @@ class SubagentArtifactStore:
             )
 
     def _load_slice(self, artifact_slice: SubagentArtifactSlice) -> dict[str, Any]:
+        """
+        Read one named slice from the full subagent payload.
+
+        Returns an empty dict when the slice is missing or not a
+        dictionary.
+        """
         payload, _ = _load_subagent_payload(self.workspace, self.task_id, self.subagent_id)
         value = payload.get(artifact_slice.value)
         if isinstance(value, dict):
@@ -244,4 +283,3 @@ def _load_subagent_payload(workspace: Workspace, task_id: str, subagent_id: str)
     else:
         payload_value = {}
     return payload_value, row["created_at"]
-

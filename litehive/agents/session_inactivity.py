@@ -33,7 +33,10 @@ class SubagentInactivityTimeoutPolicy:
     """
 
     config: "LitehiveConfig"
+    """Workspace configuration providing the default timeout duration."""
+
     completed_marker: re.Pattern[str] = _COMPLETED_INACTIVITY_PATTERN
+    """Compiled regex that detects the watchdog kill marker in stderr."""
 
     def live_timeout_seconds(self, engine_name: str) -> float:
         """
@@ -65,6 +68,7 @@ class SubagentInactivityMonitor:
     """
 
     policy: SubagentInactivityTimeoutPolicy
+    """Timeout rules driving the live and completed-process checks."""
 
     def live_timeout_seconds(self, engine_name: str) -> float:
         """

@@ -190,15 +190,34 @@ class RuntimeRecoveryOutcome(BaseModel):
     """
 
     origin_stage: str | None = None
+    """Pipeline stage where the failure that triggered recovery occurred."""
+
     trigger_event_kind: str = ""
+    """String spelling of ``TriggerEventKind`` that caused recovery entry."""
+
     fingerprint: str = ""
+    """Raw failure-fingerprint string from ``FailureFingerprint``."""
+
     classification: str | None = None
+    """Budget-grouping classification (e.g. ``hook_reject``, ``semantic_reject``)."""
+
     budget_key: str = ""
+    """Stage-scoped key used to look up the per-fingerprint recovery budget."""
+
     recovery_verdict: str = ""
+    """Short verdict label from the recovery agent (``resume``, ``advance``, ``done``, ``budget_hit``)."""
+
     disposition: str = ""
+    """String spelling of ``RecoveryDisposition`` (``resumed``, ``advanced``, ``terminated``, etc.)."""
+
     reason_code: str | None = None
+    """Machine-readable reason code for why this recovery attempt concluded."""
+
     message: str = ""
+    """Human-readable outcome sentence from the recovery agent."""
+
     created_at: str | None = None
+    """ISO timestamp of when the recovery outcome was recorded."""
 
 
 class RuntimeFailedRunRecord(BaseModel):
@@ -213,17 +232,40 @@ class RuntimeFailedRunRecord(BaseModel):
     """
 
     stage: str
+    """Pipeline stage where the failed run occurred."""
+
     failure_shape: str
+    """Normalized ``source:detail`` fingerprint identifying the failure pattern."""
+
     count: int = 0
+    """Number of times this failure shape has been recorded."""
+
     first_at: str | None = None
+    """ISO timestamp of the first occurrence of this failure shape."""
+
     latest_at: str | None = None
+    """ISO timestamp of the most recent occurrence."""
+
     last_reason: str = ""
+    """Human-readable reason from the most recent failure."""
+
     source: str | None = None
+    """Component that produced the failure (``agent``, ``hook``, ``system``)."""
+
     classification: str | None = None
+    """Failure classification for budget grouping (e.g. ``semantic_reject``)."""
+
     retry_limit: int | None = None
+    """Per-stage retry limit that was in effect when this failure exhausted it."""
+
     failed_reason: str | None = None
+    """String spelling of ``FailedReason`` that terminated the run."""
+
     operator_override_count: int = 0
+    """Number of times an operator has acknowledged and reset this record."""
+
     last_operator_override_at: str | None = None
+    """ISO timestamp of the most recent operator acknowledgement."""
 
 
 class TaskOutcomeState(BaseModel):
@@ -302,18 +344,43 @@ class PipelineRuntime(BaseModel):
     """
 
     git: RuntimeGitState = Field(default_factory=RuntimeGitState)
+    """Current commit and worktree context for the task."""
+
     execution_status: TaskExecutionStatus | str = TaskExecutionStatus.IDLE
+    """Per-task run marker: idle, running, interrupted, done, failed, etc."""
+
     run_started_at: str | None = None
+    """ISO timestamp of when the current run started."""
+
     updated_at: str | None = None
+    """ISO timestamp of the last state-machine transition."""
+
     retry_count: int = 0
+    """Current overall retry count across all stages for this run."""
+
     retry_limit: int = 0
+    """Configured overall retry budget for this task."""
+
     current_stage: RuntimeStageState = Field(default_factory=RuntimeStageState)
+    """Snapshot of the actively-running stage and its timing."""
+
     consecutive_same_hook_rejects: int = 0
+    """How many times the same hook has rejected consecutively."""
+
     last_hook_reject_fingerprint: RuntimeHookRejectFingerprint | None = None
+    """Identity of the most recent hook reject for same-hook loop detection."""
+
     hook_reject_recovery_invoked: bool = False
+    """Whether recovery has already been invoked for the current hook-reject loop."""
+
     recovery_history: list[RuntimeRecoveryOutcome] = Field(default_factory=list)
+    """Compact projections of every completed recovery attempt."""
+
     failed_run_history: dict[str, RuntimeFailedRunRecord] = Field(default_factory=dict)
+    """Per-failure-shape records of semantic-reject exhaustion, keyed by failure shape."""
+
     last_outcome: TaskOutcomeState = Field(default_factory=TaskOutcomeState)
+    """Terminal outcome record populated when the task ends."""
 
     @field_serializer("execution_status", when_used="json")
     def _serialize_execution_status(self, value: object) -> object:
@@ -344,8 +411,13 @@ class ExecutionRuntime(BaseModel):
     """
 
     active_subagent: RuntimeSubagentState | None = None
+    """Snapshot of the currently-running subagent, if any."""
+
     interruption: RuntimeInterruptionState | None = None
+    """Context preserved when a task was paused so resume can restore it."""
+
     last_engine_switch: RuntimeEngineSwitch | None = None
+    """Record of the most recent mid-task engine swap, for the operator timeline."""
 
 
 class TaskRuntime(BaseModel):
@@ -362,7 +434,10 @@ class TaskRuntime(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     pipeline: PipelineRuntime = Field(default_factory=PipelineRuntime)
+    """Lifecycle-owned state: stage position, retries, recovery and failed-run histories."""
+
     execution: ExecutionRuntime = Field(default_factory=ExecutionRuntime)
+    """Runner-owned state: live subagent, interruption context, engine switch trail."""
 
     @property
     def current_stage_name(self) -> str | None:

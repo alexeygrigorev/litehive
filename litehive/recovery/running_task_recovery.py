@@ -31,7 +31,18 @@ from litehive.workspace import Workspace
 
 
 class RunningTaskRecoveryResult(TypedDict):
-    """Recovery summary returned by :func:`recover_running_tasks` so the caller can route post-mortem state without re-walking the task population."""
+    """
+    Recovery summary returned by :func:`recover_running_tasks`.
+
+    Lets the caller route post-mortem state (persist transitions,
+    re-order the queue, render journal entries) without re-walking
+    the task population.
+
+    mutated is true when at least one task was repaired.
+    transitioned holds every task record that changed.
+    journal_messages maps task id to a human-readable journal line.
+    prioritized_ids lists task ids that should run before fresh backlog.
+    """
 
     mutated: bool
     transitioned: list[TaskRecord]

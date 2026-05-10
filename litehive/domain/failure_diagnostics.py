@@ -20,12 +20,32 @@ class FailureDiagnostics(RootModel[dict[str, FailureDiagnosticValue]]):
     root: dict[str, FailureDiagnosticValue] = Field(default_factory=dict)
 
     def __bool__(self) -> bool:
+        """
+        Truthy when at least one diagnostic entry is present.
+
+        Lets callers guard rendering with ``if diagnostics:`` instead of
+        checking ``len(diagnostics.root)`` or ``as_dict()``.
+        """
         return bool(self.root)
 
     def __getitem__(self, key: str) -> FailureDiagnosticValue:
+        """
+        Retrieve a single diagnostic value by key.
+
+        Delegates to the underlying dict so callers can use subscript
+        syntax (``diagnostics["exit_code"]``) instead of unpacking via
+        ``as_dict()`` first.
+        """
         return self.root[key]
 
     def get(self, key: str, default: FailureDiagnosticValue = None) -> FailureDiagnosticValue:
+        """
+        Retrieve a diagnostic value with a fallback.
+
+        Mirrors ``dict.get`` semantics so callers that probe for optional
+        keys (e.g. ``"reason_code"``) get ``None`` instead of
+        ``KeyError`` when the key was never recorded.
+        """
         return self.root.get(key, default)
 
     def as_dict(self) -> dict[str, FailureDiagnosticValue]:

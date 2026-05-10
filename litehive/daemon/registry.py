@@ -47,6 +47,14 @@ class DaemonRegistryEntry:
     is the on-disk format. The registry converts that boundary shape
     once so callers do not keep reaching into ``dict[str, object]``
     for pid, status, heartbeat, and log path fields.
+
+    status is ``running`` when the lock is held, ``stale`` otherwise.
+    pid is the daemon's OS process id, or None if missing.
+    workspace is the workspace root path as a string.
+    started_at is the ISO timestamp when the daemon registered.
+    heartbeat_at is the most recent heartbeat timestamp (may be
+        non-string for legacy rows).
+    log_dir is the path to the daemon's run-all log directory.
     """
 
     status: Literal["running", "stale"]
@@ -58,6 +66,12 @@ class DaemonRegistryEntry:
 
     @classmethod
     def from_metadata(cls, metadata: dict[str, object], status: Literal["running", "stale"]) -> "DaemonRegistryEntry":
+        """
+        Construct a typed entry from the raw lock-manager metadata dict.
+
+        Extracts and coerces each field, tolerating missing or
+        mistyped values from older lock-file formats.
+        """
         pid_value = metadata.get("pid")
         if isinstance(pid_value, int):
             pid = pid_value
@@ -84,6 +98,8 @@ class DaemonRegistry:
     Owns daemon lock metadata, process-state mirroring, and liveness checks for
     one workspace. Callers should bind a workspace once instead of passing it
     through module-level registry helpers.
+
+    workspace is the workspace whose daemon registration this instance manages.
     """
 
     workspace: Workspace
@@ -217,6 +233,9 @@ class DaemonRegistry:
 
 
 def _optional_text_field(metadata: dict[str, object], key: str) -> str | None:
+    """
+    Extract a string value from a metadata dict, returning None for non-strings.
+    """
     value = metadata.get(key)
     if isinstance(value, str):
         return value

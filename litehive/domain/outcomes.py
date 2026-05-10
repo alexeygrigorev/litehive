@@ -91,17 +91,17 @@ class OutcomeReasonCode(StringEnum):
     for routing and reporting.
     """
 
-    VERDICT_FAIL = "verdict_fail"
-    VERDICT_REJECT = "verdict_reject"
-    VERDICT_BLOCKED = "verdict_blocked"
-    HALLUCINATED_COMPLETION = "hallucinated_completion"
-    MISSING_ACCEPTANCE_CRITERIA = "missing_acceptance_criteria"
-    RETRY_LIMIT_EXHAUSTED = "retry_limit_exhausted"
-    STAGE_RETRY_LIMIT_EXHAUSTED = "stage_retry_limit_exhausted"
+    VERDICT_FAIL = "verdict_fail"  # Agent or hook submitted a generic fail verdict
+    VERDICT_REJECT = "verdict_reject"  # QA/reviewer judged the stage result unacceptable
+    VERDICT_BLOCKED = "verdict_blocked"  # Stage cannot proceed without external input
+    HALLUCINATED_COMPLETION = "hallucinated_completion"  # Agent claimed done without satisfying acceptance criteria
+    MISSING_ACCEPTANCE_CRITERIA = "missing_acceptance_criteria"  # Task has no measurable completion conditions
+    RETRY_LIMIT_EXHAUSTED = "retry_limit_exhausted"  # Overall task retry budget fully consumed
+    STAGE_RETRY_LIMIT_EXHAUSTED = "stage_retry_limit_exhausted"  # Per-stage retry budget fully consumed
     EXECUTION_INTERRUPTED = "execution_interrupted"  # Potentially resumable stop with interruption context
     EXECUTION_CANCELLED = "execution_cancelled"  # Deliberate operator abandon/kill path
-    STAGE_EXCEPTION = "stage_exception"
-    UNSUPPORTED_VERDICT = "unsupported_verdict"
-    MERGE_CONFLICT = "merge_conflict"
-    TASK_DONE = "task_done"
-    TASK_CLOSED = "task_closed"
+    STAGE_EXCEPTION = "stage_exception"  # Unhandled exception during stage execution
+    UNSUPPORTED_VERDICT = "unsupported_verdict"  # Submitted verdict not recognized by routing logic
+    MERGE_CONFLICT = "merge_conflict"  # Unresolved conflicts after a merge attempt
+    TASK_DONE = "task_done"  # Task completed successfully or was already satisfied
+    TASK_CLOSED = "task_closed"  # Operator explicitly closed the task with a close reason

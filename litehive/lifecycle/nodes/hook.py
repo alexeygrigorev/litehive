@@ -27,12 +27,23 @@ class HookSpec:
     """
 
     command: str
+    """Shell command to execute."""
     timeout_seconds: float = 60
+    """Wall-clock limit before the hook is killed."""
     description: str | None = None
+    """Human-readable label surfaced in reject feedback."""
     instructions_on_failure: str | None = None
+    """Guidance appended to the reject reason for the next agent visit."""
 
 
 class HookRunner(Protocol):
+    """
+    Interface for executing hook commands.
+
+    Production uses ``SubprocessHookRunner``; tests swap in fakes
+    that avoid spawning real processes.
+    """
+
     def run(self, spec: HookSpec, state: TaskState) -> subprocess.CompletedProcess[str] | None:
         """
         Execute the hook and report success or failure.

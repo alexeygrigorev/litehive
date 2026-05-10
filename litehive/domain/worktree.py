@@ -29,11 +29,22 @@ class ManagedWorktree:
     """
 
     task_id: str
+    """Task that owns this worktree."""
+
     status: str
+    """Current task status string (``queued``, ``in_progress``, ``closed``, ``done``, etc.)."""
+
     worktree_rel: str
+    """Worktree path relative to the workspace root."""
+
     worktree_path: Path
+    """Absolute filesystem path to the worktree directory."""
+
     change_count: int
+    """Number of uncommitted changes in the worktree."""
+
     active: bool
+    """Whether this worktree belongs to the runner's currently-active task."""
 
     @property
     def cleanable(self) -> bool:
@@ -60,9 +71,16 @@ class RescueCandidate:
     """
 
     task_id: str
+    """Task that owns the worktree needing rescue."""
+
     worktree_rel: str
+    """Worktree path relative to the workspace root."""
+
     worktree_path: Path
+    """Absolute filesystem path to the worktree directory."""
+
     commit_shas: list[str]
+    """Commit hashes on the worktree branch that never landed on main."""
 
 
 @dataclass(slots=True)
@@ -78,11 +96,22 @@ class RescueResult:
     """
 
     task_id: str
+    """Task that owns the rescued worktree."""
+
     worktree_rel: str
+    """Worktree path relative to the workspace root."""
+
     status: str
+    """High-level rescue outcome (``clean``, ``already_landed``, ``no_commits``, ``manual_conflict``, etc.)."""
+
     commit_shas: list[str]
+    """Commit hashes that were processed during the rescue attempt."""
+
     head_sha: str | None = None
+    """SHA of the final head commit after the rescue, or ``None`` if nothing was applied."""
+
     message: str | None = None
+    """Operator-facing detail about what the rescue did or why it stopped."""
 
 
 class WorktreeMergeConflict(Exception):
@@ -122,7 +151,10 @@ class WorktreeSyncResult:
     """
 
     changed: bool
+    """Whether the sync actually moved the worktree (rebase or merge happened)."""
+
     worktree_path: Path | None = None
+    """Filesystem path to the worktree that was sync'd."""
 
 
 @dataclass(slots=True)
@@ -137,8 +169,19 @@ class TaskWorktreeInspection:
     """
 
     task_id: str
+    """Task whose worktree is being inspected."""
+
     worktree_rel: str | None
+    """Worktree path relative to the workspace root, or ``None`` if not recorded."""
+
     worktree_path: Path | None
+    """Absolute filesystem path to the worktree, or ``None`` if it doesn't exist on disk."""
+
     exists: bool
+    """Whether the recorded worktree directory is present on disk."""
+
     uncommitted: list[str]
+    """Files with uncommitted changes in the worktree."""
+
     committed_ahead_of_main: list[str]
+    """Files committed on the worktree branch but not yet merged into main."""

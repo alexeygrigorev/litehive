@@ -20,9 +20,16 @@ class SubagentStartedEvent:
     consumed_by: ClassVar[tuple[str, ...]] = ("status recent activity", "event-log replay")
 
     subagent_id: str
+    """Canonical identifier of the subagent that was allocated."""
+
     role: str
+    """Agent role assigned to the subagent."""
+
     engine: str
+    """Name of the engine adapter selected for the subagent."""
+
     sandboxed: bool
+    """Whether the subagent runs under a sandbox policy."""
 
     @property
     def kind(self) -> str:
@@ -52,8 +59,13 @@ class SubagentPidEvent:
     consumed_by: ClassVar[tuple[str, ...]] = ("status recent activity", "event-log replay")
 
     subagent_id: str
+    """Canonical identifier of the subagent."""
+
     role: str
+    """Agent role of the subagent."""
+
     pid: int
+    """OS process id reported by the engine adapter."""
 
     @property
     def kind(self) -> str:
@@ -78,8 +90,13 @@ class SubagentProgressEvent:
     consumed_by: ClassVar[tuple[str, ...]] = ("status recent activity", "event-log replay")
 
     subagent_id: str
+    """Canonical identifier of the subagent."""
+
     role: str
+    """Agent role of the subagent."""
+
     pid: int | None
+    """OS process id, or None if not yet reported."""
 
     @property
     def kind(self) -> str:
@@ -105,11 +122,22 @@ class SubagentFinishedEvent:
     consumed_by: ClassVar[tuple[str, ...]] = ("status recent activity", "event-log replay")
 
     subagent_id: str
+    """Canonical identifier of the subagent."""
+
     role: str
+    """Agent role of the subagent."""
+
     engine: str
+    """Name of the engine adapter that ran the subagent."""
+
     status: SubagentStatus
+    """Terminal lifecycle status of the subagent."""
+
     exit_code: int
+    """Final process exit code."""
+
     interruption_reason: str | None
+    """Reason the process was interrupted, or None for normal exit."""
 
     @property
     def kind(self) -> str:

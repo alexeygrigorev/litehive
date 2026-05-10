@@ -16,10 +16,25 @@ from litehive.config.time_parsing import parse_utc_datetime
 
 
 class QuotaWindow(Protocol):
+    """
+    Protocol for one quota reset window (short-term or long-term).
+
+    Vendors return these as part of a quota status so Litehive can
+    auto-freeze an engine until the reset time instead of re-probing
+    on every stage.
+    """
+
     reset_at: str | None
 
 
 class QuotaStatus(Protocol):
+    """
+    Protocol for the result of a vendor quota probe.
+
+    Abstracts over ``heru.quota.UsageStatus`` so the config layer can
+    inspect quota state without importing the heru models directly.
+    """
+
     error: str | None
 
     @property

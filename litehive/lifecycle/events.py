@@ -115,6 +115,7 @@ class Pass(Event):
     """
 
     metadata: dict[str, Any] = field(default_factory=dict)
+    """Verdict details (files_changed, tests_added, etc.) from the agent."""
 
 
 @dataclass(frozen=True)
@@ -126,6 +127,7 @@ class HookOk(Event):
     """
 
     warnings: list[str] = field(default_factory=list)
+    """Non-fatal hook output lines the agent should be warned about."""
 
 
 @dataclass(frozen=True)
@@ -173,9 +175,13 @@ class Reject(Event):
     """
 
     source: Literal["agent", "hook", "guard", "system"]
+    """Which actor produced the rejection."""
     reason: str
+    """Free-text explanation of why the work was rejected."""
     classification: str | None = None
+    """Typed reject category (e.g. semantic_reject) used for loop detection."""
     metadata: dict[str, Any] = field(default_factory=dict)
+    """Arbitrary key-value context forwarded to recovery and reports."""
 
     @property
     def trigger_event_kind(self) -> TriggerEventKind:
@@ -224,6 +230,7 @@ class MergeConflictDetected(Event):
     """
 
     conflict_files: tuple[str, ...]
+    """Files left with unresolved merge markers after git merge."""
 
 
 @dataclass(frozen=True)
@@ -238,9 +245,11 @@ class Blocked(Event):
     """
 
     reason: str
+    """Description of the blockage (missing dependency, quota, etc.)."""
 
     @property
     def trigger_event_kind(self) -> TriggerEventKind:
+        """Infrastructure blockage maps to the BLOCKED trigger kind."""
         return TriggerEventKind.BLOCKED
 
     @property
@@ -267,10 +276,13 @@ class Crash(Event):
     """
 
     exc_type: str
+    """The exception class name that caused the crash."""
     message: str
+    """The crash exception's stringified message."""
 
     @property
     def trigger_event_kind(self) -> TriggerEventKind:
+        """Unrecoverable errors map to the CRASH trigger kind."""
         return TriggerEventKind.CRASH
 
     @property
@@ -302,11 +314,12 @@ class Timeout(Event):
 
     @property
     def trigger_event_kind(self) -> TriggerEventKind:
+        """Timeout events map to the TIMEOUT trigger kind."""
         return TriggerEventKind.TIMEOUT
 
     @property
     def terminal_recovery_verdict(self) -> str | None:
-        """Distinguish "recovery agent timed out" from a generic recovery failure."""
+        """Distinguish recovery-agent timeout from a generic failure."""
         return "timeout"
 
 
@@ -324,9 +337,11 @@ class StageRetryLimitHit(Event):
     """
 
     stage: PipelineState
+    """The stage whose retry counter hit its configured limit."""
 
     @property
     def trigger_event_kind(self) -> TriggerEventKind:
+        """Stage retry exhaustion maps to the STAGE_RETRY_LIMIT kind."""
         return TriggerEventKind.STAGE_RETRY_LIMIT
 
     @property
@@ -353,6 +368,7 @@ class OverallRetryLimitHit(Event):
 
     @property
     def trigger_event_kind(self) -> TriggerEventKind:
+        """Whole-task retry exhaustion maps to the RETRY_LIMIT kind."""
         return TriggerEventKind.RETRY_LIMIT
 
     @property
@@ -373,7 +389,9 @@ class TaskTimeBudgetExceeded(Event):
     """
 
     elapsed_seconds: float
+    """Wall-clock seconds the task has spent in agent-backed nodes."""
     budget_seconds: float
+    """The configured time budget from workspace config."""
 
     @property
     def failure_message(self) -> str:
@@ -397,7 +415,9 @@ class RecoverySucceeded(Event):
     """
 
     resume: PipelineState
+    """Where to route after recovery (stage name, phase, or DONE)."""
     disposition_hint: Literal["resume", "advance", "done"] = "resume"
+    """Semantic label for the recovery outcome the agent reported."""
 
 
 @dataclass(frozen=True)
@@ -411,6 +431,7 @@ class RecoveryFailed(Event):
     """
 
     reason: str
+    """The recovery agent's explanation of why it could not fix the task."""
 
     @property
     def failure_message(self) -> str:
@@ -451,6 +472,7 @@ class PreExecRecoverySucceeded(Event):
     """
 
     resume_stage: PipelineState
+    """The stage to enter after pre-exec recovery completes."""
 
 
 @dataclass(frozen=True)
@@ -464,6 +486,7 @@ class PreExecRecoveryFailed(Event):
     """
 
     reason: str
+    """Description of why the pre-exec repair attempt failed."""
 
 
 @dataclass(frozen=True)

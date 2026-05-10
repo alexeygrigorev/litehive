@@ -39,7 +39,21 @@ class SandboxProfile(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class SandboxPolicySummary:
-    """Snapshot of the resolved sandbox policy for one engine/role pair, surfaced to operators in subagent reports."""
+    """
+    Snapshot of the resolved sandbox policy for one engine/role pair,
+    surfaced to operators in subagent reports.
+
+    ``enabled`` is ``False`` when sandboxing is off for the engine; all
+    other fields are ``None`` or empty in that case. ``backend`` is the
+    sandbox implementation (e.g. ``docker``). ``runtime`` is the host
+    binary name (e.g. ``docker``). ``image`` is the container image
+    reference. ``network_mode`` is the docker network mode (``host``,
+    ``none``, etc.). ``workspace_mode`` is ``ro`` or ``rw`` for the
+    workspace mount. ``environment`` lists env-var names propagated into
+    the container. ``credential_inputs`` lists credential env-var/mount
+    pairs. ``propagated_mounts`` lists extra host paths bind-mounted
+    into the container.
+    """
 
     enabled: bool
     backend: str | None = None

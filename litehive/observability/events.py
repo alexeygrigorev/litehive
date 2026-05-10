@@ -27,9 +27,23 @@ class PersistedTaskEvent(Protocol):
     """
 
     @property
-    def kind(self) -> str: ...
+    def kind(self) -> str:
+        """
+        String tag that identifies the event type (e.g. ``stage_completed``).
 
-    def data(self) -> Mapping[str, object]: ...
+        Stored in the ``event_kind`` column so downstream readers can
+        filter without parsing the full payload.
+        """
+        ...
+
+    def data(self) -> Mapping[str, object]:
+        """
+        Return the structured payload fields the event carries.
+
+        Empty when the event has no extra data beyond the standard
+        ``ts`` / ``task_id`` / ``kind`` envelope.
+        """
+        ...
 
 
 def append_event(

@@ -243,6 +243,15 @@ def repair_command(workspace: WorkspaceOption = Path.cwd()) -> int:
 
 @dataclass(slots=True)
 class _QuotaHealth:
+    """
+    One engine's quota probe result rendered for the health report.
+
+    Carries the engine name, a coarse status label (``ok``,
+    ``warning``, ``unavailable``, ``unsupported``), a human-readable
+    summary string, and a ``problem`` flag that the health command
+    uses to decide its exit code.
+    """
+
     engine: str
     status: str
     summary: str
@@ -251,12 +260,36 @@ class _QuotaHealth:
 
 @dataclass(frozen=True, slots=True)
 class DaemonHealthStatus:
+    """
+    Snapshot of the workspace daemon's running state.
+
+    ``status`` is ``"running"`` or ``"stopped"``; ``pid`` carries
+    the OS pid when running and ``"-"`` otherwise so the health
+    renderer can print a fixed-width column without branching.
+    """
+
     status: str
     pid: str
 
 
 class WorkspaceHealthPresenter:
+    """
+    Workspace-bound presenter for the ``litehive health`` command.
+
+    Owns the daemon-status lookup so the health command can delegate
+    to a single object rather than importing the daemon registry
+    directly. Designed for testability: the workspace is injected
+    through the constructor.
+    """
+
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the presenter to the workspace whose daemon and health
+        state it will report.
+
+        The workspace is used to look up the daemon registry and
+        workspace-level configuration for the health display.
+        """
         self.workspace = workspace
 
     def daemon_status(self) -> DaemonHealthStatus:

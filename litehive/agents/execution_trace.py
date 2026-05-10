@@ -25,8 +25,13 @@ class ExecutionTraceView:
     """Human-readable execution trace plus the artifact it was derived from."""
 
     text: str
+    """Rendered trace text suitable for display."""
+
     source: Path | str | None
+    """File path or origin label identifying where the trace came from."""
+
     cached_final_snapshot: bool = False
+    """True when the text was read from a pre-rendered execution_trace.md."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +46,7 @@ class ParsedUnifiedEvents:
     """
 
     events: tuple[UnifiedEvent, ...]
+    """Ordered sequence of parsed engine output events."""
 
     def __bool__(self) -> bool:
         return bool(self.events)
@@ -52,6 +58,14 @@ class ExecutionTraceRenderer:
     """
 
     def parse_unified_events(self, stdout: str) -> ParsedUnifiedEvents:
+        """
+        Extract structured UnifiedEvent objects from engine stdout.
+
+        Scans each line for JSON objects containing a ``kind`` field and
+        validates them through the pydantic model. Malformed lines are
+        skipped with a warning so a single bad event does not drop the
+        rest of the trace.
+        """
         events: list[UnifiedEvent] = []
         for line_number, raw_line in enumerate(stdout.splitlines(), 1):
             line = raw_line.strip()
@@ -76,6 +90,13 @@ class ExecutionTraceRenderer:
         return ParsedUnifiedEvents(events=tuple(events))
 
     def render_event(self, event: UnifiedEvent) -> str:
+        """
+        Render a single unified event into human-readable text.
+
+        Message and status events produce their content directly. Tool
+        events are wrapped in a fenced code block with labeled input,
+        output, and error sections.
+        """
         if event.kind in {"message", "status"} and event.content:
             return event.content
         if event.kind == "error" and event.error:
@@ -99,6 +120,13 @@ class ExecutionTraceRenderer:
         return "\n".join(lines)
 
     def render_from_events(self, events: ParsedUnifiedEvents, stderr: str = "") -> str:
+        """
+        Render a sequence of parsed events into a combined trace string.
+
+        Non-empty rendered events are joined with blank-line separators.
+        When no events render, stderr is returned as a fallback so the
+        caller always gets something useful.
+        """
         parts = [rendered for event in events.events if (rendered := self.render_event(event))]
         if not parts:
             if stderr.strip():
@@ -109,6 +137,13 @@ class ExecutionTraceRenderer:
         return "\n\n".join(parts)
 
     def render(self, execution: CLIExecutionResult) -> str:
+        """
+        Render a trace from a completed engine execution result.
+
+        Tries structured event parsing first; falls back to the
+        adapter's raw transcript when the stdout does not contain
+        parseable events.
+        """
         events = self.parse_unified_events(execution.stdout)
         if not events:
             return execution.transcript
@@ -121,6 +156,13 @@ class ExecutionTraceRenderer:
         task_id: str | None = None,
         subagent_id: str | None = None,
     ) -> LiveTimeline | None:
+        """
+        Reconstruct a LiveTimeline from recovered unified events.
+
+        Used when the structured session-store event stream is missing
+        and the timeline must be rebuilt from stdout. Returns None when
+        the event list is empty.
+        """
         if not events:
             return None
         event_stream = LiveTimeline(engine=engine_name, task_id=task_id, subagent_id=subagent_id)
@@ -129,6 +171,13 @@ class ExecutionTraceRenderer:
         return event_stream
 
     def render_from_streams(self, stdout: str, stderr: str) -> str:
+        """
+        Render a trace from raw stdout and stderr strings.
+
+        Attempts structured event parsing first; when no events are
+        found, falls back to concatenating the raw text streams so
+        non-event-producing engines still produce a readable trace.
+        """
         events = self.parse_unified_events(stdout)
         if events:
             return self.render_from_events(events, stderr=stderr)
@@ -138,6 +187,12 @@ class ExecutionTraceRenderer:
         return "\n\n".join(part for part in parts if part).strip()
 
     def render_from_payload(self, payload: dict[str, Any], stderr: str = "") -> str:
+        """
+        Render a trace from a persisted event-stream payload dictionary.
+
+        Extracts the ``events`` list from the payload, validates each
+        entry, and delegates to ``render_from_events``.
+        """
         raw_events = payload.get("events")
         if not isinstance(raw_events, list):
             return ""
@@ -159,6 +214,14 @@ class ExecutionTraceRenderer:
         active: bool,
         runtime_state: RuntimeSubagentState | None = None,
     ) -> ExecutionTraceView | None:
+        """
+        Load the best available execution trace for one subagent.
+
+        Tries sources in priority order: the session-store event stream,
+        a cached final-snapshot markdown file, stdout/stderr stream
+        artifacts, and finally the runtime state's inline snippet.
+        Returns None when no trace data exists for the subagent.
+        """
         base = workspace.task_dir(task) / ref.path
         stderr = self._read_stream_artifact(base, "stderr", active=active)
         if stderr is None:
@@ -209,6 +272,13 @@ class ExecutionTraceRenderer:
         return None
 
     def _read_stream_artifact(self, base: Path, stream: str, active: bool) -> ExecutionTraceView | None:
+        """
+        Read a stdout or stderr artifact file from the subagent directory.
+
+        For active runs prefers ``.log`` (live tail target) over ``.txt``.
+        For finished runs prefers ``.txt`` (canonical snapshot) over
+        ``.log``. Returns None when neither file exists.
+        """
         if stream not in {"stdout", "stderr"}:
             raise ValueError(f"Unsupported stream artifact: {stream}")
         if active:

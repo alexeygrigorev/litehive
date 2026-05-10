@@ -303,6 +303,14 @@ class TaskDependencyValidator:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the validator to the workspace whose task store it will
+        query for dependency resolution.
+
+        The workspace is used to load existing task records when
+        checking that referenced dependency IDs exist and do not
+        form cycles.
+        """
         self.workspace = workspace
 
     def validate(self, task_id: str, depends_on: list[str]) -> None:

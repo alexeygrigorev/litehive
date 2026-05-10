@@ -12,21 +12,48 @@ from .types import FailedReason, PipelineMode
 
 @dataclass(frozen=True)
 class Limits:
+    """
+    Retry and budget ceilings the runner respects.
+
+    Injected at construction time rather than persisted so a config
+    change takes effect on the next runner launch without requiring
+    a task state migration.
+    """
+
     stage_retry_limit: int = 3
+    """Maximum retries for a single agent stage before failing."""
     same_hook_reject_limit: int = 3
+    """Consecutive identical-hook rejects before the circuit breaker trips."""
     rejection_loop_limit: int = 3
+    """Times the same stage can reject and loop back before failing."""
     same_engine_retry_limit: int = 3
+    """Transient-error retries on one engine before switching."""
     overall_retry_limit: int = 30
+    """Total retries across all stages before the task fails."""
     grace_period_seconds: int = 120
+    """Per-node wall-clock timeout before the runner emits Timeout."""
 
 
 @dataclass
 class LastReport:
+    """
+    Snapshot of what the most recent agent visit reported about its
+    work.
+
+    Updated after every Pass transition so downstream guards and the
+    next agent visit can see real change metrics instead of defaults.
+    """
+
     files_changed: int = 0
+    """Number of files the agent modified in its last visit."""
     tests_added: int = 0
+    """Number of new test files the agent created."""
     changed_files: list[str] = field(default_factory=list)
+    """Paths of files modified in the last agent visit."""
     test_results: list[str] = field(default_factory=list)
+    """Summary strings from the agent's test execution."""
     hook_ok: bool = False
+    """Whether the post-stage hook passed after the last agent visit."""
 
     def to_payload(self) -> dict[str, int | list[str] | bool]:
         """Serialize the report so the next runner launch can read it back from the json column."""
@@ -64,10 +91,22 @@ class LastReport:
 
 @dataclass
 class HookRejectFingerprint:
+    """
+    Identity tuple for detecting repeated failures of the same hook.
+
+    The same-hook-reject circuit breaker compares fingerprints across
+    launches; two rejects with matching fingerprints count as the
+    same failure, not two independent ones.
+    """
+
     point: PipelineState
+    """The pipeline phase where the hook rejected."""
     command: str
+    """The shell command that was executed."""
     description: str = ""
+    """Human-readable label from the hook config."""
     fingerprint: str = ""
+    """Computed identity string used for deduplication."""
 
     def to_payload(self) -> dict[str, str]:
         """
@@ -135,8 +174,18 @@ class LastRejection:
 
 @dataclass
 class MergeContext:
+    """
+    State carried across merge-resolution attempts.
+
+    Persists which files are conflicting and which attempt number
+    we are on so a resumed runner can re-enter merge_resolving
+    without losing its place.
+    """
+
     conflict_files: tuple[str, ...] = ()
+    """Files with unresolved merge markers."""
     merge_attempt: int = 1
+    """One-indexed attempt counter for the current conflict set."""
 
     def to_payload(self) -> dict[str, Any]:
         """
@@ -163,8 +212,19 @@ class MergeContext:
 
 @dataclass
 class CommitResult:
+    """
+    Outcome of the commit stage: the resulting HEAD sha and
+    optional skip reason.
+
+    Written by the commit node after merge lands (or is skipped)
+    so downstream stages and terminal reconciliation can reference
+    what actually landed.
+    """
+
     head_sha: str
+    """The git commit SHA at HEAD after the merge completed."""
     reason: str | None = None
+    """Why the commit was skipped, when no merge happened."""
 
     def to_payload(self) -> dict[str, Any]:
         """Serialize the commit-stage outcome (head sha plus optional skip reason) so downstream stages can reference what landed."""
@@ -184,9 +244,19 @@ class CommitResult:
 
 @dataclass
 class RejectionLoop:
+    """
+    Counter for the rejection-loop detector.
+
+    Tracks how many times a rejection at one stage caused a retry
+    of an earlier stage, so the loop cap survives runner restarts.
+    """
+
     rejection_stage: PipelineState
+    """The stage that emitted the reject."""
     retry_target_stage: PipelineState
+    """The earlier stage the pipeline loops back to."""
     count: int = 0
+    """Accumulated loop count for this (rejection, target) pair."""
 
     def to_payload(self) -> dict[str, Any]:
         """
@@ -358,28 +428,51 @@ class TaskState:
     """
 
     task_id: str
+    """Identifier of the task this state belongs to."""
     stage: PipelineState
+    """Current position in the pipeline state machine."""
     pipeline_mode: PipelineMode
+    """Whether the task runs the full pipeline or a single stage."""
     entry_stage: PipelineState | None = None
+    """Stage the task should enter first; set by single-mode launches."""
     stage_retry: dict[PipelineState, int] = field(default_factory=dict)
+    """Per-stage retry counters, bumped by ``IncStageRetry`` effects."""
     active_recovery_trigger: RecoveryTrigger | None = None
+    """The recovery trigger currently being serviced, if any."""
     recovery_history: list[RecoveryOutcome] = field(default_factory=list)
+    """Completed recovery outcomes, used for budget tracking."""
     recovery_budget_history_start: int = 0
+    """Index into recovery_history where the current budget window begins."""
     pre_exec_recovery_attempt: int = 0
+    """How many pre-exec recovery tries have occurred (budget is one)."""
     agent_elapsed_seconds: float = 0.0
+    """Cumulative wall-clock seconds spent in agent-backed nodes."""
     merge_context: MergeContext | None = None
+    """Active merge-resolution state, set when conflicts are detected."""
     commit_result: CommitResult | None = None
+    """The HEAD sha and optional skip reason from the commit node."""
     last_report: LastReport = field(default_factory=LastReport)
+    """Most recent agent report (files changed, tests added, hook ok)."""
     last_rejection_by_stage: dict[PipelineState, LastRejection] = field(default_factory=dict)
+    """Per-stage memo of the last reject, read by agent prompts on retry."""
     failed_run_history: dict[str, FailedRunRecord] = field(default_factory=dict)
+    """Cross-run retry-exhaustion memory keyed by failure shape."""
     rejection_loop: RejectionLoop | None = None
+    """Current rejection-loop counter, if one is active."""
     consecutive_same_hook_rejects: int = 0
+    """Running count of identical hook rejects for the circuit breaker."""
     last_hook_reject_fingerprint: HookRejectFingerprint | None = None
+    """Fingerprint of the most recent hook reject for deduplication."""
     hook_reject_recovery_invoked: bool = False
+    """Whether recovery has already fired for the current hook-reject loop."""
     failed_reason: FailedReason | None = None
+    """Machine-readable terminal failure category."""
     failed_message: str | None = None
+    """Human-readable detail about why the task failed."""
     recovery_failure_explanation: str | None = None
+    """Free-text explanation the recovery agent gave when it gave up."""
     limits: Limits = field(default_factory=Limits)
+    """Runtime retry/budget config; re-injected on every load, never persisted."""
 
     def __post_init__(self) -> None:
         """

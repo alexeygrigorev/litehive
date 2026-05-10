@@ -9,6 +9,16 @@ from litehive.domain.common import (
 
 
 class NodeType(str, Enum):
+    """
+    Discriminant for the four node families in the pipeline.
+
+    Each stage is backed by exactly one node type: agents own the
+    core grooming/implementing/testing/accepting stages, hooks wrap
+    before/after phases, system nodes handle commit and recovery
+    bookkeeping, and terminal nodes absorb done/failed without
+    further work.
+    """
+
     AGENT = "agent"
     HOOK = "hook"
     SYSTEM = "system"
@@ -89,6 +99,15 @@ READY: PipelineState = PipelineState.READY
 
 
 class FailedReason(StringEnum):
+    """
+    Machine-readable reason the pipeline landed in the FAILED state.
+
+    The ``Fail`` effect writes one of these onto
+    ``TaskState.failed_reason`` so status surfaces, the journal,
+    and recovery history can classify terminal failures without
+    parsing free-text messages.
+    """
+
     HOOK_REJECT_LOOP = "hook_reject_loop"
     REJECTION_LOOP_DETECTED = "rejection_loop_detected"
     SEMANTIC_REJECT = "semantic_reject"

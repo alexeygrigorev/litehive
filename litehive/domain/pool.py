@@ -136,10 +136,18 @@ class PoolStopReason(StringEnum):
 class PoolProgressReport:
     """
     Progress/action summary attached to non-progress pool stops.
+
+    Carries a machine-readable status bucket (``no_useful_progress``,
+    ``operator_action_required``) and a single human-readable sentence
+    so the pool summary can render "why did we stop?" without embedding
+    prose in the stop-reason enum.
     """
 
     progress_status: str
+    """Machine-readable bucket: ``no_useful_progress`` or ``operator_action_required``."""
+
     summary: str
+    """Human-readable sentence explaining why the pool stopped with no useful progress."""
 
 
 @dataclass(slots=True)
@@ -149,15 +157,34 @@ class PoolTaskReportEntry:
     """
 
     task_id: str
+    """Unique task identifier."""
+
     title: str
+    """Brief task title as stored on the task record."""
+
     final_task_status: TaskStatus | str
+    """Terminal ``TaskStatus`` the task landed in (done, flagged, closed, etc.)."""
+
     pipeline_status: PipelineStatus | str
+    """Last pipeline progress bucket the task reached before the pool stopped."""
+
     stage_outcomes: list[str] = field(default_factory=list)
+    """Verdict strings collected from each stage the task visited."""
+
     reason_code: str | None = None
+    """Machine-readable reason code when the task finished abnormally."""
+
     reason: str | None = None
+    """Human-readable reason text when the task finished abnormally."""
+
     follow_up_task_id: str | None = None
+    """Task id of a follow-up task spawned during this task's run, if any."""
+
     close_reason: str | None = None
+    """Close reason supplied when an operator closed the task mid-pool."""
+
     flag_reason: str | None = None
+    """Flag reason recorded when the pool or runner flagged the task."""
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, object]) -> "PoolTaskReportEntry":
@@ -187,19 +214,45 @@ class PoolTaskReportEntry:
 class PoolSummaryReport:
     """
     Structured summary of one pool run.
+
+    Aggregates every task the pool touched into outcome buckets
+    (completed, flagged, resumable, closed, skipped, remaining) plus
+    the pool-level stop reason and an optional progress diagnostic.
+    Rendered by the pool summary CLI and persisted for post-mortem.
     """
 
     created_at: str
+    """ISO timestamp of when the pool run started."""
+
     stop_reason: str
+    """Machine-readable ``PoolStopReason`` value that terminated the pool."""
+
     tasks_run: int
+    """Total number of tasks the pool attempted to execute in this run."""
+
     completed: list[PoolTaskReportEntry] = field(default_factory=list)
+    """Tasks that finished successfully."""
+
     flagged: list[PoolTaskReportEntry] = field(default_factory=list)
+    """Tasks that ended flagged for operator attention."""
+
     resumable: list[PoolTaskReportEntry] = field(default_factory=list)
+    """Tasks that were interrupted or parked and can be resumed later."""
+
     closed: list[PoolTaskReportEntry] = field(default_factory=list)
+    """Tasks that were explicitly closed by an operator during the run."""
+
     skipped: list[PoolTaskReportEntry] = field(default_factory=list)
+    """Tasks the pool chose to skip (e.g. blocked on dependencies)."""
+
     remaining: list[PoolTaskReportEntry] = field(default_factory=list)
+    """Tasks still queued or in-progress when the pool stopped."""
+
     progress_status: str | None = None
+    """Machine-readable progress bucket when the pool stopped without progress."""
+
     summary: str | None = None
+    """Human-readable sentence explaining why the pool stopped without progress."""
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, object]) -> "PoolSummaryReport":
@@ -232,26 +285,32 @@ class PoolSummaryReport:
 
     @property
     def completed_count(self) -> int:
+        """Number of tasks that finished successfully."""
         return len(self.completed)
 
     @property
     def flagged_count(self) -> int:
+        """Number of tasks that ended flagged for operator attention."""
         return len(self.flagged)
 
     @property
     def resumable_count(self) -> int:
+        """Number of tasks left in a resumable (interrupted or parked) state."""
         return len(self.resumable)
 
     @property
     def closed_count(self) -> int:
+        """Number of tasks explicitly closed by an operator during the run."""
         return len(self.closed)
 
     @property
     def skipped_count(self) -> int:
+        """Number of tasks the pool chose to skip."""
         return len(self.skipped)
 
     @property
     def remaining_count(self) -> int:
+        """Number of tasks still queued or in-progress when the pool stopped."""
         return len(self.remaining)
 
     def with_derived_progress_report(self) -> "PoolSummaryReport":

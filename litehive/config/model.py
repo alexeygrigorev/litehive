@@ -27,6 +27,12 @@ _RETRY_FAILURE_KIND_ADAPTER = TypeAdapter(TransientFailureKind)
 
 
 def _represent_transient_failure_kind(dumper, value: TransientFailureKind):
+    """
+    Teach PyYAML to serialise ``TransientFailureKind`` as its string value.
+
+    Without this representer, YAML dump would write the enum's repr and
+    the resulting file would not round-trip back through config loading.
+    """
     return dumper.represent_str(value.value)
 
 
@@ -97,31 +103,59 @@ DEFAULT_DAEMON_STARTUP_POLL_INTERVAL_SECONDS = 0.1
 
 @dataclass(slots=True)
 class SandboxCredentialInput:
+    """
+    One credential that the sandbox should inject into the container.
+
+    Maps a host environment variable to a file path inside the
+    container so engines that read credentials from disk can find them
+    without the operator mounting secrets manually.
+    """
+
     env_var: str
+    """Uppercase environment variable name read from the host process."""
+
     mount_path: str
+    """Absolute path inside the container where the value is written."""
 
 
 @dataclass(slots=True)
 class ExternalEngineSandboxPolicy:
+    """
+    Per-engine sandbox overrides merged on top of the global defaults.
+
+    Only fields that differ from ``ExternalEngineSandboxConfig`` defaults
+    need to be set; the ``policy_for_engine`` method fills in the gaps.
+    """
+
     enabled: bool = False
+    """Whether sandboxing is active for this engine."""
     network_mode: str | None = None
+    """Container network mode (``none``, ``bridge``, ``host``), or ``None`` to inherit the global default."""
     workspace_mode: str | None = None
+    """Workspace mount mode (``ro``, ``rw``), or ``None`` to inherit the global default."""
     environment: list[str] = field(default_factory=list)
+    """Host environment variable names to propagate into the container."""
     credential_inputs: list[SandboxCredentialInput] = field(default_factory=list)
+    """Credential files to mount from the host into the container."""
     extra_ro_binds: list[str] = field(default_factory=list)
-    # Writable bind mounts (docker -v :rw). Required when the engine's CLI
-    # writes to a fixed host path outside the workspace — e.g. goz writes
-    # session files to ~/.goz/sessions.
+    """Additional read-only bind mounts from the host."""
     extra_rw_binds: list[str] = field(default_factory=list)
-    # Hardcoded env vars to set inside the sandbox. Unlike `environment`,
-    # which propagates values from the caller, these are fixed values
-    # baked into the policy (e.g. CODEX_HOME -> /home/<user>/.codex so
-    # codex can find auth.json when HOME is the workspace root).
+    """Writable bind mounts. Required when the engine's CLI writes to a fixed host path outside the workspace."""
     setenv: dict[str, str] = field(default_factory=dict)
+    """Hardcoded environment variables set inside the container. Unlike ``environment``, these are fixed values, not propagated from the host."""
 
 
 @dataclass(frozen=True, slots=True)
 class ResolvedExternalEngineSandboxPolicy:
+    """
+    Fully-resolved, immutable sandbox policy for one engine.
+
+    Produced by ``ExternalEngineSandboxConfig.policy_for_engine`` by
+    merging per-engine overrides with global defaults. Frozen so the
+    sandbox launcher receives a snapshot it can trust for the duration
+    of one engine invocation.
+    """
+
     enabled: bool
     network_mode: str
     workspace_mode: str
@@ -134,31 +168,70 @@ class ResolvedExternalEngineSandboxPolicy:
 
 @dataclass(slots=True)
 class DaemonConfig:
+    """
+    Timing parameters for the background daemon process.
+
+    Controls heartbeat liveness checks, graceful shutdown escalation
+    from SIGTERM to SIGKILL, and startup polling. All values are
+    validated as positive floats during config load so the process-control
+    loops never spin or wait forever.
+    """
+
     heartbeat_interval_seconds: float = DEFAULT_DAEMON_HEARTBEAT_INTERVAL_SECONDS
+    """Seconds between daemon heartbeat writes."""
     health_timeout_seconds: float = DEFAULT_DAEMON_HEALTH_TIMEOUT_SECONDS
+    """Seconds to wait for a single health check response before declaring the daemon stale."""
     stop_grace_period_seconds: float = DEFAULT_DAEMON_STOP_GRACE_PERIOD_SECONDS
+    """Seconds between SIGTERM and SIGKILL during graceful shutdown."""
     force_kill_timeout_seconds: float = DEFAULT_DAEMON_FORCE_KILL_TIMEOUT_SECONDS
+    """Seconds between SIGKILL and assuming the process is wedged."""
     exit_poll_interval_seconds: float = DEFAULT_DAEMON_EXIT_POLL_INTERVAL_SECONDS
+    """Seconds between polls when waiting for the daemon process to exit."""
     startup_timeout_seconds: float = DEFAULT_DAEMON_STARTUP_TIMEOUT_SECONDS
+    """Seconds the CLI waits for a background daemon to register before giving up."""
     startup_poll_interval_seconds: float = DEFAULT_DAEMON_STARTUP_POLL_INTERVAL_SECONDS
+    """Seconds between polls while waiting for the daemon to become ready."""
 
 
 @dataclass(slots=True)
 class ExternalEngineSandboxConfig:
+    """
+    Global sandbox configuration shared by all external engine invocations.
+
+    Defines the container image, mount paths, security flags, and
+    default network/workspace modes. Per-engine customisation lives in
+    ``engine_policies``; the ``policy_for_engine`` method merges the two
+    layers into a resolved policy the sandbox launcher can consume.
+    """
+
     enabled: bool = False
+    """Whether external engines are sandboxed at all."""
     backend: str = "docker"
+    """Container runtime backend (currently only ``docker``)."""
     runtime_binary: str = "docker"
+    """Path or name of the container runtime binary."""
     image: str = "litehive-external-engine:latest"
+    """Container image used for sandboxed engine invocations."""
     workspace_mount_path: str = "/workspace"
+    """Absolute path inside the container where the workspace is mounted."""
     binary_mount_root: str = "/litehive/bin"
+    """Absolute path inside the container where engine binaries are mounted."""
     runtime_args: list[str] = field(default_factory=list)
+    """Extra arguments forwarded to the container runtime on every invocation."""
     default_network_mode: str = "none"
+    """Container network mode used when per-engine policy does not override it."""
     default_workspace_mode: str = "rw"
+    """Workspace mount mode used when per-engine policy does not override it."""
     read_only_rootfs: bool = True
+    """Whether the container root filesystem is mounted read-only."""
     drop_capabilities: bool = True
+    """Whether Linux capabilities are dropped inside the container."""
     no_new_privileges: bool = True
+    """Whether the ``no-new-privileges`` seccomp flag is set."""
     tmpfs: list[str] = field(default_factory=lambda: ["/tmp"])
+    """Tmpfs mounts created inside the container."""
     engine_policies: dict[str, ExternalEngineSandboxPolicy] = field(default_factory=dict)
+    """Per-engine overrides keyed by engine name."""
 
     def policy_for_engine(self, engine_name: str) -> ResolvedExternalEngineSandboxPolicy:
         """
@@ -204,16 +277,27 @@ class LitehiveConfig:
     """
 
     default_engine: str = "codex"
+    """Primary engine used when no task-level override or preference applies."""
     recovery_engine: str | None = None
+    """Engine forced during recovery, or ``None``/``auto`` to follow normal selection."""
     litehive_source_path: str | None = None
+    """Optional path to the Litehive source tree for development overrides."""
     process_profile: str = "generic"
+    """Process profile name that controls stage prompts and workspace scaffolding."""
     opencode_model: str = "zai-coding-plan/glm-5-turbo"
+    """Default model for the ``opencode`` engine."""
     goz_model: str = "glm-5-turbo"
+    """Default model for the ``goz`` engine."""
     gemini_model: str | None = None
+    """Default model for the ``gemini`` engine, or ``None`` to use the engine's own default."""
     copilot_model: str | None = None
+    """Default model for the ``copilot`` engine, or ``None`` to use the engine's own default."""
     claude_model: str = "claude-sonnet-4-20250514"
+    """Default model for the ``claude`` engine."""
     claude_max_turns: int = 100
+    """Maximum conversation turns per Claude invocation."""
     default_retry_limit: int = 3
+    """Maximum automatic retries for a single task before marking it stuck."""
     retry_on: list[TransientFailureKind] = field(
         default_factory=lambda: [
             TransientFailureKind.EXECUTION_LIMIT,
@@ -221,23 +305,41 @@ class LitehiveConfig:
         ]
     )
     default_stage_retry_limit: int = 2
+    """Maximum automatic retries within one pipeline stage."""
     default_rejection_loop_limit: int = 3
+    """Maximum accept-reject-re-implement cycles before marking the task stuck."""
     pool_stop_on_failure: bool = False
+    """Whether the task pool halts when any single task fails."""
     pool_max_tasks: int | None = None
+    """Maximum concurrent tasks in the pool, or ``None`` for unlimited."""
     pool_stop_on_dirty_git: bool = False
+    """Whether the pool halts when a dirty working tree is detected between tasks."""
     pool_stop_on_attention: bool = False
+    """Whether the pool halts when a task requires operator attention."""
     runner_hooks: dict[str, list[dict[str, object]]] = field(default_factory=dict)
+    """Shell hooks keyed by pipeline point (``pre_running``, ``post_running``, etc.)."""
     task_time_budget_seconds: float | None = DEFAULT_TASK_TIME_BUDGET_SECONDS
+    """Wall-clock budget per task; the task is marked stuck when it expires."""
     subagent_inactivity_timeout_seconds: float = DEFAULT_SUBAGENT_INACTIVITY_TIMEOUT_SECONDS
+    """Seconds of silence before a subagent is considered stalled."""
     inactivity_timeout_seconds: float | None = None
+    """Global inactivity timeout, or ``None`` to disable."""
     external_engine_sandbox: ExternalEngineSandboxConfig = field(default_factory=ExternalEngineSandboxConfig)
+    """Sandbox configuration for external engine invocations."""
     daemon: DaemonConfig = field(default_factory=DaemonConfig)
+    """Timing parameters for the background daemon process."""
     engine_freeze: dict[str, str] = field(default_factory=dict)
+    """Engine names mapped to UTC freeze-until timestamps."""
     engine_preference: list[str] = field(default_factory=lambda: ["codex", "opencode", "gemini", "copilot", "goz"])
+    """Ordered fallback engines appended after the primary engine."""
     agent_startup_guidance: dict[str, list[str]] = field(default_factory=dict)
+    """Per-role guidance lines injected into agent prompts at startup."""
     auto_commit: bool = True
+    """Whether accepted tasks are automatically committed to git."""
     task_mode_name: str = "tasks"
+    """Display name for the task tracking mode."""
     implementation_mode_name: str = "implementation"
+    """Display name for the implementation execution mode."""
 
     def __post_init__(self) -> None:
         """

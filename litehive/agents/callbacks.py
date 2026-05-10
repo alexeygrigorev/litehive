@@ -103,13 +103,28 @@ class SubagentRunCallbacks:
     """
 
     task: TaskRecord
+    """Task the subagent is running under."""
+
     base: Path
+    """Artifact directory allocated for this subagent."""
+
     ref: Subagent
+    """Canonical subagent descriptor persisted on the task record."""
+
     prompt: str
+    """Original prompt sent to the engine."""
+
     sessions: SubagentPidRecorder
+    """Session manager used to persist PID updates."""
+
     progress_writer: ProgressSnapshotWriter
+    """Writer used to persist live progress snapshots."""
+
     warnings: CallbackWarnings = field(default_factory=CallbackWarnings)
+    """Collector for non-fatal callback bookkeeping warnings."""
+
     engine_started: bool = False
+    """True after the adapter reports the engine process has started."""
 
     def on_started(self, pid: int) -> None:
         """

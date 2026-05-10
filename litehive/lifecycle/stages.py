@@ -20,8 +20,19 @@ from .nodes.terminal import TerminalNode
 
 @dataclass(frozen=True)
 class Stage:
+    """
+    A single pipeline stage: the named position plus the Node that
+    executes there.
+
+    The runner looks up a Stage by PipelineState to find which node
+    to call. Equality is overloaded so rules can mix ``Stage``
+    objects and raw string/enum spellings interchangeably.
+    """
+
     name: PipelineState
+    """The pipeline position this stage occupies."""
     node: type
+    """The Node subclass that executes when the machine enters here."""
 
     def __post_init__(self) -> None:
         """
@@ -67,6 +78,15 @@ class Stage:
 
 
 class Stages:
+    """
+    Registry of every pipeline stage, grouped by epoch.
+
+    Each class attribute is a Stage instance linking a PipelineState
+    to the node that runs there. Epoch tuples (e.g. GROOMING_EPOCH)
+    group the before/after hook phases with their primary agent stage
+    so retry and loop-detection rules can operate on whole phases.
+    """
+
     # entry
     READY = Stage(PipelineState.READY, ReadyNode)
     WORKTREE_SYNC = Stage(PipelineState.WORKTREE_SYNC, WorktreeSyncNode)

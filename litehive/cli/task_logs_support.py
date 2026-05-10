@@ -34,6 +34,13 @@ class TaskLogsPresenter:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the presenter to the workspace whose daemon and task logs
+        it will read.
+
+        Every log-lookup method on this presenter scopes its file-system
+        searches to the workspace's runtime directories.
+        """
         self.workspace = workspace
 
     def show_latest_daemon_log(self) -> int:
@@ -200,6 +207,7 @@ class TaskLogsPresenter:
         Tolerant task lookup used by ``task logs <id>``.
         """
         return WorkspaceTasks(self.workspace).get_record(task_id)
+
 
 def _latest_daemon_log_path(latest_dir: Path | None) -> Path | None:
     """

@@ -30,6 +30,12 @@ class TaskEvidencePresenter:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the presenter to the workspace whose task data it will render.
+
+        All evidence lookups — lifecycle traces, reports, and activity
+        logs — are scoped to this workspace.
+        """
         self.workspace = workspace
 
     def render_task_evidence(self, task: TaskRecord) -> int:
@@ -79,6 +85,7 @@ class TaskEvidencePresenter:
         print(f"task: {task.id}")
         _print_worktree_evidence(self.workspace, task)
         return 0
+
 
 def _print_lifecycle_evidence(workspace: Workspace, task) -> None:
     """

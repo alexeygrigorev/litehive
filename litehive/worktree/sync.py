@@ -55,6 +55,13 @@ class WorktreeSyncService:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the sync service to one workspace and its task/path helpers.
+
+        Pre-creates ``WorkspaceTasks`` and ``WorktreePaths`` so every
+        method shares the same collaborators instead of constructing
+        new instances on each call.
+        """
         self.workspace = workspace
         self.tasks: WorkspaceTasks = WorkspaceTasks(workspace)
         self.paths = WorktreePaths(workspace)
@@ -150,11 +157,26 @@ class WorktreeSyncService:
         worktree_resolver: "Callable[[object], Path] | None",
         resolver_state: object | None,
     ) -> Path:
+        """
+        Apply the optional lifecycle worktree resolver, or fall back to the recorded path.
+
+        When the lifecycle layer supplies a resolver (e.g. execution-root
+        resolution), its answer overrides the recorded path so a resumed
+        task can land in a different directory than the original run.
+        """
         if worktree_resolver is None:
             return recorded
         return Path(worktree_resolver(resolver_state))
 
     def _rebase_existing_worktree_onto_local_main(self, worktree: Path) -> bool:
+        """
+        Rebase an existing worktree onto the current main HEAD.
+
+        Skips the main checkout itself (no point rebasing the root onto
+        itself) and returns whether the HEAD actually moved. Raises
+        ``WorktreeMergeConflict`` on unresolvable conflicts so the
+        lifecycle layer can route to the merge-resolver agent.
+        """
         if worktree.resolve() == self.workspace.root.resolve():
             return False
         main_head = current_head(self.workspace.root)
@@ -172,6 +194,14 @@ class WorktreeSyncService:
         raise GitError(f"worktree_sync rebase onto local main {main_head[:8]} failed")
 
     def _merge_origin_main(self, worktree: Path, main_ref: str) -> bool:
+        """
+        Fetch and merge the upstream main ref into the worktree.
+
+        Stashes any local uncommitted work first so the merge lands on a
+        clean tree, then restores the stash afterwards. Raises
+        ``WorktreeMergeConflict`` when the merge or stash-pop produces
+        conflicts the operator must resolve.
+        """
         stash_ref = self._stash_local_changes(worktree)
         restored_stash = False
         try:
@@ -201,22 +231,41 @@ class WorktreeSyncService:
 
     @staticmethod
     def _head(worktree: Path) -> str | None:
+        """
+        Return the current HEAD commit sha, or None on failure.
+        """
         return current_head(worktree)
 
     @staticmethod
     def _is_dirty(worktree: Path) -> bool:
+        """
+        Whether the worktree has any uncommitted changes.
+        """
         return has_changes(worktree)
 
     @staticmethod
     def _has_origin(worktree: Path) -> bool:
+        """
+        Whether the worktree has an ``origin`` remote configured.
+        """
         return remote_url(worktree, "origin") is not None
 
     @staticmethod
     def _unresolved(worktree: Path) -> list[str]:
+        """
+        Return unmerged file paths from a failed merge or rebase.
+        """
         return unmerged_files(worktree)
 
     @staticmethod
     def _stash_local_changes(worktree: Path) -> str | None:
+        """
+        Stash uncommitted changes (including untracked) and return the stash ref.
+
+        Returns None when there was nothing to stash, so the caller can
+        skip the corresponding stash-pop. Raises ``GitError`` when the
+        push itself fails.
+        """
         if not status_porcelain_untracked(worktree):
             return None
         before_ref = rev_parse_verify(worktree, "refs/stash") or ""
@@ -229,6 +278,13 @@ class WorktreeSyncService:
         return after_ref
 
     def _restore_local_changes(self, worktree: Path, stash_ref: str | None) -> None:
+        """
+        Pop a previously captured stash back into the worktree.
+
+        Raises ``WorktreeMergeConflict`` when the pop produces conflicts,
+        or ``GitError`` on other pop failures. No-ops when stash_ref is
+        None (nothing was stashed).
+        """
         if not stash_ref:
             return
         ok, message = stash_pop(worktree, ref=stash_ref, with_index=True)

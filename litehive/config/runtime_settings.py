@@ -53,6 +53,14 @@ _RUNTIME_SETTING_CONTEXT_ADAPTER = TypeAdapter(RuntimeSettingContext)
 
 @dataclass(frozen=True)
 class RuntimeSettingChange:
+    """
+    Result of a single audited write to a runtime setting.
+
+    Carries both the before/after values and whether the write actually
+    changed anything, so callers can decide whether to log or notify
+    without re-reading the store.
+    """
+
     key: RuntimeSettingKey
     old_value: RuntimeSettingValue | None
     new_value: RuntimeSettingValue
@@ -61,6 +69,14 @@ class RuntimeSettingChange:
 
 @dataclass(frozen=True)
 class RuntimeSettingAuditEntry:
+    """
+    One row from the runtime-settings audit log.
+
+    Immutable snapshot of who changed what, when, and why. Used by the
+    CLI ``engine audit`` command and diagnostic surfaces to reconstruct
+    the timeline of engine-control changes.
+    """
+
     id: int
     key: str
     created_at: str
@@ -90,6 +106,15 @@ class RuntimeSettingsRepository:
         config_data_loader: RuntimeSettingsConfigLoader | None = None,
         clock: RuntimeSettingsClock | None = None,
     ) -> None:
+        """
+        Bind the repository to one workspace and optional test seams.
+
+        The config-data loader produces the merged config dict used by
+        bootstrap when the caller does not supply one explicitly.
+        The clock returns an ISO-format UTC timestamp; both default to
+        production implementations so tests can inject deterministic
+        fakes.
+        """
         self.workspace = workspace
         self.config_data_loader = config_data_loader or (
             lambda bound_workspace: WorkspaceConfigLoader(bound_workspace).effective_data()
@@ -261,7 +286,6 @@ class RuntimeSettingsRepository:
                 )
             )
         return entries
-
 
 
 def _dump_runtime_value(value: RuntimeSettingValue) -> str:

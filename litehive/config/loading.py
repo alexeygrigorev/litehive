@@ -67,6 +67,12 @@ class WorkspaceConfigLoader:
     """
 
     def __init__(self, workspace: "Workspace") -> None:
+        """
+        Bind the loader to one workspace.
+
+        The workspace provides the path to the per-workspace config layer
+        and the SQLite store used by the runtime-settings overlay.
+        """
         self.workspace = workspace
 
     def effective_data(self) -> dict[str, Any]:

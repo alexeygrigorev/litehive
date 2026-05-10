@@ -86,6 +86,10 @@ def mode(m: PipelineMode | str) -> Guard:
         want = PipelineMode(m)
 
     def check(state: TaskState, event: Event) -> bool:
+        """
+        Return ``True`` when the task's pipeline mode matches the
+        requested mode.
+        """
         del event
         return state.pipeline_mode == want
 
@@ -100,7 +104,12 @@ def stage_retries_remaining(stage: PipelineState) -> Guard:
     Reject loops the task back to the configured stage instead of
     failing it as soon as the very first reject lands.
     """
+
     def check(state: TaskState, event: Event) -> bool:
+        """
+        Return ``True`` while the given stage has not consumed its
+        full reject-retry budget.
+        """
         del event
         return state.stage_retry.get(stage, 0) < state.limits.stage_retry_limit
 
@@ -116,7 +125,12 @@ def stage_retries_exhausted(stage: PipelineState) -> Guard:
     hooks pass, the QA rejection is treated as semantic-only and the
     reviewer gets a chance to override.
     """
+
     def check(state: TaskState, event: Event) -> bool:
+        """
+        Return ``True`` once the given stage has exhausted its
+        reject-retry budget.
+        """
         del event
         return state.stage_retry.get(stage, 0) >= state.limits.stage_retry_limit
 
@@ -132,7 +146,12 @@ def last_hook_ok() -> Guard:
     semantic-only, not a broken pipeline that should be failed
     outright.
     """
+
     def check(state: TaskState, event: Event) -> bool:
+        """
+        Return ``True`` when the most recent hook report passed
+        successfully.
+        """
         del event
         return state.last_report.hook_ok is True
 
@@ -148,7 +167,12 @@ def hook_reject_loop_detected() -> Guard:
     instead of looping forever — once a hook has rejected the same
     stage repeatedly, no amount of further retry is going to land it.
     """
+
     def check(state: TaskState, event: Event) -> bool:
+        """
+        Return ``True`` when the same hook has rejected the stage
+        enough consecutive times to indicate a livelock.
+        """
         if not isinstance(event, Reject) or event.source != "hook":
             return False
         count = event.metadata.get("consecutive_same_hook_rejects")
@@ -168,6 +192,7 @@ def rejection_loop_detected(retry_target_stage: PipelineState) -> Guard:
     effect can stay in sync — this wrapper just adapts it to the Guard
     protocol.
     """
+
     def check(state: TaskState, event: Event) -> bool:
         return rejection_loop_detected_delta(state, event, retry_target_stage=retry_target_stage)
 
@@ -184,7 +209,12 @@ def zero_change_shortcut() -> Guard:
     that decides the task is already satisfied does not produce a noise
     commit.
     """
+
     def check(state: TaskState, event: Event) -> bool:
+        """
+        Return ``True`` when the implementing stage produced no file
+        changes and no new tests, signalling an early-done shortcut.
+        """
         del event
         return state.last_report.files_changed == 0 and state.last_report.tests_added == 0
 
@@ -201,7 +231,12 @@ def pre_exec_budget_remaining() -> Guard:
     itself, but the guard exists so the rule shape can move without a
     separate predicate to define.
     """
+
     def check(state: TaskState, event: Event) -> bool:
+        """
+        Return ``True`` while the task has not yet used its single
+        pre-exec recovery attempt.
+        """
         del event
         return state.pre_exec_recovery_attempt < 1
 
@@ -218,6 +253,7 @@ def recovery_budget_available() -> Guard:
     gets one shot at recovery; once that shot is used, the matching
     guard flips and the partner rule fails the task instead.
     """
+
     def check(state: TaskState, event: Event) -> bool:
         return state.recovery_budget_available(recovery_trigger_from_event(state, event))
 
@@ -246,7 +282,9 @@ def recovery_resume_is_concrete() -> Guard:
     through to the FAILED rule with ``recovery_missing_target_stage``
     instead of resuming somewhere unspecified.
     """
+
     def check(state: TaskState, event: Event) -> bool:
+        """True when the recovery event carries a non-empty resume stage."""
         del state
         return isinstance(event, RecoverySucceeded) and bool(event.resume.strip())
 

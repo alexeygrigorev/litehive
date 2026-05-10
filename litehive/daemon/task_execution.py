@@ -26,6 +26,12 @@ class DaemonRunIteration:
     (``consecutive_task_failures``, ``pool_stop_reason``) so the
     drain loop and the single-shot path can decide whether to
     continue or stop without re-reading state from the database.
+
+    exit_code is the process exit code for this iteration.
+    ran_task is true when a task was actually dispatched.
+    final_stage is the pipeline stage the task reached, if any.
+    consecutive_task_failures is the running failure counter after this run.
+    pool_stop_reason is set when the pool should halt.
     """
 
     exit_code: int
@@ -71,6 +77,13 @@ class DaemonExecution:
     This is the task-execution half of daemon progress. The outer
     workspace daemon decides when to spawn ``litehive run``; this object
     owns what one spawned run does once it starts.
+
+    container is the dependency-injection container for this workspace.
+    engine optionally overrides the agent engine for this run.
+    model optionally overrides the agent model for this run.
+    task_runner is the callable seam for task orchestration.
+    task_picker selects the next task from the queue.
+    output receives operator-visible lines during execution.
     """
 
     container: LitehiveContainer

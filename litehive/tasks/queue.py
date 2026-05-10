@@ -85,28 +85,70 @@ class TaskQueueService:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the service to a workspace whose queue will be managed.
+
+        The workspace is forwarded to lower-level selection and mutation
+        helpers; the service itself holds no mutable state.
+        """
         self.workspace = workspace
 
     def eligible_tasks(self) -> list[TaskRecord]:
+        """
+        Return all tasks that the runner is allowed to pick up right now.
+
+        A task is eligible when its status, pipeline stage, dependency
+        graph, and recovery budget all allow execution.  The list is not
+        ordered by queue position.
+        """
         return [
-            task
-            for task in WorkspaceTasks(self.workspace).list(strict=False)
-            if is_task_eligible_for_execution(task)
+            task for task in WorkspaceTasks(self.workspace).list(strict=False) if is_task_eligible_for_execution(task)
         ]
 
     def select_next(self) -> TaskSelection:
+        """
+        Dequeue the highest-priority eligible task and mark it active.
+
+        Returns a ``TaskSelection`` describing the chosen task and the
+        workspace-state changes, or an empty selection when nothing is
+        eligible.
+        """
         return _dequeue_next_task_selection(self.workspace)
 
     def peek_next_selection(self) -> TaskSelection:
+        """
+        Preview which task the next dequeue would select, without mutating.
+
+        Useful for dry-run displays and pre-flight checks that need to know
+        what the runner would pick up.
+        """
         return _peek_next_task_selection(self.workspace)
 
     def dequeue_next(self) -> TaskRecord | None:
+        """
+        Dequeue and return the next eligible task, or None if the queue is empty.
+
+        Simpler alternative to ``select_next`` for callers that only need the
+        task record.
+        """
         return _dequeue_next_task(self.workspace)
 
     def peek_next(self) -> TaskRecord | None:
+        """
+        Preview the next task without removing it from the queue.
+
+        Returns None when no eligible task exists.
+        """
         return _peek_next_task(self.workspace)
 
     def enqueue(self, task_id: str, front: bool = False) -> WorkspaceState:
+        """
+        Add a task to the end (or front) of the workspace queue.
+
+        Holds the workspace-state lock and validates that the task is in a
+        future-ready status before inserting.  An audit entry records the
+        enqueue, including whether the task was placed at the front.
+        """
         with WorkspaceStateLock(self.workspace).hold():
             state = WorkspaceStateRepository(self.workspace).load()
             WorkspaceMutationGuard(self.workspace).ensure_future_task_mutation_allowed([task_id], state=state)
@@ -137,6 +179,12 @@ class TaskQueueService:
             return state
 
     def move(self, task_id: str, position: int) -> WorkspaceState:
+        """
+        Move a queued task to a 1-indexed position in the queue.
+
+        Position 1 is the front of the queue.  If the requested position
+        exceeds the queue length the task is placed at the end.
+        """
         if position < 1:
             raise ValueError("Queue position must be 1 or greater")
         with WorkspaceStateLock(self.workspace).hold():
@@ -170,6 +218,12 @@ class TaskQueueService:
             return state
 
     def prioritize(self, task_ids: list[str]) -> WorkspaceState:
+        """
+        Promote a set of tasks to the front of the queue in the given order.
+
+        All listed tasks must already be queued.  Duplicates are rejected so
+        the resulting queue order is unambiguous.
+        """
         if not task_ids:
             raise ValueError("At least one task id is required")
         seen: set[str] = set()
@@ -206,34 +260,92 @@ class TaskQueueService:
             return state
 
     def remove(self, state: WorkspaceState, task_id: str) -> bool:
+        """
+        Remove a task from the in-memory workspace state's queue list.
+
+        Delegates to ``remove_from_state``; returns True if the task was
+        present and removed, False otherwise.
+        """
         return self.remove_from_state(state, task_id)
 
     def mark_active(self, task_id: str | None) -> WorkspaceState:
+        """
+        Pin a task as the workspace's active task, or clear the pin.
+
+        Passing None clears the active-task slot.  The active-task marker
+        prevents the dequeue loop from starting a second task concurrently.
+        """
         return _set_active_task(self.workspace, task_id)
 
     def clear_active(self) -> WorkspaceState:
+        """
+        Unpin whichever task is currently marked active.
+
+        Safe to call when no task is active; the state is returned unchanged.
+        """
         return _clear_active_task(self.workspace)
 
     def restore_untouched_active(self) -> WorkspaceState:
+        """
+        Re-activate the previously active task if it was not modified.
+
+        Used by the dequeue loop after a peek-and-check cycle to confirm the
+        task is still eligible before committing to a run.
+        """
         return _restore_untouched_active_task(self.workspace)
 
     def active_task_markers(self, state: WorkspaceState | None = None) -> dict[str, list[str]]:
+        """
+        Collect runtime markers that indicate which task(s) are active.
+
+        Returns a dict keyed by marker type (e.g. active_task_id) whose values
+        are lists of task ids carrying that marker.  Primarily a diagnostic
+        helper for the single-active-task invariant check.
+        """
         return _active_task_markers_impl(self.workspace, state)
 
     def validate_single_active_task(self, state: WorkspaceState | None = None) -> None:
+        """
+        Assert that at most one task is marked active across all markers.
+
+        Raises if multiple tasks claim the active slot, which would indicate a
+        bug in the dequeue or recovery logic.
+        """
         _validate_single_active_task_impl(self.workspace, state)
 
     def validate_dependencies(self, task_id: str, depends_on: list[str]) -> None:
+        """
+        Check that a task's dependency list is acyclic and references real tasks.
+
+        Raises on cycles, missing tasks, or self-dependencies.
+        """
         TaskDependencyValidator(self.workspace).validate(task_id, depends_on)
 
     def is_resumable(self, task: TaskRecord) -> bool:
+        """
+        True when the task has a pipeline stage that supports resumption.
+
+        A resumable task can be placed back on the queue at the stage it
+        occupied when it was interrupted, rather than starting over.
+        """
         return resumable_queue_stage(task) is not None
 
     def is_runnable(self, task: TaskRecord) -> bool:
+        """
+        True when the task passes all eligibility checks for execution.
+
+        Combines status, dependency, recovery-budget, and interruption
+        predicates into a single boolean.
+        """
         return is_task_eligible_for_execution(task)
 
     @staticmethod
     def remove_from_state(state: WorkspaceState, task_id: str) -> bool:
+        """
+        Drop a task id from the in-memory queue list, returning True if removed.
+
+        Pure in-memory operation on the state object; does not persist.
+        """
         return _drop_task_from_workspace_state_impl(state, task_id)
 
     @staticmethod
@@ -241,7 +353,15 @@ class TaskQueueService:
         state: WorkspaceState,
         tasks_by_id: dict[str, TaskRecord],
     ) -> list[str]:
+        """
+        Re-insert queued task ids that were lost from the state's queue list.
+
+        Compares the persisted queue against ``tasks_by_id`` and appends any
+        task that exists in the workspace but has no queue entry.  Returns the
+        list of restored task ids.
+        """
         return _restore_missing_queued_tasks_impl(state, tasks_by_id)
+
 
 __all__ = [
     "_RESUMABLE_PIPELINE_STAGES",

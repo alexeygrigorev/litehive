@@ -37,6 +37,15 @@ class MissingVerdictError(Exception):
     """
 
     def __init__(self, *, pipeline_state: ReportPipelineState, subagent_id: SubagentId) -> None:
+        """
+        Record which pipeline stage and subagent failed to submit a verdict.
+
+        `pipeline_state` identifies the stage the subagent was running when
+        it exited without producing a verdict, and `subagent_id` identifies
+        the offending subagent. Both are attached to the exception so
+        snapshot writers and log handlers can report the context without
+        re-deriving it from the task record.
+        """
         self.pipeline_state = pipeline_state
         self.subagent_id = subagent_id
         super().__init__(
@@ -50,6 +59,12 @@ class AgentReportService:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the report builder to the workspace whose tasks are being reported.
+
+        The workspace is used to look up task records and stage history when
+        assembling a report from a subagent result.
+        """
         self.workspace = workspace
 
     def stage_report_from_subagent(

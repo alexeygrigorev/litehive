@@ -58,6 +58,13 @@ def engine_command(
 
 
 def _engine_status_command(workspace: Path, name: str | None) -> int:
+    """
+    Render the multi-engine status block for ``engine status``.
+
+    Refuses a positional engine name because the status view always
+    shows every configured engine; filtering is handled by the
+    audit subcommand instead.
+    """
     if name:
         print("engine status: does not take positional arguments")
         return 1
@@ -68,12 +75,27 @@ def _engine_status_command(workspace: Path, name: str | None) -> int:
 
 
 def _engine_audit_command(workspace: Workspace, key: str | None, limit: int) -> int:
+    """
+    Print runtime-setting audit entries for ``engine audit``.
+
+    Delegates to :func:`_render_engine_audit_lines` and emits the
+    result line by line so the function stays a thin command wrapper
+    that tests can call without going through Typer.
+    """
     for line in _render_engine_audit_lines(workspace, key=key, limit=limit):
         print(line)
     return 0
 
 
 def _engine_default_command(workspace: Workspace, name: str | None, reason: str | None) -> int:
+    """
+    Set the workspace's default engine via ``engine default``.
+
+    Persists the change through :class:`EngineRoutingPolicy` so the
+    audit trail records the old and new value. Prints both values
+    and whether the setting actually changed so the operator can
+    confirm the write landed.
+    """
     if name is None or name not in ENGINE_CHOICES:
         print(f"engine default: unknown engine '{name}'")
         return 1
@@ -86,6 +108,14 @@ def _engine_default_command(workspace: Workspace, name: str | None, reason: str 
 
 
 def _engine_preference_command(workspace: Workspace, name: str | None, reason: str | None) -> int:
+    """
+    Set the engine preference order via ``engine preference``.
+
+    Parses the operator-supplied comma-separated list, normalises it
+    through the canonical engine registry, and persists the change
+    with audit attribution. Prints old and new preference strings so
+    the operator can verify the write.
+    """
     try:
         preference = _parse_engine_preference(name)
     except ValueError as exc:
@@ -107,6 +137,13 @@ def _engine_preference_command(workspace: Workspace, name: str | None, reason: s
 
 
 def _engine_freeze_command(workspace: Workspace, name: str, until: str | None, reason: str | None) -> int:
+    """
+    Freeze an engine until a given date via ``engine freeze``.
+
+    Parses the ``--until`` ISO date, persists the freeze through
+    the routing policy, and prints a confirmation line with the
+    effective date and optional reason.
+    """
     freeze_iso = parse_engine_freeze_until(until)
     if freeze_iso is None:
         print("engine freeze: --until must be ISO date YYYY-MM-DD")
@@ -121,6 +158,12 @@ def _engine_freeze_command(workspace: Workspace, name: str, until: str | None, r
 
 
 def _engine_unfreeze_command(workspace: Workspace, name: str, reason: str | None) -> int:
+    """
+    Remove an engine freeze via ``engine unfreeze``.
+
+    Returns an error when the engine was not frozen so the operator
+    can distinguish "nothing to do" from a successful unfreeze.
+    """
     unfrozen = EngineRoutingPolicy(workspace, workspace.load_config()).unfreeze(name, reason=reason)
     if not unfrozen:
         print(f"engine unfreeze: {name} is not frozen")
@@ -130,6 +173,10 @@ def _engine_unfreeze_command(workspace: Workspace, name: str, reason: str | None
 
 
 def _updated_label(changed: bool) -> str:
+    """
+    Render the ``updated`` boolean as ``"yes"`` / ``"no"`` for the
+    engine subcommand output.
+    """
     if changed:
         return "yes"
     return "no"

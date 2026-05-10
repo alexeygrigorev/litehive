@@ -64,25 +64,64 @@ class StateDelta:
     """
 
     inc_stage_retry: PipelineState | None = None
+    """Bump the retry counter for this pipeline stage by one."""
+
     reset_stage_retry: PipelineState | None = None
+    """Reset the retry counter for this pipeline stage back to zero."""
+
     set_active_recovery_trigger: RecoveryTrigger | None = None
+    """Persist the recovery cause the recovery agent will read from prompt context."""
+
     clear_active_recovery_trigger: bool = False
+    """Remove the active recovery trigger, signalling recovery has concluded."""
+
     append_recovery_outcome: RecoveryOutcome | None = None
+    """Append one completed or denied recovery attempt to the history list."""
+
     inc_pre_exec_recovery_attempt: bool = False
+    """Bump the pre-execution recovery counter for wake-up-into-recovery paths."""
+
     set_merge_context: MergeContext | None = None
+    """Stash conflict-file list and merge-attempt counter for the merge resolver."""
+
     clear_merge_context: bool = False
+    """Clear merge context after conflicts are resolved or the task fails."""
+
     set_last_rejection: tuple[PipelineState, LastRejection] | None = None
+    """Record the stage and rejection details so the next agent prompt can quote them."""
+
     set_rejection_loop: RejectionLoop | None = None
+    """Start or advance the rejection-loop counter for reviewer-bounce detection."""
+
     clear_rejection_loop: bool = False
+    """Wipe the rejection-loop counter when a stage passes or the task fails."""
+
     set_consecutive_same_hook_rejects: int | None = None
+    """Set the counter tracking how many times the same hook has rejected in a row."""
+
     set_last_hook_reject_fingerprint: HookRejectFingerprint | None = None
+    """Record the identity of the most recent hook reject for same-hook comparison."""
+
     clear_hook_reject_tracking: bool = False
+    """Reset all hook-reject tracking state (counter, fingerprint, recovery flag)."""
+
     set_hook_reject_recovery_invoked: bool | None = None
+    """Mark whether recovery has already been invoked for the current hook-reject loop."""
+
     failed_reason: FailedReason | None = None
+    """Terminal failure category that will drive the task into the FAILED state."""
+
     failed_message: str | None = None
+    """Human-readable failure summary persisted for the operator's failure report."""
+
     set_recovery_failure_explanation: str | None = None
+    """Operator-facing sentence explaining why recovery could not restore a runnable path."""
+
     clear_recovery_failure_explanation: bool = False
+    """Clear a stale recovery explanation when starting a fresh recovery attempt."""
+
     record_failed_run: FailedRunRecord | None = None
+    """Append a semantic-reject exhaustion record to the failed-run history."""
 
 
 EMPTY_DELTA = StateDelta()
@@ -616,7 +655,10 @@ class IncStageRetry:
     """
 
     stage: PipelineState
+    """The pipeline stage whose retry counter will be bumped."""
+
     retry_target_stage: PipelineState | None = None
+    """Stage to retry at when different from the rejection stage (e.g. bounce back to implementing)."""
 
     def __call__(self, state: TaskState, event: Event) -> StateDelta:
         """
@@ -640,7 +682,10 @@ class RememberRejection:
     """Capture a rejection for a downstream prompt without bumping retries."""
 
     stage: PipelineState
+    """The pipeline stage that owns the rejection being recorded."""
+
     retry_target_stage: PipelineState | None = None
+    """Target stage if this transition bounces to a different stage instead of retrying."""
 
     def __call__(self, state: TaskState, event: Event) -> StateDelta:
         """
@@ -713,7 +758,10 @@ class FailRejectionLoop:
     """
 
     stage: PipelineState
+    """The pipeline stage that detected the loop."""
+
     retry_target_stage: PipelineState
+    """The stage the loop would bounce back to (typically implementing)."""
 
     def __call__(self, state: TaskState, event: Event) -> StateDelta:
         """
@@ -799,6 +847,7 @@ class Fail:
     """
 
     reason: FailedReason
+    """The terminal failure category explaining why the task is being marked failed."""
 
     def __post_init__(self) -> None:
         """

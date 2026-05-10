@@ -29,6 +29,17 @@ from litehive.workspace import Workspace
 
 
 class WorktreeCleanupResult(TypedDict):
+    """
+    Summary of a bulk worktree cleanup pass returned by
+    ``WorktreeCleanupService.remove_cleanable_worktrees``.
+
+    candidates lists all terminal worktrees eligible for removal.
+    skipped_active lists worktrees the daemon is currently running.
+    removed lists worktrees successfully deleted.
+    deferred lists worktrees whose metadata could not be cleared.
+    failures maps worktrees to their removal error message.
+    """
+
     candidates: list[ManagedWorktree]
     skipped_active: list[ManagedWorktree]
     removed: list[ManagedWorktree]
@@ -42,6 +53,13 @@ class WorktreeCleanupService:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the cleanup service to one workspace and its path policy.
+
+        The workspace reference is what lets cleanup, rescue, and
+        status callers share one instance instead of reconstructing
+        path helpers on every call.
+        """
         self.workspace = workspace
         self.paths = WorktreePaths(workspace)
 

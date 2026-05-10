@@ -90,6 +90,14 @@ def _current_stage() -> str | None:
 
 
 def _current_environment() -> LitehiveEnvironment:
+    """
+    Build a :class:`LitehiveEnvironment` snapshot from the current
+    process environment.
+
+    Centralises the ``from_process()`` call so every helper in this
+    module reads the same env state rather than each calling
+    ``os.getenv`` independently.
+    """
     return LitehiveEnvironment.from_process()
 
 
@@ -252,6 +260,14 @@ def resolve_active_agent_task_mutation_target(
 
 
 def _subagent_id_from_environment(environment: LitehiveEnvironment) -> SubagentId | None:
+    """
+    Convert the raw env-sourced subagent id into a typed
+    :class:`SubagentId`.
+
+    Returns ``None`` when the environment does not carry a subagent
+    id so callers can skip the session lookup rather than handling a
+    conversion error.
+    """
     if environment.subagent_id is None:
         return None
     return SubagentId(environment.subagent_id)

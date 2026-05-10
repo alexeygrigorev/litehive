@@ -32,6 +32,13 @@ class WorkspaceStateRepository:
     """
 
     def __init__(self, workspace: Workspace, runtime_store: RuntimeStore | None = None) -> None:
+        """
+        Bind the repository to a workspace and optional runtime store.
+
+        Accepts an externally constructed ``RuntimeStore`` so callers
+        that already have one can share it; falls back to a fresh store
+        so standalone callers don't need to build one themselves.
+        """
         self.workspace = workspace
         self.runtime_store = runtime_store or RuntimeStore(workspace)
 
@@ -223,7 +230,15 @@ class WorkspaceStateRepository:
         protected_task_ids: list[str] | tuple[str, ...] = (),
         audit_entries: list[TaskAuditEntry] | None = None,
     ) -> None:
-        # inline: state.records top-level-imports state.persist (would cycle).
+        """
+        Write tasks and workspace state assuming the mutation guard is already held.
+
+        Rebases the in-memory workspace state onto the latest persisted
+        snapshot so concurrent CLI edits survive, then writes intent rows,
+        state rows, journal entries, and audit entries in one SQLite
+        transaction.  The late import avoids a circular dependency with
+        ``state.records``.
+        """
         from litehive.state.records import task_state_for_storage, WorkspaceTasks  # noqa: PLC0415
 
         for task in tasks:

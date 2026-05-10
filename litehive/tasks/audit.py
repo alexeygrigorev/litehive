@@ -23,7 +23,9 @@ class TaskAuditState:
     """
 
     status: TaskStatus
+    """Task lifecycle status at the moment the snapshot was taken."""
     pipeline_status: PipelineStatus
+    """Pipeline progress status at the moment the snapshot was taken."""
 
 
 class TaskAuditEntry(BaseModel):

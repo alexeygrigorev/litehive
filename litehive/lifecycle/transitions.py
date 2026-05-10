@@ -54,22 +54,56 @@ def _entry_phase(stage: str | PipelineState | None) -> PipelineState:
 
 @dataclass(frozen=True)
 class Rule:
+    """
+    One row in the transition rule table.
+
+    Rules are evaluated top-to-bottom by ``evaluate``: the first
+    rule whose ``from_state``, ``on_event``, and optional ``when``
+    guard all match wins, and its ``transition_to`` and
+    ``with_effect`` determine what happens next.
+    """
+
     from_state: PipelineState | str | frozenset | Stage
+    """State (or frozenset of states, or Stage) this rule matches."""
     on_event: type[Event]
+    """The event type this rule responds to."""
     transition_to: ToSpec
+    """Destination state, Stage, or callable resolving the next state."""
     when: Guard | None = None
+    """Optional guard; rule only matches when this returns True."""
     with_effect: EffectFn | None = None
+    """Optional effect factory producing a StateDelta on transition."""
     description: str = ""
+    """Human-readable label for diagnostics and rule listings."""
 
 
 @dataclass(frozen=True)
 class Transition:
+    """
+    The result of a matched rule: where to go and what to change.
+
+    Produced by ``evaluate`` and consumed by the runner to advance
+    the state machine by applying the delta and moving to the next
+    state.
+    """
+
     next: PipelineState
+    """The PipelineState the machine moves to."""
     delta: StateDelta
+    """The StateDelta (mutations) to apply alongside the move."""
     rule: Rule
+    """The matched Rule, kept for diagnostics and journaling."""
 
 
 class NoTransitionError(RuntimeError):
+    """
+    No rule in the table matched the current (state, event) pair.
+
+    Raised by ``evaluate`` when every rule is checked and none
+    accepts; the captured state and event let callers spot a missing
+    rule from the stack trace alone.
+    """
+
     def __init__(self, current: str | PipelineState, event: Event) -> None:
         """Build a ``NoTransitionError`` capturing the unmatched (state, event) pair for diagnostics.
 

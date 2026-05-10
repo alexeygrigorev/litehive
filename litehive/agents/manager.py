@@ -63,11 +63,22 @@ class SubagentRunContext:
     """
 
     base: Path
+    """Filesystem directory allocated for this subagent's artifacts."""
+
     ref: Subagent
+    """Canonical subagent descriptor persisted on the task record."""
+
     engine_adapter: object
+    """Resolved engine adapter instance for the chosen engine."""
+
     run_adapter: object
+    """Adapter that will actually execute the command, possibly sandbox-wrapped."""
+
     sandbox_summary: SandboxPolicySummary
+    """Summary of the sandbox policy applied to this subagent."""
+
     callbacks: SubagentRunCallbacks
+    """Safe callback wrappers wired to the session manager."""
 
 
 @dataclass(frozen=True)
@@ -77,7 +88,10 @@ class EngineProcessResult:
     """
 
     execution: CLIExecutionResult
+    """Raw process result returned by the engine adapter."""
+
     run_adapter: object
+    """Adapter that executed the command, possibly sandbox-wrapped."""
 
 
 @dataclass(frozen=True)
@@ -87,10 +101,19 @@ class EngineRunOutcome:
     """
 
     execution: CLIExecutionResult
+    """Raw process result from the engine invocation."""
+
     transcript: str
+    """Rendered human-readable execution trace."""
+
     continuation: RuntimeEngineContinuation | None
+    """Engine continuation token for multi-turn sessions."""
+
     failure: EngineFailure | None
+    """Classified failure descriptor, or None on success."""
+
     run_adapter: object
+    """Adapter that executed the command, possibly sandbox-wrapped."""
 
 
 def _latest_report_files_changed(
@@ -663,8 +686,7 @@ class SubagentManager:
             # so an operator watching `litehive status` can see why no
             # report was written.
             missing_verdict_warning = (
-                "Agent did not submit verdict via `litehive agent report` CLI; "
-                "lifecycle will nudge the agent."
+                "Agent did not submit verdict via `litehive agent report` CLI; lifecycle will nudge the agent."
             )
             warnings = callback_warnings.merged_with([missing_verdict_warning])
             report_payload = SubagentReportPayload(

@@ -34,6 +34,14 @@ class ArtifactService:
     """
 
     def __init__(self, base: Path) -> None:
+        """
+        Bind the service to the directory that holds subagent artifacts.
+
+        `base` is the per-session directory (typically under
+        ``<workspace>/agents/<subagent-id>/``) where prompt, trace, stdout,
+        and stderr files are written. The service creates it on first write
+        so callers never need to manage the path themselves.
+        """
         self.base = base
 
     def write_stream(self, name: str, content: str, compress: bool) -> None:
@@ -114,4 +122,3 @@ def write_text_if_changed(path: Path, content: str) -> bool:
         return False
     write_atomic_files({path: content})
     return True
-

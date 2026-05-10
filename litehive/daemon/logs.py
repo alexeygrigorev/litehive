@@ -30,14 +30,27 @@ class DaemonLogs:
     directory, while CLI/status wrappers use it to locate the latest
     run-all session or matching log file without recomputing runtime
     paths in multiple modules.
+
+    workspace is the workspace whose log directories this instance
+        manages.
     """
 
     workspace: Workspace
 
     def run_all_base(self) -> Path:
+        """
+        Return the base directory that holds all run-all sessions.
+        """
         return self.workspace.runtime_path("logs", "run-all")
 
     def prepare_session(self, session_dir: Path | None = None) -> Path:
+        """
+        Create (or reuse) a session directory and prune old ones.
+
+        When ``session_dir`` is None, a new timestamped directory is
+        created under the run-all base. Pruning runs immediately so
+        the oldest sessions are dropped before the new one is returned.
+        """
         log_base = self.run_all_base()
         timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         log_root = session_dir or (log_base / timestamp)
@@ -46,9 +59,15 @@ class DaemonLogs:
         return log_root
 
     def prune_sessions(self, keep: int = _RUN_ALL_SESSION_RETENTION) -> None:
+        """
+        Delegate to the standalone pruning function, keeping the configured number of sessions.
+        """
         prune_run_all_log_dirs(self.run_all_base(), keep=keep)
 
     def latest_run_all_dir(self) -> Path | None:
+        """
+        Return the most recent session directory, or None when no sessions exist.
+        """
         log_base = self.run_all_base()
         if not log_base.exists():
             return None
@@ -58,6 +77,9 @@ class DaemonLogs:
         return None
 
     def latest_matching(self, pattern: str) -> Path | None:
+        """
+        Return the most recent log file in the latest session matching ``pattern``.
+        """
         return latest_matching(self.latest_run_all_dir(), pattern)
 
 

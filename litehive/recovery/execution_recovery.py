@@ -45,6 +45,13 @@ class RunnerRecoveryService:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the service to a single workspace for its entire lifetime.
+
+        The workspace reference is what lets queue, stop, and repair callers
+        share one recovery instance instead of threading the workspace
+        through free helper signatures.
+        """
         self.workspace = workspace
 
     def recover_stale_runner_state(self, summary: WorkspaceRepairSummary | None = None) -> bool:

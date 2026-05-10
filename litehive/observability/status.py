@@ -102,6 +102,16 @@ StatusRenderMode = Literal["summary", "detailed"]
 
 @dataclass(slots=True)
 class TaskPipelineStatusData:
+    """
+    Aggregated snapshot consumed by the CLI status renderer.
+
+    Bundles workspace configuration, runner state, monitoring info, any
+    open issues, the currently active task, queue head, waiting-lines
+    text, and a human-readable runner state label into a single object
+    so the renderer can operate without further database or filesystem
+    lookups.
+    """
+
     config: LitehiveConfig
     state: WorkspaceState
     runner: RunnerStatusState
@@ -120,6 +130,13 @@ class TaskPipelineStatusCollector:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the collector to the workspace whose pipeline status it
+        will assemble.
+
+        The workspace is used to read configuration, task records,
+        runner state, and monitoring data during ``collect``.
+        """
         self.workspace = workspace
 
     def collect(

@@ -42,6 +42,13 @@ class WorktreeInspector:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the inspector to one workspace and its path policy.
+
+        The inspector holds a ``WorktreePaths`` instance so every call
+        shares the same managed-path checks and resolution logic rather
+        than each method reconstructing a ``WorktreePaths`` on the fly.
+        """
         self.workspace = workspace
         self.paths = WorktreePaths(workspace)
 

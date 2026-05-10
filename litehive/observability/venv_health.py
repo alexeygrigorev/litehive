@@ -25,12 +25,32 @@ _MISSING_TARGET_ERRNOS = {errno.ENOENT, errno.ENOTDIR}
 
 @dataclass(slots=True, frozen=True)
 class VenvCheckout:
+    """
+    A located virtualenv inside a checkout.
+
+    ``checkout_root`` is the git worktree root (workspace or per-task
+    worktree). ``venv_path`` is the resolved absolute path to the
+    ``.venv`` directory inside that checkout. The pair is used to
+    map broken executables back to the checkout an operator needs to
+    fix.
+    """
+
     checkout_root: Path
     venv_path: Path
 
 
 @dataclass(slots=True, frozen=True)
 class BrokenVenvExecutable:
+    """
+    One venv entrypoint that failed to exec during the health probe.
+
+    ``checkout`` ties the broken binary back to the venv and checkout.
+    ``binary_path`` is the absolute path to the broken file.
+    ``error_detail`` is the OS error string (e.g. "No such file or
+    directory") that signals a broken symlink target after
+    ``uv cache clean``.
+    """
+
     checkout: VenvCheckout
     binary_path: Path
     error_detail: str
@@ -56,6 +76,13 @@ class WorkspaceVenvHealth:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the health probe to a workspace.
+
+        The workspace reference is used by discovery to walk the main
+        checkout and per-task worktrees. The probe is short-lived (one
+        ``ensure_ready`` or ``probe_broken_executables`` call).
+        """
         self.workspace = workspace
 
     def discover_venvs(self) -> list[VenvCheckout]:

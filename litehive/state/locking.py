@@ -93,12 +93,25 @@ class WorkspaceRunnerLock:
     workspace: Workspace
 
     def read_metadata(self) -> RunnerStatusState:
+        """
+        Read the runner lockfile and return a typed status object.
+
+        Returns a default-constructed ``RunnerStatusState`` when the
+        lockfile is missing or empty, so callers always get a valid
+        object rather than ``None``.
+        """
         data = _runner_lock_manager_impl(self.workspace).read_metadata(strict=True)
         if data is None:
             return RunnerStatusState()
         return RunnerStatusState.model_validate(data)
 
     def is_active(self) -> bool:
+        """
+        Probe whether any process currently holds the runner lock.
+
+        Checks both the in-process registry (fast path for same-process
+        reentry) and the flock (for cross-process detection).
+        """
         lock_key = _runner_lock_key_impl(self.workspace)
         return _runner_lock_manager_impl(
             self.workspace,
@@ -106,6 +119,12 @@ class WorkspaceRunnerLock:
         ).is_active()
 
     def clear_metadata(self) -> None:
+        """
+        Truncate stale lockfile metadata and the SQLite process mirror.
+
+        Only clears when no live process holds the flock, so a
+        concurrent owner's identity is never accidentally scrubbed.
+        """
         lock_key = _runner_lock_key_impl(self.workspace)
         manager = _runner_lock_manager_impl(
             self.workspace,
@@ -115,6 +134,14 @@ class WorkspaceRunnerLock:
             self._clear_process_state()
 
     def status(self) -> RunnerStatusState:
+        """
+        Derive the current runner status from lockfile and liveness data.
+
+        Returns ``RUNNING`` when the flock is held and the heartbeat is
+        recent, ``LATE`` when held but the heartbeat is stale, ``STALE``
+        when metadata exists but no live owner holds the flock, or a
+        default-constructed state when no runner identity is recorded.
+        """
         status = self.read_metadata()
         if self.is_active():
             if heartbeat_is_late(status.heartbeat_at):
@@ -144,6 +171,12 @@ class WorkspaceRunnerLock:
         )
 
     def owns_current_thread(self) -> bool:
+        """
+        Return True when the current thread already holds the runner guard.
+
+        Used by the mutation guard to detect re-entry and skip a nested
+        lock acquisition that would deadlock.
+        """
         lock_key = _runner_lock_key_impl(self.workspace)
         owner_thread_id = threading.get_ident()
         with RUNNER_LOCKS_MUTEX:
@@ -151,15 +184,34 @@ class WorkspaceRunnerLock:
         return existing is not None and existing.owner_thread_id == owner_thread_id
 
     def is_held(self) -> bool:
+        """
+        Check whether the current process holds the runner lock.
+
+        Unlike ``is_active`` (which checks any process), this returns
+        True only when the current thread is the lock owner.
+        """
         return _runner_lock_manager_impl(
             self.workspace,
             held_in_process=self.owns_current_thread,
         ).is_active()
 
     def pid_is_stale(self) -> bool:
+        """
+        True when the lockfile names a PID that no longer exists.
+
+        Used by recovery and startup probes to decide whether a leftover
+        lockfile can be safely cleaned up.
+        """
         return _runner_lock_manager_impl(self.workspace).pid_is_stale()
 
     def touch(self, active_task_id: str | None | object = MISSING) -> None:
+        """
+        Refresh the heartbeat timestamp and optional active-task pointer.
+
+        No-op when the current process does not hold the runner lock;
+        otherwise writes updated metadata to the lockfile and the SQLite
+        process mirror so liveness probes see a recent timestamp.
+        """
         lock_key = _runner_lock_key_impl(self.workspace)
         lock_state = RUNNER_LOCKS.get(lock_key)
         if lock_state is None:
@@ -206,6 +258,12 @@ class WorkspaceRunnerLock:
             self.touch(active_task_id=None)
 
     def conflict_message(self) -> str:
+        """
+        Build a human-readable message describing who holds the runner lock.
+
+        Includes PID, start time, heartbeat, and command when available
+        so the operator can decide whether to wait or investigate.
+        """
         metadata = self.read_metadata()
         pid = metadata.pid
         started_at = metadata.started_at
@@ -306,6 +364,13 @@ class WorkspaceRunnerLock:
             self._clear_process_state()
 
     def _save_process_state(self, status: RunnerStatusState) -> None:
+        """
+        Mirror runner identity into the SQLite runtime store.
+
+        Lets dashboards see who owns the runner slot without probing the
+        flock; the lockfile remains the source of truth but the SQLite
+        row is the cheap-to-read alternative.
+        """
         RuntimeStore(self.workspace).save_process_state(
             "runner",
             status=status.status or RunnerStatus.RUNNING,
@@ -313,6 +378,12 @@ class WorkspaceRunnerLock:
         )
 
     def _clear_process_state(self) -> None:
+        """
+        Drop the SQLite runtime mirror for the runner slot.
+
+        Called on guard release and on stale-lockfile cleanup so
+        dashboards stop reporting a phantom owner after shutdown.
+        """
         RuntimeStore(self.workspace).clear_process_state("runner")
 
 
@@ -325,10 +396,23 @@ class WorkspaceMutationGuard:
     workspace: Workspace
 
     def is_owned_by_current_thread(self) -> bool:
+        """
+        Return True when the current thread holds the long-lived runner guard.
+
+        Short mutation helpers use this to decide whether they need to
+        take the runner guard or can skip re-entry.
+        """
         return WorkspaceRunnerLock(self.workspace).owns_current_thread()
 
     @contextmanager
     def hold(self) -> Iterator[None]:
+        """
+        Acquire the runner guard for the duration of the block.
+
+        Re-entrant from the same thread: if the current thread already
+        holds the guard, yields immediately without taking the flock a
+        second time, preventing deadlocks in nested mutation calls.
+        """
         if self.is_owned_by_current_thread():
             yield
             return
@@ -340,7 +424,14 @@ class WorkspaceMutationGuard:
         task_ids: list[str],
         state: WorkspaceState | None = None,
     ) -> None:
-        # inline: tasks.queue top-level-imports state.locking (would cycle).
+        """
+        Raise when a runner is actively using task state the caller wants to change.
+
+        Inspects active-task markers and execution status so that
+        concurrent CLI edits (priority changes, deletions) do not
+        clobber state a live runner is mid-transition on; the late
+        import avoids a circular dependency with ``tasks.queue``.
+        """
         from litehive.tasks.queue import is_task_eligible_for_execution, TaskQueueService  # noqa: PLC0415
         from litehive.state.records import WorkspaceTasks  # noqa: PLC0415
 
@@ -379,7 +470,13 @@ class WorkspaceMutationGuard:
         journal_message: str | None = None,
         audit_entries: list["TaskAuditEntry"] | None = None,
     ) -> None:
-        # inline: state.records top-level-imports state.locking (would cycle).
+        """
+        Write a single task's intent and state without workspace-level changes.
+
+        Used by the mutation guard for CLI-driven edits that must land
+        atomically but do not touch the queue or pool counters; the
+        late import avoids a circular dependency with ``state.records``.
+        """
         from litehive.state.records import task_state_for_storage, WorkspaceTasks  # noqa: PLC0415
 
         task.updated_at = utcnow()
@@ -411,6 +508,13 @@ class WorkspaceStateLock:
 
     @contextmanager
     def hold(self) -> Iterator[None]:
+        """
+        Acquire a blocking flock for the duration of the block.
+
+        Used by CLI mutations and recovery probes that do not own the
+        long-lived runner guard; blocks until the lock is available so
+        a second writer waits rather than failing immediately.
+        """
         lock_path = self.workspace.control_dir() / ".lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         with lock_path.open("w", encoding="utf-8") as handle:

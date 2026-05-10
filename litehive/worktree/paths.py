@@ -37,6 +37,13 @@ class WorktreePaths:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the path policy to a single workspace.
+
+        All path computations are relative to this workspace's root and
+        runtime directories, so the policy is only valid for the workspace
+        it was constructed with.
+        """
         self.workspace = workspace
 
     def task_worktree_path(self, task: TaskRecord) -> Path:

@@ -59,19 +59,52 @@ class WorkspaceTasks:
     """
 
     def __init__(self, workspace: Workspace, runtime_store: RuntimeStore | None = None) -> None:
+        """
+        Bind the service to a workspace and optional runtime store.
+
+        Accepts an externally constructed ``RuntimeStore`` so callers
+        that already have one (e.g. the persist layer) can share it
+        instead of opening a second connection chain; falls back to a
+        fresh store when the caller doesn't supply one.
+        """
         self.workspace = workspace
         self.runtime_store = runtime_store or RuntimeStore(workspace)
 
     def ensure_runtime_ignored(self) -> None:
+        """
+        Refresh the workspace ``.gitignore`` after any persistence write.
+
+        Delegates to the module-level implementation so tests can
+        monkey-patch a single symbol instead of every call site.
+        """
         _ensure_runtime_ignored_for_workspace_impl(self.workspace)
 
     def write_runtime(self, task: TaskRecord) -> None:
+        """
+        Persist a task's runtime row without entering the mutation guard.
+
+        Used by engine adapters that already hold their own lock; the
+        unguarded path avoids a re-entrant guard acquisition.
+        """
         _write_task_runtime_for_workspace_impl(self.workspace, task)
 
     def save_runtime(self, task: TaskRecord) -> None:
+        """
+        Persist a task's runtime row under the workspace mutation guard.
+
+        The safe counterpart to ``write_runtime`` for callers that do
+        not already hold a lock.
+        """
         _save_task_runtime_for_workspace_impl(self.workspace, task)
 
     def load_runtime(self, task: TaskRecord) -> TaskRecord:
+        """
+        Hydrate a task's runtime row from SQLite and run normalisers.
+
+        Raises ``TaskStateMissingError`` when the SQLite row is absent;
+        callers that need to tolerate a missing row should use
+        ``get_record`` instead.
+        """
         return _load_task_runtime_impl(self.workspace, task)
 
     def create(
@@ -106,9 +139,23 @@ class WorkspaceTasks:
         return f"T-{_reserve_next_task_numbers_impl(self.workspace, state)[0]:04d}"
 
     def discard_created(self, task_id: str) -> None:
+        """
+        Remove a task that should never have existed.
+
+        Rolls back queue entry, on-disk directory, and SQLite rows so
+        the workspace is left in the pre-creation shape; used by the
+        rollback path when a creation step fails downstream.
+        """
         _discard_created_task_for_workspace_impl(self.workspace, task_id)
 
     def list(self, include_runtime: bool = True, strict: bool = True) -> list[TaskRecord]:
+        """
+        Return every task in id order, optionally with runtime rows.
+
+        When ``include_runtime`` is true, each task carries its full
+        mutable state; when ``strict`` is true, a missing runtime row
+        raises rather than being silently skipped.
+        """
         return _list_tasks_for_workspace_impl(self.workspace, include_runtime=include_runtime, strict=strict)
 
     def list_state_first(
@@ -116,6 +163,13 @@ class WorkspaceTasks:
         state: WorkspaceState | None = None,
         include_runtime: bool = False,
     ) -> builtins.list[TaskRecord]:
+        """
+        Return tasks ordered by workspace priority.
+
+        Active task first, then queued in queue order, then remaining
+        by id; status displays render this directly so the user sees
+        work-in-flight at the top without re-sorting.
+        """
         return _list_tasks_state_first_impl(self.workspace, state=state, include_runtime=include_runtime)
 
     def create_follow_ups(
@@ -124,19 +178,54 @@ class WorkspaceTasks:
         stage: str,
         follow_ups: Sequence[FollowUpTaskSpec],
     ) -> Sequence[TaskRecord]:
+        """
+        Spawn follow-up tasks emitted by grooming, testing, or accepting.
+
+        Persists the batch atomically so a partial failure cannot leave
+        half-created siblings; ignored for pipeline stages that never
+        produce follow-ups.
+        """
         return _create_follow_up_tasks_impl(self.workspace, parent_task, stage, list(follow_ups))
 
     def get(self, task_id: str) -> TaskRecord | None:
+        """
+        Look up a task by id and require its runtime row to exist.
+
+        Returns ``None`` when the task id is unknown; raises
+        ``TaskStateMissingError`` when the intent row exists but the
+        runtime row was deleted.
+        """
         return _get_task_for_workspace_impl(self.workspace, task_id)
 
     def get_record(self, task_id: str) -> TaskRecord | None:
+        """
+        Return the task record, tolerating a missing runtime row.
+
+        Recovery and diagnostics use this so they can still report on a
+        task whose runtime row was deleted; intent-only data is returned
+        rather than raising.
+        """
         return _get_task_record_for_workspace_impl(self.workspace, task_id)
 
     def require(self, task_id: str) -> TaskRecord:
+        """
+        Look up a task by id and raise if it does not exist.
+
+        For CLI handlers and engine adapters where a missing task is a
+        programmer or operator error, not an expected absence.
+        """
         return _require_task_for_workspace_impl(self.workspace, task_id)
 
     def save(self, task: TaskRecord) -> None:
+        """
+        Persist both the intent and runtime sides of a task atomically.
+
+        Refreshes ``updated_at`` and runs under the workspace mutation
+        guard; used by stage transition helpers and CLI mutators that
+        need a single-task write without touching workspace queue state.
+        """
         _save_task_for_workspace_impl(self.workspace, task)
+
 
 def _highest_task_number_in_store_impl(workspace: Workspace) -> int:
     """
@@ -831,8 +920,7 @@ def _list_tasks_state_first_impl(
     without having to re-sort client-side.
     """
     task_by_id = {
-        task.id: task
-        for task in _load_tasks_from_store_impl(workspace, include_runtime=include_runtime, strict=True)
+        task.id: task for task in _load_tasks_from_store_impl(workspace, include_runtime=include_runtime, strict=True)
     }
 
     if state is None:

@@ -81,14 +81,36 @@ class NudgeRequired(Exception):
 
 @dataclass
 class AgentVerdict:
+    """
+    The structured outcome an engine adapter returns after one turn.
+
+    Translated by ``AgentNode.verdict_to_event`` into a state-machine
+    Event (Pass, Reject, Blocked, or Crash). Carries enough context
+    for the runner to route correctly without understanding
+    engine-specific response shapes.
+    """
+
     outcome: Verdict | str
+    """The agent's decision: pass, reject, or blocked."""
     reason: str = ""
+    """Free-text explanation of why the agent chose this outcome."""
     classification: str | None = None
+    """Typed label for the reject category (e.g. semantic_reject)."""
     metadata: dict[str, Any] = field(default_factory=dict)
+    """Arbitrary key-value data the adapter wants to forward."""
     source: Literal["agent", "guard", "hook", "system"] = "agent"
+    """Which actor produced the verdict."""
 
 
 class Engine(Protocol):
+    """
+    Minimal interface an engine adapter must implement.
+
+    The protocol exposes a single ``run_turn`` method so AgentNode
+    can drive retries, nudges, and engine switches without knowing
+    the adapter's internals.
+    """
+
     name: str
 
     def run_turn(self, session: Any, prompt: Any, state: TaskState) -> AgentVerdict:

@@ -49,6 +49,13 @@ class ExecutionTrace:
         return "\n\n".join(self.chunks)
 
     def __bool__(self) -> bool:
+        """
+        Truthy when at least one non-empty chunk exists.
+
+        Used by callers that need to distinguish "agent ran but produced
+        no trace" from "no trace at all" without reaching through
+        ``.text`` — e.g. deciding whether to write a trace artifact.
+        """
         return bool(self.text)
 
 

@@ -82,10 +82,15 @@ class ExecutionResult:
     """Result of running one task through the pipeline state machine."""
 
     task: TaskRecord | None
+    """The task record after syncing terminal state back."""
     final_state: TaskState | None
+    """The last TaskState the runner produced."""
     final_stage: PipelineState
+    """Terminal pipeline position (done or failed)."""
     failed_reason: str | None = None
+    """Machine-readable reason when the task failed."""
     failed_message: str | None = None
+    """Human-readable detail when the task failed."""
 
 
 class TaskOrchestrator:
@@ -94,6 +99,14 @@ class TaskOrchestrator:
     """
 
     def __init__(self, workspace: Workspace, config: LitehiveConfig) -> None:
+        """
+        Bind the orchestrator to a workspace and its loaded config.
+
+        The workspace provides the sqlite database and git worktree;
+        the config carries engine, hook, and retry policy settings.
+        One ``TaskOrchestrator`` per ``run`` call is the expected
+        lifetime.
+        """
         self.workspace = workspace
         self.config = config
 
@@ -118,7 +131,7 @@ class TaskOrchestrator:
                 ),
             )
             _load_or_initialize(task.id, workspace, persistence)
-    
+
             factory = engine_factory or heru_engine_factory(workspace, config)
             selector = ConfigBackedEngineSelector(
                 config,
@@ -144,7 +157,7 @@ class TaskOrchestrator:
             prompt_context = PromptContext(workspace=workspace, config=config)
             hook_specs = hook_specs_from_config(config)
             retry_budget = resolve_task_retry_policy(task, config)
-    
+
             registry = build_registry(
                 selector=selector,
                 session_store=sessions,
@@ -158,7 +171,7 @@ class TaskOrchestrator:
                 retry_budget=retry_budget,
                 retry_on=tuple(config.retry_on),
             )
-    
+
             runner = StateMachineRunner(
                 registry,
                 persistence,
@@ -174,7 +187,7 @@ class TaskOrchestrator:
                 session_store=sessions,
                 task_time_budget_seconds=config.task_time_budget_seconds,
             )
-    
+
             # 3. Run under the heartbeat so `litehive status` sees the active task.
             with WorkspaceRunnerLock(workspace).heartbeat(active_task_id=task.id):
                 try:
@@ -184,7 +197,7 @@ class TaskOrchestrator:
                     # resumed instead of leaving stale "running" state behind.
                     worktree_setup.mark_task_interrupted_on_crash(task)
                     raise
-    
+
             # 4. Mirror terminal state back to the TaskRecord.
             updated_task = _sync_back(final_state, workspace) or task
             if final_state.stage in {PipelineState.DONE, PipelineState.FAILED}:

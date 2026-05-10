@@ -97,10 +97,28 @@ class EngineRoutingPolicy:
     """
 
     def __init__(self, workspace: Workspace, config: LitehiveConfig) -> None:
+        """
+        Bind routing policy to a workspace and its current config.
+
+        The config is the in-memory snapshot that may diverge from the
+        file-based config when runtime settings have been applied; callers
+        are responsible for loading the effective config before
+        constructing the policy.
+        """
         self.workspace = workspace
         self.config = config
 
     def select(self, task: TaskRecord, request: EngineSelectionRequest | None = None) -> EngineSelection:
+        """
+        Run the full engine-selection loop for one task.
+
+        Builds a candidate order from the task plan and workspace
+        preferences, filters frozen engines, probes availability and
+        quota, and returns the first engine that passes all checks.
+        Persists quota-driven freezes and clears expired ones as a
+        side effect so the freeze map self-cleans during normal
+        selection.
+        """
         if request is None:
             selection_request = EngineSelectionRequest()
         else:
@@ -176,8 +194,19 @@ class EngineRoutingPolicy:
         )
 
     def resolve_engine_name(self, task: TaskRecord, engine_override: str | None = None) -> str:
+        """
+        Return the first unfrozen engine for a task without quota probing.
+
+        Lightweight alternative to ``select`` used by status and
+        diagnostic surfaces that want to preview the next engine
+        without triggering availability checks or quota writes.
+        Falls back to the initial planned engine when every candidate
+        is frozen so callers that require a string always get one.
+        """
         initial_engine_names = resolve_engine_plan(task, self.config, engine_override=engine_override)
-        attempt_order = _unfrozen_engine_attempt_order(self.config.engine_attempt_order(initial_engine_names), self.config)
+        attempt_order = _unfrozen_engine_attempt_order(
+            self.config.engine_attempt_order(initial_engine_names), self.config
+        )
         if attempt_order:
             return attempt_order[0]
         return initial_engine_names[0]
@@ -188,6 +217,13 @@ class EngineRoutingPolicy:
         engine_name: str,
         requested_model_name: str | None = None,
     ) -> str | None:
+        """
+        Pick the model name for a given engine and task.
+
+        Precedence: explicit request, task-level model, workspace default.
+        Returns ``None`` when the engine does not support model overrides
+        so the engine adapter is never handed a value it would ignore.
+        """
         if not get_engine(engine_name).capabilities.supports_model_override:
             return None
         if requested_model_name is not None:
@@ -197,6 +233,14 @@ class EngineRoutingPolicy:
         return self.config.model_for_engine(engine_name)
 
     def resolve_recovery_engine(self, task: TaskRecord) -> tuple[str, str | None]:
+        """
+        Select an engine for recovery, requiring availability.
+
+        Uses the workspace ``recovery_engine`` when set (unless it is
+        ``auto``), otherwise follows normal selection. Raises
+        ``RuntimeError`` when no engine can run so recovery failures
+        surface immediately rather than producing a silent no-op.
+        """
         engine_override = None
         if self.config.recovery_engine and self.config.recovery_engine != "auto":
             engine_override = self.config.recovery_engine
@@ -209,6 +253,14 @@ class EngineRoutingPolicy:
         return selection.engine_name, selection.model_name
 
     def freeze(self, engine: str, until: str, reason: str | None = None) -> None:
+        """
+        Freeze an engine until a UTC timestamp and persist the change.
+
+        Writes through the audited runtime-settings store so the freeze
+        survives restarts, and mirrors the value on the in-memory config
+        so subsequent selection within the same process sees it
+        immediately.
+        """
         set_engine_freeze(
             self.workspace,
             engine_name=engine,
@@ -220,6 +272,13 @@ class EngineRoutingPolicy:
         self.config.engine_freeze[engine] = until
 
     def unfreeze(self, engine: str, reason: str | None = None) -> bool:
+        """
+        Remove a freeze entry for one engine.
+
+        Returns whether the freeze was actually present so callers can
+        skip noisy no-op log lines. Writes through the audited store and
+        mirrors the removal on the in-memory config.
+        """
         changed = clear_engine_freeze(
             self.workspace,
             engine_name=engine,
@@ -232,6 +291,12 @@ class EngineRoutingPolicy:
         return changed
 
     def set_default(self, engine: str, reason: str | None = None) -> None:
+        """
+        Persist a new default engine and mirror it on the live config.
+
+        The reason string is carried into the audit-log context so
+        operators can reconstruct why a default changed.
+        """
         context = _reason_context(reason)
         set_default_engine_setting(
             self.workspace,
@@ -243,6 +308,12 @@ class EngineRoutingPolicy:
         self.config.default_engine = engine
 
     def set_preference(self, order: list[str], reason: str | None = None) -> None:
+        """
+        Persist the engine fallback order and mirror it on the live config.
+
+        The list is normalised and deduplicated by the audited store
+        before writing so the audit log records a clean sequence.
+        """
         context = _reason_context(reason)
         set_engine_preference_setting(
             self.workspace,
@@ -254,9 +325,23 @@ class EngineRoutingPolicy:
         self.config.engine_preference = list(order)
 
     def quota_status(self, engine: str) -> EngineQuotaBlock | None:
+        """
+        Probe the engine's vendor quota and return whether it is blocked.
+
+        Delegates to :func:`engine_quota_block` so the policy class can
+        be the single entry point for quota-aware selection without
+        owning the vendor probe details.
+        """
         return engine_quota_block(engine)
 
     def clear_expired_freezes(self) -> None:
+        """
+        Remove freeze entries whose timestamps are in the past.
+
+        Iterates the in-memory freeze map and calls the audited store
+        for each expired entry so the freeze self-cleans during normal
+        policy operations without a separate sweeper process.
+        """
         for engine_name, freeze_until in list(self.config.engine_freeze.items()):
             if parse_utc_datetime(freeze_until) is None:
                 continue
@@ -264,7 +349,14 @@ class EngineRoutingPolicy:
                 continue
             _clear_engine_freeze(self.workspace, self.config, engine_name)
 
+
 def _reason_context(reason: str | None) -> RuntimeSettingContext | None:
+    """
+    Wrap an optional operator-supplied reason into an audit context dict.
+
+    Returns ``None`` when no reason was given so the audit log omits the
+    context column entirely rather than recording an empty dict.
+    """
     if reason is None:
         return None
     return {"reason": reason}

@@ -25,8 +25,11 @@ class LitehiveContainer:
     """
 
     workspace: Workspace
+    """Resolved workspace handle carrying identity, DB access, and config."""
     config: LitehiveConfig
+    """Merged workspace configuration loaded from YAML and runtime settings."""
     tasks: WorkspaceTasks
+    """Task query and mutation store bound to this workspace's database."""
 
 
 @dataclass(frozen=True)
@@ -36,8 +39,11 @@ class PipelineContainer:
     """
 
     workspace: Workspace
+    """Resolved workspace handle for pipeline operations."""
     persistence: SqlitePersistence
+    """Pipeline state load/save gateway bound to the workspace DB."""
     journal: SqliteJournal
+    """Append-only pipeline transition journal for audit and recovery."""
 
 
 @dataclass(frozen=True)
@@ -51,8 +57,11 @@ class DaemonContainer:
     """
 
     workspace: Workspace
+    """Resolved workspace handle for the daemon loop."""
     config: LitehiveConfig
+    """Merged workspace configuration controlling daemon behaviour."""
     attention_repository: AttentionRepository
+    """Append-only attention log for operator-facing diagnostics."""
 
 
 def build_container(root: Path) -> LitehiveContainer:
@@ -119,6 +128,13 @@ def build_agent_report_submitter(
     persistence = SqlitePersistence(workspace)
 
     def load_pipeline_stage(task_id: str) -> str | None:
+        """
+        Look up the current pipeline stage for a task.
+
+        Returns the stage name string if the task exists, or ``None``
+        when the task is unknown so the submitter can surface a clear
+        error instead of propagating a persistence exception.
+        """
         try:
             pipeline_state = persistence.load(task_id)
             return pipeline_state.stage

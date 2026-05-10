@@ -16,7 +16,16 @@ from litehive.workspace import Workspace
 
 
 class NonrunningResumableRepairResult(TypedDict):
-    """Repair summary returned by :func:`normalize_nonrunning_resumable_tasks` so the caller can persist transitions and journal entries without a second walk."""
+    """
+    Repair summary returned by :func:`normalize_nonrunning_resumable_tasks`.
+
+    Lets the caller persist transitions and journal entries without a
+    second walk over the task population.
+
+    mutated is true when at least one task was re-canonicalised.
+    transitioned holds every task record that changed.
+    journal_messages maps task id to a human-readable journal line.
+    """
 
     mutated: bool
     transitioned: list[TaskRecord]
@@ -59,11 +68,7 @@ def normalize_nonrunning_resumable_tasks(
         # "interrupted" and a trusted stage marker. That state is not eligible
         # for normal dequeue, but repair must still canonicalize it back to a
         # runnable queued/idle task.
-        if (
-            task.status != TaskStatus.INTERRUPTED
-            and not is_task_eligible_for_execution(task)
-            and not has_resume_marker
-        ):
+        if task.status != TaskStatus.INTERRUPTED and not is_task_eligible_for_execution(task) and not has_resume_marker:
             continue
         if task.status == TaskStatus.QUEUED and task.id != state.active_task_id and not has_resume_marker:
             continue

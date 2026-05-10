@@ -60,23 +60,58 @@ _REQUIRED_TABLES_BY_MIGRATION = {
 
 @dataclass(frozen=True)
 class Migration:
+    """
+    One bundled SQL migration file discovered from the package.
+
+    Each migration is a ``NNNN_name.sql`` file under
+    ``litehive.db.migrations``. The version number determines
+    apply order; the name is the original filename including
+    the prefix.
+    """
+
     version: int
+    """Numeric prefix controlling apply order (e.g. 1, 2, 10)."""
     name: str
+    """Original filename with version prefix (e.g. ``0001_initial.sql``)."""
     sql: str
+    """Raw SQL content read from the migration file."""
 
 
 @dataclass(frozen=True)
 class MigrationStatus:
+    """
+    Read-only snapshot of the database's migration state.
+
+    Returned by :func:`migration_status` for the CLI's
+    ``litehive db status`` command so the operator can see
+    which migrations have been applied and which are pending
+    without mutating the database.
+    """
+
     current_version: int
+    """Highest applied migration version, or 0 on a fresh database."""
     applied_migrations: tuple[Migration, ...]
+    """Migrations whose versions appear in ``schema_migrations``."""
     pending_migrations: tuple[Migration, ...]
+    """Bundled migrations not yet recorded in ``schema_migrations``."""
 
 
 @dataclass(frozen=True)
 class MigrationPlan:
+    """
+    Result of a migration run (or dry-run) for the CLI and auto-migrate path.
+
+    ``dry_run=True`` means no SQL was executed; the plan just
+    reports what would happen. ``dry_run=False`` means all
+    pending migrations were applied successfully.
+    """
+
     applied_migrations: tuple[Migration, ...]
+    """Migrations recorded before and including this run."""
     pending_migrations: tuple[Migration, ...]
+    """Migrations applied during this run (empty when ``dry_run=True``)."""
     dry_run: bool
+    """Whether the plan was evaluated without executing SQL."""
 
 
 class MigrationApplyError(RuntimeError):

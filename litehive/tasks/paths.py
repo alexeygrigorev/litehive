@@ -93,6 +93,13 @@ class TaskArtifactLocator:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the path resolver to the workspace whose runtime
+        directory tree it will search.
+
+        All artifact lookups on this instance scope their searches to
+        the workspace's runtime paths.
+        """
         self.workspace = workspace
 
     def latest_run_all_log_path(self) -> Path | None:

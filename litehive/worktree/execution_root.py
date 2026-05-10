@@ -36,6 +36,13 @@ class TaskExecutionRootResolver:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the resolver to one workspace and its path policy.
+
+        The resolver holds a ``WorktreePaths`` instance so it can
+        compute canonical worktree locations and ensure venv links
+        without the caller constructing helpers on every invocation.
+        """
         self.workspace = workspace
         self.paths = WorktreePaths(workspace)
 

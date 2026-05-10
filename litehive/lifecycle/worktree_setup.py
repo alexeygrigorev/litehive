@@ -41,6 +41,13 @@ class PipelineWorktreeSetup:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind worktree setup to a workspace and pre-build its helpers.
+
+        ``tasks`` and ``paths`` are constructed once so every method
+        call reuses the same db connection factory and path resolver
+        rather than rebuilding them on each invocation.
+        """
         self.workspace = workspace
         self.tasks = WorkspaceTasks(workspace)
         self.paths = WorktreePaths(workspace)
@@ -105,6 +112,10 @@ class PipelineWorktreeSetup:
         inspector = WorktreeInspector(self.workspace)
 
         def _probe(state: TaskState) -> bool:
+            """
+            Return ``True`` when the task's recorded worktree path no
+            longer exists on disk.
+            """
             task = self.tasks.get(state.task_id)
             if task is None:
                 return False
@@ -124,6 +135,10 @@ class PipelineWorktreeSetup:
         inspector = WorktreeInspector(self.workspace)
 
         def _repair(state: TaskState) -> None:
+            """
+            Clear the stale worktree path from the task record so the
+            next launch creates a fresh worktree.
+            """
             task = self.tasks.get(state.task_id)
             if task is None:
                 return

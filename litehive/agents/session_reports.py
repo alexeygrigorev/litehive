@@ -21,13 +21,28 @@ class SubagentReportPayload:
     """
 
     status: SubagentStatus
+    """Terminal or in-progress lifecycle status of the subagent."""
+
     summary: str
+    """Free-text summary of what the subagent accomplished."""
+
     files_changed: list[str] = field(default_factory=list)
+    """Normalized list of file paths the subagent modified."""
+
     tests: Mapping[str, object] = field(default_factory=dict)
+    """Structured test summary with counts like added and passing."""
+
     warnings: list[str] = field(default_factory=list)
+    """Collected warnings from the agent report and callback bookkeeping."""
+
     resource_control: SandboxPolicySummary = field(default_factory=lambda: SandboxPolicySummary(enabled=False))
+    """Sandbox/resource policy summary attached to this report."""
+
     interruption_reason: str | None = None
+    """Reason the process was interrupted, if applicable."""
+
     continuation: SubagentContinuationState = field(default_factory=NoSubagentContinuation)
+    """Engine continuation state for multi-turn resume."""
 
     def as_dict(self) -> dict[str, object]:
         """

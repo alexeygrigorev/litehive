@@ -12,6 +12,7 @@ class FreshEngineSession:
     """
 
     resume_session_id: None = None
+    """Always None; signals no prior conversation to resume."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +22,7 @@ class ResumableEngineSession:
     """
 
     resume_session_id: str
+    """The engine-issued continuation handle to pass on the next turn."""
 
 
 class EngineSessionContinuation(Protocol):
@@ -46,7 +48,9 @@ class Session:
     """
 
     engine_session_id: str | None = None
+    """The engine's resume handle (e.g. codex session id)."""
     conversation_id: str | None = None
+    """A secondary conversation identifier some engines expose."""
 
     def continuation_state(self) -> EngineSessionContinuation:
         """

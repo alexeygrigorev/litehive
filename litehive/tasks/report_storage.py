@@ -22,7 +22,9 @@ class ReportReference:
     """
 
     table: str
+    """SQLite table that holds the report row (stage_reports or recovery_reports)."""
     row_id: int
+    """Auto-incremented primary key of the stored row."""
 
     def display(self) -> str:
         """
@@ -53,6 +55,12 @@ class TaskReportStore:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the report store to a workspace's SQLite database.
+
+        The store writes report rows and matching task-event entries through
+        the workspace's connection, so callers never manage raw SQL.
+        """
         self.workspace = workspace
 
     def insert_recovery_report(self, task: TaskRecord, report: RecoveryReport) -> ReportReference:
@@ -252,6 +260,7 @@ class TaskReportStore:
             except ValidationError:
                 continue
         return reports
+
 
 def _deserialize_stage_report_payload(payload: dict[str, object]) -> StageReport:
     """

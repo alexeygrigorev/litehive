@@ -54,6 +54,13 @@ class WorktreeRescueService:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the rescue service to one workspace.
+
+        All rescue operations (listing candidates, checking preconditions,
+        cherry-picking) are scoped to this workspace's root, task records,
+        and git state.
+        """
         self.workspace = workspace
 
     def collect_rescue_candidates(self) -> list[RescueCandidate]:

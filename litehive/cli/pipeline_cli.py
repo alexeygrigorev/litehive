@@ -141,6 +141,12 @@ def pipeline_journal_command(
 
 
 def _print_pipeline_report_lines(workspace: Workspace, task_id: str) -> None:
+    """
+    Print the latest stage and recovery reports for a task.
+
+    Silently skips tasks that do not exist or have no reports so the
+    journal output continues even when report artifacts are missing.
+    """
     task = WorkspaceTasks(workspace).get_record(task_id)
     if task is None:
         return
@@ -165,6 +171,14 @@ def _print_pipeline_report_lines(workspace: Workspace, task_id: str) -> None:
 
 
 def _print_pipeline_state_lines(state: TaskState) -> None:
+    """
+    Dispatch the per-section pipeline state printer helpers.
+
+    Called once from the journal command so each section (trigger,
+    merge/commit, recovery history, failed runs, failure detail) is
+    printed in a stable order without the caller knowing the
+    internals.
+    """
     _print_recovery_trigger_line(state)
     _print_merge_and_commit_lines(state)
     _print_recovery_history_lines(state)
@@ -173,6 +187,13 @@ def _print_pipeline_state_lines(state: TaskState) -> None:
 
 
 def _print_recovery_trigger_line(state: TaskState) -> None:
+    """
+    Print the active recovery trigger when one is present.
+
+    Shows origin stage, event kind, fingerprint, source, and reason
+    code on a single line so an operator can tell what the state
+    machine plans to retry without querying the persistence layer.
+    """
     if not state.active_recovery_trigger:
         return
     trigger = state.active_recovery_trigger
@@ -187,6 +208,14 @@ def _print_recovery_trigger_line(state: TaskState) -> None:
 
 
 def _print_merge_and_commit_lines(state: TaskState) -> None:
+    """
+    Print merge context and commit result when the task reached
+    those stages.
+
+    Merge context surfaces the attempt number and conflict files;
+    commit result shows the resulting head SHA and reason. Both are
+    absent for tasks that never reached the merge/commit phase.
+    """
     if state.merge_context is not None:
         print(
             "merge_context: "
@@ -198,6 +227,13 @@ def _print_merge_and_commit_lines(state: TaskState) -> None:
 
 
 def _print_recovery_history_lines(state: TaskState) -> None:
+    """
+    Print every past recovery attempt for the task.
+
+    Each row shows timestamp, origin stage, trigger kind, verdict,
+    and disposition so the operator can see how many retries were
+    attempted and whether they advanced or failed.
+    """
     if not state.recovery_history:
         return
     print("recovery_history:")
@@ -213,6 +249,14 @@ def _print_recovery_history_lines(state: TaskState) -> None:
 
 
 def _print_failed_run_history_lines(state: TaskState) -> None:
+    """
+    Print the per-shape failed-run counters accumulated by the
+    lifecycle manager.
+
+    Each key groups failures by fingerprint; the count and latest
+    timestamp let the operator decide whether a task is stuck in a
+    retry loop without opening the database.
+    """
     if not state.failed_run_history:
         return
     print("failed_run_history:")
@@ -229,6 +273,15 @@ def _print_failed_run_history_lines(state: TaskState) -> None:
 
 
 def _print_failure_detail_lines(state: TaskState) -> None:
+    """
+    Print the remaining failure-detail fields from the pipeline
+    state.
+
+    Covers stage retry counters, the last failed reason/message, the
+    recovery failure explanation, and per-stage rejection records.
+    These fields are sparse (most tasks carry empty values), so each
+    line is only printed when the field is set.
+    """
     if state.stage_retry:
         print(f"stage_retry: {dict(state.stage_retry)}")
     if state.failed_reason:
@@ -244,6 +297,13 @@ def _print_failure_detail_lines(state: TaskState) -> None:
 
 
 def _print_pipeline_lifecycle_lines(lifecycle) -> None:
+    """
+    Print the raw lifecycle event log for a task.
+
+    Each row carries a sequence number, timestamp, event kind, and
+    JSON payload so the operator can trace the exact order of state
+    machine events without querying SQLite directly.
+    """
     if not lifecycle:
         return
     print("\nlifecycle:")
@@ -252,6 +312,15 @@ def _print_pipeline_lifecycle_lines(lifecycle) -> None:
 
 
 def _print_pipeline_transition_lines(transitions, limit: int) -> None:
+    """
+    Print the most recent pipeline transition records, capped by
+    ``limit``.
+
+    Shows sequence, timestamp, from-stage, event, and to-stage for
+    each transition so the operator can trace how the task reached
+    its current state. The rule description annotation is appended
+    when present.
+    """
     if not transitions:
         return
     recent = transitions[-limit:]

@@ -25,9 +25,13 @@ class WorkspaceBackup:
     """
 
     timestamp: str
+    """Hour-resolution UTC timestamp embedded in the backup filename."""
     created_at: datetime
+    """Parsed datetime of the backup's capture time."""
     path: Path
+    """Full filesystem path to the gzip-compressed backup file."""
     size_bytes: int
+    """Compressed size of the backup file in bytes."""
 
 
 def _backup_timestamp(when: datetime) -> str:
@@ -73,6 +77,13 @@ class WorkspaceBackupService:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the backup service to a workspace.
+
+        The workspace provides the runtime directory layout (``data.db``
+        location, ``backups/`` subdirectory) that all backup operations
+        use; the service is stateless between calls.
+        """
         self.workspace = workspace
 
     def list_backups(self) -> list[WorkspaceBackup]:
@@ -159,7 +170,10 @@ class WorkspaceBackupService:
                 target.close()
                 source.close()
 
-            with temp_db_path.open("rb") as source_handle, gzip.open(temp_gz_path, "wb", compresslevel=9) as gzip_handle:
+            with (
+                temp_db_path.open("rb") as source_handle,
+                gzip.open(temp_gz_path, "wb", compresslevel=9) as gzip_handle,
+            ):
                 while True:
                     chunk = source_handle.read(1024 * 1024)
                     if not chunk:

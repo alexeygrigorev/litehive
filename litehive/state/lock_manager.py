@@ -22,10 +22,15 @@ class WorkspaceLockManager:
     """
 
     path: Path
+    """Lockfile path; parent directories are created on first open."""
     pid_is_alive: Callable[[object], bool]
+    """Liveness oracle that accepts a PID and returns whether it is still running."""
     held_in_process: Callable[[], bool] | None = None
+    """Optional callback returning True when the current process already holds the lock."""
     pid_field: str = "pid"
+    """JSON key inside the lockfile that carries the owner PID."""
     fsync_writes: bool = False
+    """When True, fsync after metadata writes so they survive a crash."""
 
     def _is_held_in_process(self) -> bool:
         """

@@ -50,7 +50,9 @@ class OperatorNeededState:
     """
 
     flagged_tasks: tuple[TaskRecord, ...]
+    """Tasks currently in ``FLAGGED`` status requiring operator review."""
     pool_stop_reason: str | None
+    """Active pool stop reason, filtered to operator-needed reasons."""
 
     @property
     def needed(self) -> bool:
@@ -78,7 +80,9 @@ class AttentionLogEntry:
     """
 
     created_at: str
+    """ISO timestamp when the entry was appended."""
     message: str
+    """Human-readable diagnostic message for the operator."""
 
 
 class AttentionRepository:
@@ -93,6 +97,13 @@ class AttentionRepository:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the repository to a workspace's database.
+
+        The workspace is stored so every ``append`` call opens
+        the correct database without callers threading the root
+        through each invocation.
+        """
         self.workspace = workspace
 
     def append(self, message: str) -> None:
@@ -118,6 +129,12 @@ class OperatorAttentionProjector:
     """
 
     def __init__(self, workspace: Workspace) -> None:
+        """
+        Bind the projector to a workspace for reading task and pool state.
+
+        The workspace is stored so ``collect_state`` can open the
+        database and read authoritative records on each call.
+        """
         self.workspace = workspace
 
     def collect_state(self) -> OperatorNeededState:

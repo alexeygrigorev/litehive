@@ -23,8 +23,11 @@ class ProcessLockManager:
     """
 
     process_name: str
+    """Named slot this manager owns (e.g. ``"runner"`` or ``"daemon"``)."""
     lock_manager: WorkspaceLockManager
+    """Low-level flock plumbing that handles file I/O and PID checks."""
     runtime_store: RuntimeStore | None = None
+    """Optional SQLite mirror for process identity; write callers fail if unset."""
 
     def is_active(self) -> bool:
         """Probe whether the lock is currently held by any process."""

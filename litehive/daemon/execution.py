@@ -78,6 +78,8 @@ def unregister_daemon(workspace: Workspace, pid: int | None = None) -> None:
     Execution-module seam for daemon unregistration.
     """
     DaemonRegistry(workspace).unregister(pid=pid)
+
+
 _LIVE_RUNNER_STATUSES = frozenset({RunnerExecutionStatus.RUNNING, RunnerExecutionStatus.LATE})
 
 
@@ -91,6 +93,9 @@ class DaemonStatusSnapshot:
     `WorkspaceState` object intact avoids converting domain state into
     a loose dictionary just so the daemon can inspect queue and stop
     fields.
+
+    state is the loaded workspace state at the time of the snapshot.
+    text is the pre-rendered multi-line status block for the log.
     """
 
     state: WorkspaceState
@@ -110,9 +115,18 @@ class DaemonOutput:
     """
 
     def __init__(self, stream: TextIO | None) -> None:
+        """
+        Bind the renderer to an optional output stream.
+
+        Passing ``None`` silences all output, which is the non-interactive
+        path used by background daemon workers.
+        """
         self.stream = stream
 
     def line(self, message: str = "") -> None:
+        """
+        Write a complete line to the output stream, adding a trailing newline if missing.
+        """
         if self.stream is None:
             return
         self.stream.write(message)
@@ -121,6 +135,12 @@ class DaemonOutput:
         self.stream.flush()
 
     def child_line(self, line: str) -> None:
+        """
+        Forward a raw child-process output line without appending a newline.
+
+        Child stdout already carries newlines, so appending one would
+        produce double-spacing in the log.
+        """
         if self.stream is None:
             return
         self.stream.write(line)
@@ -143,8 +163,7 @@ class DaemonOutput:
         task_id = status.active_task_id or "-"
         heartbeat = status.heartbeat_at or "-"
         self.line(
-            f"runner already active: status={status.status} pid={pid} "
-            f"active_task_id={task_id} heartbeat_at={heartbeat}"
+            f"runner already active: status={status.status} pid={pid} active_task_id={task_id} heartbeat_at={heartbeat}"
         )
 
 
@@ -197,10 +216,16 @@ class DaemonStatusSnapshotCollector:
     before/after pair the operator can diff. ``read_only=True``
     keeps the snapshot from racing the runner's own writes — the
     daemon must not mutate state here, only observe it.
+
+    workspace is the workspace whose pool state is being observed.
     """
+
     workspace: Workspace
 
     def snapshot(self) -> DaemonStatusSnapshot:
+        """
+        Read pool state and return a snapshot with rendered status text.
+        """
         status = TaskPipelineStatusCollector(self.workspace).collect(read_only=True)
         lines = render_task_pipeline_status_lines(status, workspace=self.workspace.root, mode="summary")
         return DaemonStatusSnapshot(state=status.state, text="\n".join(lines) + "\n")
@@ -272,6 +297,9 @@ def _has_work(state: WorkspaceState) -> bool:
 
 
 def _pool_stop_reason_from_state(state: WorkspaceState) -> PoolStopReason | None:
+    """
+    Convert the raw pool_stop_reason string into a typed enum, or None.
+    """
     if state.pool_stop_reason is None:
         return None
     return PoolStopReason.from_value(state.pool_stop_reason)
@@ -292,6 +320,13 @@ def _daemon_should_continue_for_stop_reason(reason: PoolStopReason | None) -> bo
 
 
 def _snapshot_exit_code(snapshot: DaemonStatusSnapshot, output: DaemonOutput) -> int | None:
+    """
+    Render a snapshot and decide whether the daemon loop should stop.
+
+    Returns an exit code when the snapshot signals a terminal condition
+    (no work remaining, operator halt, diverged origin), or None when
+    the loop should continue to the next iteration.
+    """
     output.line(snapshot.text)
 
     if not _has_work(snapshot.state):
@@ -377,6 +412,16 @@ class WorkspaceDaemon:
     The dataclass constructor stores collaborators only. Runtime state
     such as signal handlers, heartbeat events, and the current child
     process is reset inside ``run`` for a single invocation.
+
+    workspace is the workspace whose pool this daemon drives.
+    daemon_config controls heartbeat intervals, stop timeouts, etc.
+    attention_repository receives attention-log entries.
+    output renders daemon-loop and child-process output.
+    command_prefix is the argv prefix for spawning ``litehive run``.
+    logs manages run-all log directories and pruning.
+    session_dir overrides the per-session log directory when set.
+    status_snapshot_collector optionally overrides the snapshot
+        mechanism for testing.
     """
 
     workspace: Workspace
@@ -494,11 +539,23 @@ class WorkspaceDaemon:
         return _snapshot_exit_code(post_snapshot, self.output)
 
     def _status_snapshot_collector(self) -> DaemonStatusSnapshotCollector:
+        """
+        Return the injected collector or build a default one.
+        """
         if self.status_snapshot_collector is not None:
             return self.status_snapshot_collector
         return DaemonStatusSnapshotCollector(self.workspace)
 
     def run(self) -> int:
+        """
+        Run the daemon loop until work runs out or a stop is requested.
+
+        Applies pending schema migrations, registers this process as the
+        active daemon, starts the heartbeat thread, installs signal
+        handlers, and drives the iteration loop. Cleans up registration
+        and signal handlers in a ``finally`` block so an unexpected
+        exception does not leave a stale lock.
+        """
         workspace_root = self.workspace.root
         apply_pending_migrations(workspace_root)
         log_root = self.logs.prepare_session(self.session_dir)
@@ -551,6 +608,7 @@ class WorkspaceDaemon:
             heartbeat_stop.set()
             heartbeat_thread.join(timeout=max(self.daemon_config.heartbeat_interval_seconds, 0.1) * 2)
             unregister_daemon(self.workspace, pid=os.getpid())
+
 
 def run_daemon_loop(
     workspace: Path,
@@ -710,10 +768,16 @@ class DaemonStatusPresenter:
     can land on the right log file from one command without scraping
     the workspace tree. Failing to surface the latest log dir here
     is the difference between "I can debug" and "I have to grep".
+
+    workspace is the workspace whose daemon and runner state is rendered.
     """
+
     workspace: Workspace
 
     def status_lines(self) -> list[str]:
+        """
+        Build the operator-facing status lines for daemon and runner state.
+        """
         entry = DaemonRegistry(self.workspace).metadata()
         lines = [f"workspace: {self.workspace.root}"]
         if entry is None or entry.status != "running":

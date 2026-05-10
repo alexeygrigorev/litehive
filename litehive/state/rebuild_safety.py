@@ -39,9 +39,13 @@ class RebuildSafetyReport:
     """
 
     sqlite_task_ids: frozenset[str]
+    """Task ids present in the live SQLite database."""
     task_dir_ids: frozenset[str]
+    """Task ids that have on-disk artifact directories."""
     replay_task_ids: frozenset[str]
+    """Task ids the append-only event log can reconstruct."""
     missing_task_ids: tuple[str, ...]
+    """Ids present in SQLite but absent from the replay source."""
 
 
 def sqlite_task_ids(db_path: Path) -> set[str]:
@@ -80,6 +84,13 @@ class DatabaseRebuildSafety:
     """
 
     def __init__(self, workspace: "Workspace") -> None:
+        """
+        Bind the safety checker to a workspace.
+
+        The workspace provides the control-directory layout for artifact
+        discovery and the runtime path for the event log; constructed by
+        the CLI rebuild command and by the bootstrap safety gate.
+        """
         self.workspace = workspace
 
     def task_artifact_dir_ids(self) -> set[str]:
