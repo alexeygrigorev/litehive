@@ -2,7 +2,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from heru import ENGINE_CHOICES
-from heru.quota import UsageStatus, UsageWindow
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
@@ -30,6 +29,25 @@ from litehive.workspace import Workspace
 from litehive.domain.common import PipelineStatus, TaskStatus
 
 _RUNNER = CliRunner()
+
+
+def _usage_window(percent_remaining: float, reset_at: str | None = None) -> SimpleNamespace:
+    return SimpleNamespace(percent_remaining=percent_remaining, reset_at=reset_at)
+
+
+def _usage_status(
+    *,
+    limit_reached: bool = False,
+    short_term: SimpleNamespace | None = None,
+    long_term: SimpleNamespace | None = None,
+    error: str | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        error=error,
+        limit_reached=limit_reached,
+        short_term=short_term or _usage_window(100.0),
+        long_term=long_term or _usage_window(100.0),
+    )
 
 
 def test_health_daemon_status_defaults_to_stopped(tmp_path: Path, monkeypatch) -> None:
@@ -114,10 +132,10 @@ def test_doctor_command_is_not_registered(tmp_path: Path) -> None:
 
 
 def test_quota_health_formats_status_and_reset() -> None:
-    status = UsageStatus(
+    status = _usage_status(
         limit_reached=True,
-        short_term=UsageWindow(percent_remaining=12.5, reset_at="2026-04-14T12:00:00Z"),
-        long_term=UsageWindow(percent_remaining=45.0, reset_at="2026-04-15T00:00:00Z"),
+        short_term=_usage_window(12.5, reset_at="2026-04-14T12:00:00Z"),
+        long_term=_usage_window(45.0, reset_at="2026-04-15T00:00:00Z"),
     )
 
     health = quota_health("codex", status)
@@ -129,22 +147,22 @@ def test_quota_health_formats_status_and_reset() -> None:
 
 
 def test_collect_quota_health_reuses_shared_statuses(monkeypatch) -> None:
-    claude_status = UsageStatus(
-        short_term=UsageWindow(percent_remaining=80.0, reset_at="2026-04-14T11:00:00Z"),
-        long_term=UsageWindow(percent_remaining=60.0),
+    claude_status = _usage_status(
+        short_term=_usage_window(80.0, reset_at="2026-04-14T11:00:00Z"),
+        long_term=_usage_window(60.0),
     )
-    codex_status = UsageStatus(
-        short_term=UsageWindow(percent_remaining=70.0),
-        long_term=UsageWindow(percent_remaining=50.0, reset_at="2026-04-15T00:00:00Z"),
+    codex_status = _usage_status(
+        short_term=_usage_window(70.0),
+        long_term=_usage_window(50.0, reset_at="2026-04-15T00:00:00Z"),
     )
-    copilot_status = UsageStatus(
-        short_term=UsageWindow(percent_remaining=65.0),
-        long_term=UsageWindow(percent_remaining=40.0, reset_at="2026-04-16T00:00:00Z"),
+    copilot_status = _usage_status(
+        short_term=_usage_window(65.0),
+        long_term=_usage_window(40.0, reset_at="2026-04-16T00:00:00Z"),
     )
-    zai_status = UsageStatus(
+    zai_status = _usage_status(
         limit_reached=True,
-        short_term=UsageWindow(percent_remaining=10.0),
-        long_term=UsageWindow(percent_remaining=5.0),
+        short_term=_usage_window(10.0),
+        long_term=_usage_window(5.0),
     )
 
     monkeypatch.setattr("litehive.cli.workspace.check_claude_quota", lambda: claude_status)

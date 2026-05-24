@@ -18,14 +18,14 @@ from heru import (
     resolve_engine_resume_session_id,
     resume_safe_model_override,
 )
-from heru.quota import (
+from quse import (
     check_claude_quota,
     check_codex_quota,
     check_copilot_quota,
     check_zai_quota,
     usage_limit_block_reason,
 )
-from heru.quota._shared import UsageStatus
+from quse import UsageStatus
 from litehive.config.model import LitehiveConfig
 from litehive.config.paths import litehive_root
 from litehive.config.workspace import create_workspace
@@ -84,7 +84,7 @@ def _engine_quota_block_reason(engine_name: str) -> str | None:
         }.get(engine_name)
         if checker is None:
             return None
-        # heru's per-engine quota status classes are structurally compatible
+        # quse's per-engine quota status classes are structurally compatible
         # with UsageStatus (same field shape) but do not inherit from it; cast
         # so the boundary is explicit rather than suppressed.
         return usage_limit_block_reason(engine_name, cast(UsageStatus, checker()))

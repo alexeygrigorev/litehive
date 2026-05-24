@@ -11,6 +11,7 @@ dynamic = ["version"]
 dependencies = [
     "heru>=2.0.1",
     "pydantic>=2.11.0",
+    "quse>=0.0.4",
     "pyyaml>=6.0.2",
     "typer>=0.16.0",
 ]
@@ -76,6 +77,9 @@ dev = [
 
 [tool.uv.sources]
 heru = { path = "../heru", editable = true }
+
+[tool.uv]
+exclude-newer-package = { quse = "2026-05-25T00:00:00Z" }
 
 [tool.ruff.format]
 

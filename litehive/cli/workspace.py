@@ -6,7 +6,7 @@ import typer
 from dataclasses import dataclass
 
 from heru import ENGINE_CHOICES
-from heru.quota import (
+from quse import (
     UsageStatus,
     check_claude_quota,
     check_codex_quota,
@@ -420,7 +420,7 @@ def quota_health(
     status: UsageStatus | object,
 ) -> _QuotaHealth:
     """
-    Translate a heru ``UsageStatus`` into a renderable ``_QuotaHealth``.
+    Translate a quse ``UsageStatus`` into a renderable ``_QuotaHealth``.
 
     Tolerates engines whose provider returns a different schema
     by flagging them as ``unavailable`` with the ``problem`` bit

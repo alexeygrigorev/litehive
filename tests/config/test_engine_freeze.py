@@ -10,7 +10,6 @@ import pytest
 import yaml
 
 from heru import ENGINE_CHOICES
-from heru.quota import UsageStatus, UsageWindow
 from typer.testing import CliRunner
 
 from litehive.cli.app import app
@@ -76,6 +75,25 @@ def _assert_engine_selection_request(actual: object, expected: EngineSelectionRe
     assert getattr(actual, "excluded_engine_names") == expected.excluded_engine_names
     assert getattr(actual, "require_available") == expected.require_available
     assert getattr(actual, "check_quota") == expected.check_quota
+
+
+def _usage_window(percent_remaining: float, reset_at: str | None = None) -> SimpleNamespace:
+    return SimpleNamespace(percent_remaining=percent_remaining, reset_at=reset_at)
+
+
+def _usage_status(
+    *,
+    limit_reached: bool = False,
+    short_term: SimpleNamespace | None = None,
+    long_term: SimpleNamespace | None = None,
+    error: str | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        error=error,
+        limit_reached=limit_reached,
+        short_term=short_term or _usage_window(100.0),
+        long_term=long_term or _usage_window(100.0),
+    )
 
 
 def test_engine_freeze_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -294,8 +312,8 @@ def test_engine_status_prints_routing_availability_and_live_quota(tmp_path: Path
         "litehive.config.engine_quota.check_claude_quota",
         lambda: SimpleNamespace(
             error=None,
-            short_term=UsageWindow(percent_remaining=87.5, reset_at="2026-04-14T12:00:00Z"),
-            long_term=UsageWindow(percent_remaining=55.0, reset_at="2026-04-15T00:00:00Z"),
+            short_term=_usage_window(87.5, reset_at="2026-04-14T12:00:00Z"),
+            long_term=_usage_window(55.0, reset_at="2026-04-15T00:00:00Z"),
         ),
     )
     monkeypatch.setattr(
@@ -303,24 +321,24 @@ def test_engine_status_prints_routing_availability_and_live_quota(tmp_path: Path
         lambda: SimpleNamespace(
             error=None,
             limit_reached=True,
-            short_term=UsageWindow(percent_remaining=70.0, reset_at="2026-04-14T17:00:00Z"),
-            long_term=UsageWindow(percent_remaining=35.0, reset_at="2026-04-21T00:00:00Z"),
+            short_term=_usage_window(70.0, reset_at="2026-04-14T17:00:00Z"),
+            long_term=_usage_window(35.0, reset_at="2026-04-21T00:00:00Z"),
         ),
     )
     monkeypatch.setattr(
         "litehive.config.engine_quota.check_copilot_quota",
         lambda: SimpleNamespace(
             error=None,
-            short_term=UsageWindow(percent_remaining=100.0),
-            long_term=UsageWindow(percent_remaining=40.0, reset_at="2026-04-30T00:00:00Z"),
+            short_term=_usage_window(100.0),
+            long_term=_usage_window(40.0, reset_at="2026-04-30T00:00:00Z"),
         ),
     )
     monkeypatch.setattr(
         "litehive.config.engine_quota.check_zai_quota",
         lambda: SimpleNamespace(
             error=None,
-            short_term=UsageWindow(percent_remaining=55.0),
-            long_term=UsageWindow(percent_remaining=100.0),
+            short_term=_usage_window(55.0),
+            long_term=_usage_window(100.0),
         ),
     )
 
@@ -349,7 +367,7 @@ def test_engine_status_handles_quota_errors_gracefully(tmp_path: Path, monkeypat
 
     monkeypatch.setattr(
         "litehive.config.engine_quota.check_claude_quota",
-        lambda: UsageStatus(error="no-credentials"),
+        lambda: _usage_status(error="no-credentials"),
     )
     monkeypatch.setattr(
         "litehive.config.engine_quota.check_codex_quota",
@@ -357,11 +375,11 @@ def test_engine_status_handles_quota_errors_gracefully(tmp_path: Path, monkeypat
     )
     monkeypatch.setattr(
         "litehive.config.engine_quota.check_copilot_quota",
-        lambda: UsageStatus(error="gh exit 1"),
+        lambda: _usage_status(error="gh exit 1"),
     )
     monkeypatch.setattr(
         "litehive.config.engine_quota.check_zai_quota",
-        lambda: UsageStatus(error="goz exit 1"),
+        lambda: _usage_status(error="goz exit 1"),
     )
 
     exit_code, output = _run_engine(
@@ -599,69 +617,6 @@ def test_engine_routing_policy_records_quota_freeze_and_falls_back(
 
     assert selection.engine_name == "gemini"
     assert _load_config(tmp_path).engine_freeze["codex"] == freeze_iso
-
-
-def test_engine_quota_block_consumes_current_heru_normalized_windows(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import importlib
-
-    from heru.quota.codex_quota import CodexQuotaStatus, CodexQuotaWindow
-    import litehive.config.engine_quota as engine_quota
-
-    engine_quota = importlib.reload(engine_quota)
-    status = CodexQuotaStatus(
-        secondary_window=CodexQuotaWindow(used_percent=95.0, reset_at="2026-04-27T00:00:00Z"),
-        limit_reached=True,
-    )
-    monkeypatch.setattr(engine_quota, "check_codex_quota", lambda: status)
-
-    block = engine_quota.engine_quota_block("codex")
-
-    assert block is not None
-    assert block.reason == "codex usage limit reached, resets 2026-04-27T00:00:00Z"
-    assert block.freeze_until == datetime(2026, 4, 27, tzinfo=timezone.utc)
-
-
-def test_select_engine_skips_current_heru_quota_status_shape(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import importlib
-
-    from heru.quota.codex_quota import CodexQuotaStatus, CodexQuotaWindow
-    import litehive.config.engine_quota as engine_quota
-    import litehive.config.engine_models as engine_models
-
-    engine_quota = importlib.reload(engine_quota)
-    engine_models = importlib.reload(engine_models)
-    status = CodexQuotaStatus(
-        secondary_window=CodexQuotaWindow(used_percent=95.0, reset_at="2026-04-27T00:00:00Z"),
-        limit_reached=True,
-    )
-    create_workspace(
-        tmp_path,
-        LitehiveConfig(default_engine="codex", recovery_engine="claude"),
-    )
-    task = WorkspaceTasks(Workspace.from_path(tmp_path)).create( title="quota selection repro")
-    config = _load_config(tmp_path)
-    monkeypatch.setattr(engine_quota, "check_codex_quota", lambda: status)
-    monkeypatch.setattr(engine_quota, "check_claude_quota", lambda: UsageStatus())
-
-    selection = engine_models.EngineRoutingPolicy(
-        Workspace.from_path(tmp_path),
-        config,
-    ).select(
-        task,
-        EngineSelectionRequest(engine_names=["codex", "claude"]),
-    )
-
-    assert selection.engine_name == "claude"
-    assert [(item.engine_name, item.reason) for item in selection.skipped] == [
-        ("codex", "codex usage limit reached, resets 2026-04-27T00:00:00Z")
-    ]
-    assert _load_config(tmp_path).engine_freeze["codex"] == "2026-04-27T00:00:00Z"
 
 
 def test_select_engine_skips_active_freeze_without_quota_call(

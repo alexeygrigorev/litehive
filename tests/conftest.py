@@ -22,7 +22,7 @@ def _bootstrap_heru_import_path() -> None:
 
 
 _bootstrap_heru_import_path()
-_codex_quota_mod = importlib.import_module("heru.quota.codex_quota")
+_codex_quota_mod = importlib.import_module("quse.codex_quota")
 
 _PREVIOUS_TEST_ENV = {
     key: os.environ.get(key) for key in ("LITEHIVE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME")
@@ -75,7 +75,7 @@ for entry in reversed(_PYTHONPATH_ENTRIES):
         pythonpath_entries.insert(0, entry)
 os.environ["PYTHONPATH"] = os.pathsep.join(pythonpath_entries)
 
-_codex_quota_mod = importlib.import_module("heru.quota.codex_quota")
+_codex_quota_mod = importlib.import_module("quse.codex_quota")
 
 
 def _noop_block_reason(**kw):

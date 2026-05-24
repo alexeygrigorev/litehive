@@ -3,8 +3,11 @@ revision = 3
 requires-python = ">=3.11"
 
 [options]
-exclude-newer = "2026-04-27T07:36:43.828239507Z"
+exclude-newer = "2026-05-17T13:57:21.032830549Z"
 exclude-newer-span = "P7D"
+
+[options.exclude-newer-package]
+quse = "2026-05-25T00:00:00Z"
 
 [[package]]
 name = "annotated-doc"
@@ -56,7 +59,7 @@ wheels = [
 
 [[package]]
 name = "heru"
-version = "2.0.1"
+version = "2.1.0"
 source = { editable = "../heru" }
 dependencies = [
     { name = "pydantic" },
@@ -67,6 +70,7 @@ dependencies = [
 requires-dist = [
     { name = "pydantic", specifier = ">=2.11.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.0" },
+    { name = "quse", marker = "extra == 'dev'", specifier = ">=0.0.4" },
     { name = "typer", specifier = ">=0.16.0" },
 ]
 provides-extras = ["dev"]
@@ -87,6 +91,7 @@ dependencies = [
     { name = "heru" },
     { name = "pydantic" },
     { name = "pyyaml" },
+    { name = "quse" },
     { name = "typer" },
 ]
 
@@ -119,6 +124,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.0" },
     { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.4.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "quse", specifier = ">=0.0.4" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
     { name = "typer", specifier = ">=0.16.0" },
 ]
@@ -424,6 +430,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/da/92/1446574745d74df0c92e6aa4a7b0b3130706a4142b2d1a5869f2eaa423c6/pyyaml-6.0.3-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:16249ee61e95f858e83976573de0f5b2893b3677ba71c9dd36b9cf8be9ac6d65", size = 829923, upload-time = "2025-09-25T21:32:54.537Z" },
     { url = "https://files.pythonhosted.org/packages/f0/7a/1c7270340330e575b92f397352af856a8c06f230aa3e76f86b39d01b416a/pyyaml-6.0.3-cp314-cp314t-win_amd64.whl", hash = "sha256:4ad1906908f2f5ae4e5a8ddfce73c320c2a1429ec52eafd27138b7f1cbe341c9", size = 174062, upload-time = "2025-09-25T21:32:55.767Z" },
     { url = "https://files.pythonhosted.org/packages/f1/12/de94a39c2ef588c7e6455cfbe7343d3b2dc9d6b6b2f40c4c6565744c873d/pyyaml-6.0.3-cp314-cp314t-win_arm64.whl", hash = "sha256:ebc55a14a21cb14062aa4162f906cd962b28e2e9ea38f9b4391244cd8de4ae0b", size = 149341, upload-time = "2025-09-25T21:32:56.828Z" },
+]
+
+[[package]]
+name = "quse"
+version = "0.0.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b5/60/921eb4ea21951ead2922dd554ebad579220d5475d822c08f4341c179239e/quse-0.0.4.tar.gz", hash = "sha256:43df8abe3242c15e602167af097a04729e4f6d2cf4b3c98ebdfcd360e097cedd", size = 37426, upload-time = "2026-05-24T13:46:39.515Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6e/fd/d5a0dd82d20c23bb7e29061dd97e0c989dd1ec364bab4e38d17291ddd01d/quse-0.0.4-py3-none-any.whl", hash = "sha256:f3867940c421c8c705545f20f74b49acd7139e858a84f8782e51be5a4ac9aabc", size = 12106, upload-time = "2026-05-24T13:46:40.454Z" },
 ]
 
 [[package]]

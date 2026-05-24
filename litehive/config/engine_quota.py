@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from heru.quota import (
+from quse import (
     UsageStatus,
     check_claude_quota,
     check_codex_quota,
@@ -31,7 +31,7 @@ class QuotaStatus(Protocol):
     """
     Protocol for the result of a vendor quota probe.
 
-    Abstracts over ``heru.quota.UsageStatus`` so the config layer can
+    Abstracts over ``quse.UsageStatus`` so the config layer can
     inspect quota state without importing the heru models directly.
     """
 
@@ -67,7 +67,7 @@ class EngineQuotaBlock:
 
 def _quota_checker(engine_name: str) -> QuotaChecker | None:
     """
-    Return the heru ``check_*_quota`` callable for an engine.
+    Return the quse ``check_*_quota`` callable for an engine.
 
     Returns ``None`` for engines without a quota probe (Gemini today).
     The dispatch table lets :func:`engine_quota_block` stay generic
@@ -87,7 +87,7 @@ def _quota_checker(engine_name: str) -> QuotaChecker | None:
 
 def _preferred_quota_reset_at(status: QuotaStatus) -> str | None:
     """
-    Ask heru for the most informative reset timestamp on a quota status.
+    Ask quse for the most informative reset timestamp on a quota status.
     """
     if status.long_term.reset_at:
         return status.long_term.reset_at
@@ -96,7 +96,7 @@ def _preferred_quota_reset_at(status: QuotaStatus) -> str | None:
 
 def _quota_block_reason(engine_name: str, status: QuotaStatus) -> EngineQuotaBlock | None:
     """
-    Translate a heru quota status into a skip reason and freeze window.
+    Translate a quse quota status into a skip reason and freeze window.
     """
     if status.error is not None:
         return None
